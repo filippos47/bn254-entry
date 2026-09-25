@@ -57,7 +57,7 @@ abbrev rSecond : Register := 15
 
 /-! ### RAM regions -/
 
-/-- The `34,297` public field cells, in `Wire.encoding` order: curve (3), rows (`91 · 10`),
+/-- The `33,660` public field cells, in `Wire.encoding` order: curve (3), rows (`91 · 3`),
 scale (`52 · 642`). -/
 def fieldBase : Nat := 2 ^ 40
 /-- The `1,092` exception bytes. -/
@@ -109,7 +109,7 @@ def designatedCell (element : Nat) : Nat := designatedBase + element
 
 /-- Field-cell counts. -/
 def curveCellCount : Nat := 3
-def rowCellCount : Nat := 91 * 10
+def rowCellCount : Nat := 91 * 3
 def scaleCellCount : Nat := 52 * 642
 def fieldCellCount : Nat := curveCellCount + rowCellCount + scaleCellCount
 /-- The first scale cell. -/
@@ -119,7 +119,7 @@ def hotBlockCount : Nat := 4 * 202
 def labelCount : Nat := 508
 def keyBlockCount : Nat := 2 * 508
 
-theorem fieldCellCount_eq : fieldCellCount = 34297 := by
+theorem fieldCellCount_eq : fieldCellCount = 33660 := by
   norm_num [fieldCellCount, curveCellCount, rowCellCount, scaleCellCount]
 
 /-! ### Request cells -/

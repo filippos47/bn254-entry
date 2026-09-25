@@ -567,15 +567,15 @@ theorem digitValues_fixed (dx dy : Block) (kx ky : Fin coordinateBitCount → Bl
     simp only [masks_pointY]
 
 theorem pointXJoins_fixed (dx : Block) (kx : Fin coordinateBitCount → Block × Block)
-    (rand : Fin digitCount → RowRand) (slopes : Fin digitCount → Biquadratic.Values)
+    (rows : Fin digitCount → Coordinates.Rows) (slopes : Fin digitCount → Biquadratic.Values)
     (hs : ∀ d, slopes d =
-      digitSlopes ((maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).1 d) (rand d))
+      digitSlopes (rows d) ((maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).1 d))
     (chunk : Fin chunkCount) (slot : Fin pointElementCountX) :
     (Programs.laneTables (tableOracle (fixedTable v T)) (tableHash (fixedTable v T)) .pointX dx
         kx).scaleJoins (Pipeline.pointXAssemble slopes) chunk slot =
-      digitJoins
+      digitJoins (rows (pointXSlots.symm slot).1)
         ((maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).1 (pointXSlots.symm slot).1)
-        (rand (pointXSlots.symm slot).1) (.inl (pointXSlots.symm slot).2) chunk := by
+        (.inl (pointXSlots.symm slot).2) chunk := by
   obtain ⟨⟨d, e⟩, rfl⟩ := pointXSlots.surjective slot
   rw [Equiv.symm_apply_apply]
   refine (laneScaleJoins_fixed v T .pointX dx kx _ chunk (pointXSlots (d, e))).trans ?_
@@ -583,21 +583,21 @@ theorem pointXJoins_fixed (dx : Block) (kx : Fin coordinateBitCount → Block ×
     Pipeline.pointXAssemble_digit slopes d e
   show _ = (∑ j : Fin (2 ^ chunkWidth chunk),
       (maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).1 d (.inl e) ⟨chunk, j⟩) +
-    digitSlopes ((maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).1 d) (rand d)
+    digitSlopes (rows d) ((maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).1 d)
       (.inl e) * weight chunk
   rw [slope, hs d]
   simp only [masks_pointX]
 
 theorem pointYJoins_fixed (dy : Block) (ky : Fin coordinateBitCount → Block × Block)
-    (rand : Fin digitCount → RowRand) (slopes : Fin digitCount → Biquadratic.Values)
+    (rows : Fin digitCount → Coordinates.Rows) (slopes : Fin digitCount → Biquadratic.Values)
     (hs : ∀ d, slopes d =
-      digitSlopes ((maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).1 d) (rand d))
+      digitSlopes (rows d) ((maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).1 d))
     (chunk : Fin chunkCount) (slot : Fin pointElementCountY) :
     (Programs.laneTables (tableOracle (fixedTable v T)) (tableHash (fixedTable v T)) .pointY dy
         ky).scaleJoins (Pipeline.pointYAssemble slopes) chunk slot =
-      digitJoins
+      digitJoins (rows (pointYSlots.symm slot).1)
         ((maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).1 (pointYSlots.symm slot).1)
-        (rand (pointYSlots.symm slot).1) (.inr (pointYSlots.symm slot).2) chunk := by
+        (.inr (pointYSlots.symm slot).2) chunk := by
   obtain ⟨⟨d, e⟩, rfl⟩ := pointYSlots.surjective slot
   rw [Equiv.symm_apply_apply]
   refine (laneScaleJoins_fixed v T .pointY dy ky _ chunk (pointYSlots (d, e))).trans ?_
@@ -605,7 +605,7 @@ theorem pointYJoins_fixed (dy : Block) (ky : Fin coordinateBitCount → Block ×
     Pipeline.pointYAssemble_digit slopes d e
   show _ = (∑ j : Fin (2 ^ chunkWidth chunk),
       (maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).1 d (.inr e) ⟨chunk, j⟩) +
-    digitSlopes ((maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).1 d) (rand d)
+    digitSlopes (rows d) ((maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).1 d)
       (.inr e) * weight chunk
   rw [slope, hs d]
   simp only [masks_pointY]
@@ -809,9 +809,7 @@ theorem tablePub_cells (coins : Coins) (v : FixedIndex → Block) (T : Tape) (ke
         (splitAlong (hiddenIdx input) (hiddenIdx_injective input)
           (v ∘ indexSwap (coinKeys scalar (coinsSplit coins)))).2) := rfl
   have coinsEq : (omegaEquiv input scalar (coins, v, masksOf VectorSite.lane T)).2 =
-      (fun d => ((maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).1 d,
-          ((coins.pointRandomness.get d).x,
-          (coins.pointRandomness.get d).y, (coins.pointRandomness.get d).z)),
+      (fun d => (maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).1 d,
         ((maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).2, coins.bridgeKey,
           ⟨coins.curveMask.value, coins.curveMask.nonzero⟩, coins.curveR1, coins.curveR2),
         (fun ℓ s => v (hiddenIdx input (.inl (ℓ, s))),
@@ -832,22 +830,21 @@ theorem tablePub_cells (coins : Coins) (v : FixedIndex → Block) (T : Tape) (ke
       digitOffsets (m.1 d) := fun d => digitValues_fixed v T _ _ _ _ d
   have curveK := curveValues_fixed v T (coins.inputDelta .x) (coins.inputDelta .y)
     (Pipeline.bitKeyOf coins.inputMacKey .x) (Pipeline.bitKeyOf coins.inputMacKey .y)
+  have rowsGet : ∀ i : Fin outputMacCount,
+      (FieldMacToECMac.rowsForOutputKeys keys coins.pointRandomness).get i =
+        Coordinates.rows (keys.get i).offset.coordinates (digitEndomorphismBase (keys.get i).digit)
+          (coins.pointRandomness.get i).rho.value (coins.pointRandomness.get i).tau.value := by
+    intro i
+    unfold FieldMacToECMac.rowsForOutputKeys
+    exact Vector.get_ofFn _ i
   apply public_ext
   · change CurveMembership.garble _ _ _ _ _ = CurveMembership.garble _ _ _ _ _
     rw [curveK]
   · change Vector.ofFn _ = Vector.ofFn _
     refine congrArg Vector.ofFn (funext fun d => ?_)
-    change garbleRow _ _ _ = garbleRow _ _ _
+    change garbleRow _ _ = garbleRow _ _
     beta_reduce
-    rw [digitK]
-    have rowsGet : ∀ i : Fin outputMacCount,
-        (FieldMacToECMac.rowsForOutputKeys keys coins.pointRandomness).get i =
-          Coordinates.rows (keys.get i).offset.coordinates (digitEndomorphismBase (keys.get i).digit)
-            (coins.pointRandomness.get i).rho.value (coins.pointRandomness.get i).tau.value := by
-      intro i
-      unfold FieldMacToECMac.rowsForOutputKeys
-      exact Vector.get_ofFn _ i
-    rw [rowsGet d]
+    rw [digitK, rowsGet d]
     rfl
   · rw [assemble_exception, cellsSource_exception]
     unfold Programs.gadgetM
@@ -863,13 +860,13 @@ theorem tablePub_cells (coins : Coins) (v : FixedIndex → Block) (T : Tape) (ke
     exact congrArg Vector.ofFn (funext fun s => foldJoin_split input (v ∘ indexSwap keys) .pointX s _)
   · rw [(assemble_hot _ _ _ _ _ _ _ _ _ _ _).2.2.2, (cellsSource_hot _ _).2.2.2, laneHotJoins_fixed]
     exact congrArg Vector.ofFn (funext fun s => foldJoin_split input (v ∘ indexSwap keys) .pointY s _)
-  · have pointSlopes : ∀ d : Fin digitCount, Biquadratic.slopes (coins.pointRandomness.get d).x
-        (coins.pointRandomness.get d).y (coins.pointRandomness.get d).z
+  · have pointSlopes : ∀ d : Fin digitCount,
+        Biquadratic.slopes ((FieldMacToECMac.rowsForOutputKeys keys coins.pointRandomness).get d)
           (Pipeline.digitValues PX.offsets PY.offsets d) =
-        digitSlopes (m.1 d) ((coins.pointRandomness.get d).x,
-          (coins.pointRandomness.get d).y, (coins.pointRandomness.get d).z) := by
+        digitSlopes ((offContext input pads keys
+          (omegaEquiv input scalar (coins, v, masksOf VectorSite.lane T)).1).rows d) (m.1 d) := by
       intro d
-      rw [digitK]
+      rw [digitK, rowsGet d]
       rfl
     have curveSlopesEq : CurveMembership.slopes coins.curveR1 coins.curveR2
         (Pipeline.curveValues

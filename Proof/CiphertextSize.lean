@@ -23,19 +23,19 @@ open BN254
 
 /-- Every Plan B public value has the declared ciphertext size. -/
 theorem ciphertextSize (value : Public) :
-    (encoding.encode value).length = 1103204 :=
+    (encoding.encode value).length = 1082820 :=
   garble_length value
 
-/-- The construction-facing corollary: every garbling of every tape is `1103204` bytes, because
+/-- The construction-facing corollary: every garbling of every tape is `1082820` bytes, because
 every inhabitant of `Public` is. -/
 theorem garbledCircuit_length [FieldCertificate] [GroupCertificate]
     (parameter : Nat) (scalar : NonZeroScalar) (randomness : Garbling.Randomness) :
     (encoding.encode
       ((Garbling.garbledCircuit construction).garble parameter scalar randomness).1).length =
-      1103204 :=
+      1082820 :=
   ciphertextSize _
 
 /-- The constant the Plan B `Solution.ciphertextBytes` field carries. -/
-theorem ciphertextBytesConstant_eq : ciphertextBytesConstant = 1103204 := rfl
+theorem ciphertextBytesConstant_eq : ciphertextBytesConstant = 1082820 := rfl
 
 end Kriterion.ArgoMAC.PlanB.Wire

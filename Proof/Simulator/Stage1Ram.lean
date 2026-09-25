@@ -184,11 +184,8 @@ theorem sourceOfDraws_congr (cells cells' : Nat → BaseField) (bytes bytes' hot
     intro digit bound
     have small : digit < 91 := bound
     simp only [sourceOfDraws, Vector.getElem_ofFn]
-    rw [sameCells _ (by omega), sameCells (3 + 10 * digit + 1) (by omega),
-      sameCells (3 + 10 * digit + 2) (by omega), sameCells (3 + 10 * digit + 3) (by omega),
-      sameCells (3 + 10 * digit + 4) (by omega), sameCells (3 + 10 * digit + 5) (by omega),
-      sameCells (3 + 10 * digit + 6) (by omega), sameCells (3 + 10 * digit + 7) (by omega),
-      sameCells (3 + 10 * digit + 8) (by omega), sameCells (3 + 10 * digit + 9) (by omega)]
+    rw [sameCells _ (by omega), sameCells (3 + 3 * digit + 1) (by omega),
+      sameCells (3 + 3 * digit + 2) (by omega)]
   · apply Vector.ext
     intro digit bound
     apply Vector.ext

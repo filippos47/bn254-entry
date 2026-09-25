@@ -5,7 +5,7 @@
 `rep` at the front, and `memSem_rep_law` turns a `rep` of independent draws, each stored by a
 `step`, into `optionProduct` followed by `foldStore`. Instances:
 
-* `memSem_fields`: the `34,297` field cells, as `fieldCellLaw` draws;
+* `memSem_fields`: the `33,660` field cells, as `fieldCellLaw` draws;
 * `memSem_words`: the byte, fold-join and key cells, as `wordLaw` draws.
 
 `foldStore_ram_at` / `foldStore_ram_off` read the RAM a fold of stores leaves.

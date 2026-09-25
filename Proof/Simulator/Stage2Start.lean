@@ -142,8 +142,8 @@ theorem retained_key (parameter : Nat) (draw : Stage1Draw)
 end Cells
 
 theorem drawSource_row_get (draw : Stage1Draw) (digit : Fin digitCount) (field : Nat)
-    (small : field < 10) :
-    rowField ((drawSource draw).rows.get digit) field = total 0 draw.1 (3 + 10 * digit.val + field) := by
+    (small : field < 3) :
+    rowField ((drawSource draw).rows.get digit) field = total 0 draw.1 (3 + 3 * digit.val + field) := by
   simp only [drawSource, sourceOfDraws, Vector.get_ofFn]
   interval_cases field <;> rfl
 
@@ -258,7 +258,7 @@ theorem prefix_replayStart (parameter : Nat) (draw : Stage1Draw)
   have fieldCell : ∀ index, index < fieldCellCount →
       middle.ram (word (fieldBase + index)) = fieldWord (total 0 draw.1 index) := by
     intro index bound
-    have : index < 34297 := bound
+    have : index < 33660 := bound
     rw [parsed _ (by unfold fieldBase; omega), parsed_outside _ _ _ _ _ _ _ _ (by unfold fieldBase; omega)]
     exact retained_field parameter draw index bound
   have hotCell : ∀ index, index < hotBlockCount →
@@ -300,7 +300,7 @@ theorem prefix_replayStart (parameter : Nat) (draw : Stage1Draw)
     unfold chunkCount at chunkBound
     unfold elementCount at slotBound
     rw [show scaleCellBase + elementCount * c.val + slot.val =
-        fieldBase + (913 + 642 * c.val + slot.val) by
+        fieldBase + (276 + 642 * c.val + slot.val) by
         unfold scaleCellBase curveCellCount rowCellCount elementCount; omega,
       fieldCell _ (by unfold fieldCellCount curveCellCount rowCellCount scaleCellCount; omega)]
     rfl
@@ -323,12 +323,12 @@ theorem prefix_rows (parameter : Nat) (draw : Stage1Draw) (input : AffineInput) 
     (parsed : ∀ value, value < 2 ^ 44 → middle.ram (word value) =
       parsedRam (retained parameter draw).ram input.x.val input.y.val (outTags target).1
         (outTags target).2.1 (outTags target).2.2.1 (outTags target).2.2.2 (word value))
-    (digit : Fin digitCount) (slot : Nat) (small : slot < 10) :
+    (digit : Fin digitCount) (slot : Nat) (small : slot < 3) :
     middle.ram (word (Opening.rowCell digit.val slot)) =
       fieldWord (rowField ((drawSource draw).rows.get digit) slot) := by
   have := digit.isLt
   unfold digitCount at this
-  rw [show Opening.rowCell digit.val slot = fieldBase + (3 + 10 * digit.val + slot) by
+  rw [show Opening.rowCell digit.val slot = fieldBase + (3 + 3 * digit.val + slot) by
       unfold Opening.rowCell curveCellCount; omega,
     parsed _ (by unfold fieldBase; omega), parsed_outside _ _ _ _ _ _ _ _ (by unfold fieldBase; omega),
     retained_field parameter draw _ (by unfold fieldCellCount curveCellCount rowCellCount scaleCellCount; omega),

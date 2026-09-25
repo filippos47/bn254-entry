@@ -11,12 +11,9 @@ import Construction.PGS.Encoding
 
 open Kriterion Kriterion.ArgoMAC Kriterion.ArgoMAC.PlanB
 
-/-- Eleven distinct published constants. -/
+/-- Three distinct published constants. -/
 def sampleGamma (digit : Nat) : RowGamma :=
-  { xC0 := (digit + 1 : Nat), xC1 := (digit + 2 : Nat), xC2 := (digit + 3 : Nat),
-    xC4 := (digit + 4 : Nat), yC0 := (digit + 5 : Nat), yC2 := (digit + 6 : Nat),
-    yC3 := (digit + 7 : Nat), yC4 := (digit + 8 : Nat), yC5 := (digit + 9 : Nat),
-    zC0 := (digit + 10 : Nat), zC1 := (digit + 11 : Nat) }
+  { gX := (digit + 1 : Nat), gY := (digit + 2 : Nat), gZ := (digit + 3 : Nat) }
 
 /-- Six gadget bytes. -/
 def sampleEntry (digit : Nat) : Exception.Entry :=
@@ -41,5 +38,5 @@ def samplePublic : Public :=
       BitVec.ofNat 128 (step.val * 6543217 + 4)
     scale := Vector.ofFn fun chunk : Fin chunkCount => sampleWord chunk.val }
 
--- Prints `1348634`.
+-- Prints `1082820`.
 #eval (Wire.encoding.encode samplePublic).length

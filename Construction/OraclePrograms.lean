@@ -606,13 +606,11 @@ def assemble (outputKeys : FieldMacToECMac.OutputKeys)
   let curveSlopes := CurveMembership.slopes curveR1 curveR2 curveK
   let digitK : FieldMacToECMac.DigitValues :=
     fun digit => Pipeline.digitValues pointX.offsets pointY.offsets digit
-  let pointSlopes : Fin digitCount → Biquadratic.Values := fun digit =>
-    Biquadratic.slopes (pointRandomness.get digit).x (pointRandomness.get digit).y
-      (pointRandomness.get digit).z (digitK digit)
   let rows := FieldMacToECMac.rowsForOutputKeys outputKeys pointRandomness
+  let pointSlopes : Fin digitCount → Biquadratic.Values := fun digit =>
+    Biquadratic.slopes (rows.get digit) (digitK digit)
   { curve := CurveMembership.garble bridgeKey curveMask.value curveR1 curveR2 curveK
-    rows := Vector.ofFn fun index =>
-      FieldMacToECMac.garbleRow (rows.get index) (pointRandomness.get index) (digitK index)
+    rows := Vector.ofFn fun index => FieldMacToECMac.garbleRow (rows.get index) (digitK index)
     exception := gadget
     curveXHot := curveX.hotJoins
     curveYHot := curveY.hotJoins

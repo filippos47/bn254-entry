@@ -169,226 +169,179 @@ theorem step_addCell (cell : Nat) (memory : Memory) (acc value : BaseField)
 /-- The solve's fixed registers, as field values. -/
 def SolveRegs (memory : Memory) (x y kappaValue : BaseField) : Prop :=
   wordField (memory.registers rA) = x ∧ wordField (memory.registers rB) = y ∧
-    wordField (memory.registers rC) = x * x ∧ wordField (memory.registers rD) = y * y ∧
-    wordField (memory.registers rE) = x * y ∧ wordField (memory.registers rF) = kappaValue
+    wordField (memory.registers rC) = x * x ∧ wordField (memory.registers rF) = kappaValue
 
 theorem SolveRegs.frame {memory after : Memory} {x y kappaValue : BaseField}
     (holds : SolveRegs memory x y kappaValue)
     (same : ∀ index, index ≠ rAcc → index ≠ rSel → index ≠ rAddr →
       after.registers index = memory.registers index) : SolveRegs after x y kappaValue := by
-  obtain ⟨a, b, c, d, e, f⟩ := holds
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩ <;> rw [same _ (by decide) (by decide) (by decide)] <;> assumption
+  obtain ⟨a, b, c, f⟩ := holds
+  refine ⟨?_, ?_, ?_, ?_⟩ <;> rw [same _ (by decide) (by decide) (by decide)] <;> assumption
 
-/-- **The `X` row** of a digit and its collector target `y*_0 = (W.x − X) · κ`. -/
+/-- **The `X` row** of a digit and its collector target `y*_0 = (W.x − X) · κ`:
+`X = gX + x7 · x + x9 + y10`. -/
 theorem run_rowX (digit : Nat) (rest : Prog) (memory : Memory) (x y kappaValue : BaseField)
     (regsHold : SolveRegs memory x y kappaValue)
-    (c0 c1 c2 c4 v7 v9 v10 target : BaseField)
+    (c0 v7 v9 v10 target : BaseField)
     (h0 : wordField (memory.ram (word (Opening.rowCell digit 0))) = c0)
-    (h1 : wordField (memory.ram (word (Opening.rowCell digit 1))) = c1)
-    (h2 : wordField (memory.ram (word (Opening.rowCell digit 2))) = c2)
-    (h3 : wordField (memory.ram (word (Opening.rowCell digit 3))) = c4)
     (h7 : wordField (memory.ram (word (Opening.xCell (4 * digit)))) = v7)
     (h9 : wordField (memory.ram (word (Opening.xCell (4 * digit + 1)))) = v9)
     (h10 : wordField (memory.ram (word (Opening.yCell (3 * digit)))) = v10)
     (hw : wordField (memory.ram (word (openRow digit))) = target) :
     ∃ after, (Prog.seq (loadAt rAcc (Opening.rowCell digit 0))
-        (Prog.seq (Opening.addScaled (Opening.rowCell digit 1) rA)
-        (Prog.seq (Opening.addScaled (Opening.rowCell digit 2) rB)
-        (Prog.seq (Opening.addScaled (Opening.rowCell digit 3) rC)
         (Prog.seq (Opening.addScaled (Opening.xCell (4 * digit)) rA)
         (Prog.seq (Opening.addCell (Opening.xCell (4 * digit + 1)))
         (Prog.seq (Opening.addCell (Opening.yCell (3 * digit)))
-        (Prog.seq (Opening.finishTarget (openRow digit) (designatedCell (4 * digit + 1))) rest)))))))).memSem
-          memory = rest.memSem after ∧
+        (Prog.seq (Opening.finishTarget (openRow digit) (designatedCell (4 * digit + 1)))
+          rest))))).memSem memory = rest.memSem after ∧
       after.ram = Function.update memory.ram (word (designatedCell (4 * digit + 1)))
-        (fieldWord ((target - (c0 + c1 * x + c2 * y + c4 * (x * x) + v7 * x + v9 + v10)) *
-          kappaValue)) ∧
+        (fieldWord ((target - (c0 + v7 * x + v9 + v10)) * kappaValue)) ∧
       after.bits = memory.bits ∧ SolveRegs after x y kappaValue ∧
       ∀ index, index ≠ rAcc → index ≠ rSel → index ≠ rAddr →
         after.registers index = memory.registers index := by
-  obtain ⟨ra, rb, rc, rd, re, rf⟩ := regsHold
+  obtain ⟨ra, rb, rc, rf⟩ := regsHold
   rw [memSem_loadAt_seq]
   set m1 := setReg (setReg memory rAddr (word (Opening.rowCell digit 0))) rAcc
     (memory.ram (word (Opening.rowCell digit 0))) with m1Def
   have frame1 : ∀ index, index ≠ rAcc → index ≠ rSel → index ≠ rAddr →
       m1.registers index = memory.registers index := fun index h0' _ h4' => by
     rw [m1Def]; simp only [setReg_registers, if_neg h0', if_neg h4']
-  have regs1 : SolveRegs m1 x y kappaValue := SolveRegs.frame ⟨ra, rb, rc, rd, re, rf⟩ frame1
-  obtain ⟨m2, run2, ram2, bits2, acc2, frame2⟩ := step_addScaled _ rA m1 c0 c1 x (by decide)
-    (by decide) (by rw [m1Def, reg_same, h0]) (by rw [m1Def]; exact h1) regs1.1
-  rw [memSem_pure_seq run2]
-  have regs2 := regs1.frame frame2
-  obtain ⟨m3, run3, ram3, bits3, acc3, frame3⟩ := step_addScaled _ rB m2 _ c2 y (by decide)
-    (by decide) acc2 (by rw [ram2, m1Def]; exact h2) regs2.2.1
-  rw [memSem_pure_seq run3]
-  have regs3 := regs2.frame frame3
-  obtain ⟨m4, run4, ram4, bits4, acc4, frame4⟩ := step_addScaled _ rC m3 _ c4 (x * x) (by decide)
-    (by decide) acc3 (by rw [ram3, ram2, m1Def]; exact h3) regs3.2.2.1
-  rw [memSem_pure_seq run4]
-  have regs4 := regs3.frame frame4
-  obtain ⟨m5, run5, ram5, bits5, acc5, frame5⟩ := step_addScaled _ rA m4 _ v7 x (by decide)
-    (by decide) acc4 (by rw [ram4, ram3, ram2, m1Def]; exact h7) regs4.1
-  rw [memSem_pure_seq run5]
-  have regs5 := regs4.frame frame5
-  obtain ⟨m6, run6, ram6, bits6, acc6, frame6⟩ := step_addCell _ m5 _ v9 acc5
-    (by rw [ram5, ram4, ram3, ram2, m1Def]; exact h9)
-  rw [memSem_pure_seq run6]
-  have regs6 := regs5.frame frame6
-  obtain ⟨m7, run7, ram7, bits7, acc7, frame7⟩ := step_addCell _ m6 _ v10 acc6
-    (by rw [ram6, ram5, ram4, ram3, ram2, m1Def]; exact h10)
-  rw [memSem_pure_seq run7]
-  have regs7 := regs6.frame frame7
-  obtain ⟨m8, run8, ram8, bits8, frame8⟩ := memSem_finishTarget (openRow digit) (designatedCell (4 * digit + 1)) m7
-  rw [memSem_pure_seq run8]
-  have ramChain : m7.ram = memory.ram := by rw [ram7, ram6, ram5, ram4, ram3, ram2, m1Def]; rfl
-  refine ⟨m8, rfl, ?_, ?_, regs7.frame fun index _ h5 h4 => frame8 index h5 h4, ?_⟩
-  · rw [ram8, acc7, regs7.2.2.2.2.2, ramChain, hw]
-  · rw [bits8, bits7, bits6, bits5, bits4, bits3, bits2, m1Def]; rfl
-  · intro index h0' h5 h4
-    rw [frame8 index h5 h4, frame7 index h0' h5 h4, frame6 index h0' h5 h4, frame5 index h0' h5 h4,
-      frame4 index h0' h5 h4, frame3 index h0' h5 h4, frame2 index h0' h5 h4, frame1 index h0' h5 h4]
-
-/-- **The sign row** of a digit and its collector target `y*_1 = (W.y − S) · κ · (x · x)⁻¹`: the
-collector `rowY_cubic` enters the row with coefficient `x²`. The row reads `cubic · x²` (the running
-sum without `j*`), then `y8 · y` and `y10`. -/
-theorem run_rowY (digit : Nat) (rest : Prog) (memory : Memory) (x y kappaValue : BaseField)
-    (regsHold : SolveRegs memory x y kappaValue)
-    (c0 c2 c4 c5 vc v8 v10 target : BaseField)
-    (h0 : wordField (memory.ram (word (Opening.rowCell digit 4))) = c0)
-    (h2 : wordField (memory.ram (word (Opening.rowCell digit 5))) = c2)
-    (h4 : wordField (memory.ram (word (Opening.rowCell digit 6))) = c4)
-    (h5 : wordField (memory.ram (word (Opening.rowCell digit 7))) = c5)
-    (hc : wordField (memory.ram (word (Opening.xCell (4 * digit + 2)))) = vc)
-    (h8 : wordField (memory.ram (word (Opening.yCell (3 * digit + 1)))) = v8)
-    (h10 : wordField (memory.ram (word (Opening.yCell (3 * digit + 2)))) = v10)
-    (hw : wordField (memory.ram (word (openRow digit + 1))) = target) :
-    ∃ after, (Prog.seq (loadAt rAcc (Opening.rowCell digit 4))
-        (Prog.seq (Opening.addScaled (Opening.rowCell digit 5) rB)
-        (Prog.seq (Opening.addScaled (Opening.rowCell digit 6) rC)
-        (Prog.seq (Opening.addScaled (Opening.rowCell digit 7) rD)
-        (Prog.seq (Opening.addScaled (Opening.xCell (4 * digit + 2)) rC)
-        (Prog.seq (Opening.addScaled (Opening.yCell (3 * digit + 1)) rB)
-        (Prog.seq (Opening.addCell (Opening.yCell (3 * digit + 2)))
-        (Prog.seq (Opening.finishScaled (openRow digit + 1) (designatedCell (4 * digit + 2)))
-          rest)))))))).memSem memory = rest.memSem after ∧
-      after.ram = Function.update memory.ram (word (designatedCell (4 * digit + 2)))
-        (fieldWord ((target - (c0 + c2 * y + c4 * (x * x) + c5 * (y * y) + vc * (x * x) +
-          v8 * y + v10)) * kappaValue * (x * x)⁻¹)) ∧
-      after.bits = memory.bits ∧ SolveRegs after x y kappaValue ∧
-      ∀ index, index ≠ rAcc → index ≠ rSel → index ≠ rAddr →
-        after.registers index = memory.registers index := by
-  obtain ⟨ra, rb, rc, rd, re, rf⟩ := regsHold
-  rw [memSem_loadAt_seq]
-  set m1 := setReg (setReg memory rAddr (word (Opening.rowCell digit 4))) rAcc
-    (memory.ram (word (Opening.rowCell digit 4))) with m1Def
-  have frame1 : ∀ index, index ≠ rAcc → index ≠ rSel → index ≠ rAddr →
-      m1.registers index = memory.registers index := fun index h0' _ h4' => by
-    rw [m1Def]; simp only [setReg_registers, if_neg h0', if_neg h4']
-  have regs1 : SolveRegs m1 x y kappaValue := SolveRegs.frame ⟨ra, rb, rc, rd, re, rf⟩ frame1
+  have regs1 : SolveRegs m1 x y kappaValue := SolveRegs.frame ⟨ra, rb, rc, rf⟩ frame1
   have ram1 : m1.ram = memory.ram := by rw [m1Def]; rfl
-  obtain ⟨m2, run2, ram2, bits2, acc2, frame2⟩ := step_addScaled _ rB m1 c0 c2 y (by decide)
-    (by decide) (by rw [m1Def, reg_same, h0]) (by rw [ram1]; exact h2) regs1.2.1
-  rw [memSem_pure_seq run2]
-  have regs2 := regs1.frame frame2
-  obtain ⟨m3, run3, ram3, bits3, acc3, frame3⟩ := step_addScaled _ rC m2 _ c4 (x * x) (by decide)
-    (by decide) acc2 (by rw [ram2, ram1]; exact h4) regs2.2.2.1
-  rw [memSem_pure_seq run3]
-  have regs3 := regs2.frame frame3
-  obtain ⟨m4, run4, ram4, bits4, acc4, frame4⟩ := step_addScaled _ rD m3 _ c5 (y * y) (by decide)
-    (by decide) acc3 (by rw [ram3, ram2, ram1]; exact h5) regs3.2.2.2.1
-  rw [memSem_pure_seq run4]
-  have regs4 := regs3.frame frame4
-  obtain ⟨m5, run5, ram5, bits5, acc5, frame5⟩ := step_addScaled _ rC m4 _ vc (x * x) (by decide)
-    (by decide) acc4 (by rw [ram4, ram3, ram2, ram1]; exact hc) regs4.2.2.1
-  rw [memSem_pure_seq run5]
-  have regs5 := regs4.frame frame5
-  obtain ⟨m6, run6, ram6, bits6, acc6, frame6⟩ := step_addScaled _ rB m5 _ v8 y (by decide)
-    (by decide) acc5 (by rw [ram5, ram4, ram3, ram2, ram1]; exact h8) regs5.2.1
-  rw [memSem_pure_seq run6]
-  have regs6 := regs5.frame frame6
-  obtain ⟨m7, run7, ram7, bits7, acc7, frame7⟩ := step_addCell _ m6 _ v10 acc6
-    (by rw [ram6, ram5, ram4, ram3, ram2, ram1]; exact h10)
-  rw [memSem_pure_seq run7]
-  have regs7 := regs6.frame frame7
-  obtain ⟨m8, run8, ram8, bits8, frame8⟩ :=
-    memSem_finishScaled (openRow digit + 1) (designatedCell (4 * digit + 2)) m7
-  rw [memSem_pure_seq run8]
-  have ramChain : m7.ram = memory.ram := by
-    rw [ram7, ram6, ram5, ram4, ram3, ram2, ram1]
-  refine ⟨m8, rfl, ?_, ?_, regs7.frame fun index h0' h5' h4' => frame8 index h0' h5' h4', ?_⟩
-  · rw [ram8, acc7, regs7.2.2.2.2.2, regs7.2.2.1, ramChain, hw]
-  · rw [bits8, bits7, bits6, bits5, bits4, bits3, bits2, m1Def]; rfl
-  · intro index h0' h5' h4'
-    rw [frame8 index h0' h5' h4', frame7 index h0' h5' h4', frame6 index h0' h5' h4',
-      frame5 index h0' h5' h4', frame4 index h0' h5' h4', frame3 index h0' h5' h4',
-      frame2 index h0' h5' h4', frame1 index h0' h5' h4']
-
-/-- **The `Z` row** of a digit and its collector target `y*_2 = (W.z − Z) · κ`. -/
-theorem run_rowZ (digit : Nat) (rest : Prog) (memory : Memory) (x y kappaValue : BaseField)
-    (regsHold : SolveRegs memory x y kappaValue)
-    (c0 c1 v9 target : BaseField)
-    (h0 : wordField (memory.ram (word (Opening.rowCell digit 8))) = c0)
-    (h1 : wordField (memory.ram (word (Opening.rowCell digit 9))) = c1)
-    (h9 : wordField (memory.ram (word (Opening.xCell (4 * digit + 3)))) = v9)
-    (hw : wordField (memory.ram (word (openRow digit + 2))) = target) :
-    ∃ after, (Prog.seq (loadAt rAcc (Opening.rowCell digit 8))
-        (Prog.seq (Opening.addScaled (Opening.rowCell digit 9) rA)
-        (Prog.seq (Opening.addCell (Opening.xCell (4 * digit + 3)))
-        (Prog.seq (Opening.finishTarget (openRow digit + 2) (designatedCell (4 * digit + 3))) rest)))).memSem
-          memory = rest.memSem after ∧
-      after.ram = Function.update memory.ram (word (designatedCell (4 * digit + 3)))
-        (fieldWord ((target - (c0 + c1 * x + v9)) * kappaValue)) ∧
-      after.bits = memory.bits ∧ SolveRegs after x y kappaValue ∧
-      ∀ index, index ≠ rAcc → index ≠ rSel → index ≠ rAddr →
-        after.registers index = memory.registers index := by
-  obtain ⟨ra, rb, rc, rd, re, rf⟩ := regsHold
-  rw [memSem_loadAt_seq]
-  set m1 := setReg (setReg memory rAddr (word (Opening.rowCell digit 8))) rAcc
-    (memory.ram (word (Opening.rowCell digit 8))) with m1Def
-  have frame1 : ∀ index, index ≠ rAcc → index ≠ rSel → index ≠ rAddr →
-      m1.registers index = memory.registers index := fun index h0' _ h4' => by
-    rw [m1Def]; simp only [setReg_registers, if_neg h0', if_neg h4']
-  have regs1 : SolveRegs m1 x y kappaValue := SolveRegs.frame ⟨ra, rb, rc, rd, re, rf⟩ frame1
-  have ram1 : m1.ram = memory.ram := by rw [m1Def]; rfl
-  obtain ⟨m2, run2, ram2, bits2, acc2, frame2⟩ := step_addScaled _ rA m1 c0 c1 x (by decide)
-    (by decide) (by rw [m1Def, reg_same, h0]) (by rw [ram1]; exact h1) regs1.1
+  obtain ⟨m2, run2, ram2, bits2, acc2, frame2⟩ := step_addScaled _ rA m1 c0 v7 x (by decide)
+    (by decide) (by rw [m1Def, reg_same, h0]) (by rw [ram1]; exact h7) regs1.1
   rw [memSem_pure_seq run2]
   have regs2 := regs1.frame frame2
   obtain ⟨m3, run3, ram3, bits3, acc3, frame3⟩ := step_addCell _ m2 _ v9 acc2
     (by rw [ram2, ram1]; exact h9)
   rw [memSem_pure_seq run3]
   have regs3 := regs2.frame frame3
-  obtain ⟨m4, run4, ram4, bits4, frame4⟩ :=
-    memSem_finishTarget (openRow digit + 2) (designatedCell (4 * digit + 3)) m3
+  obtain ⟨m4, run4, ram4, bits4, acc4, frame4⟩ := step_addCell _ m3 _ v10 acc3
+    (by rw [ram3, ram2, ram1]; exact h10)
   rw [memSem_pure_seq run4]
-  refine ⟨m4, rfl, ?_, ?_, regs3.frame fun index _ h5' h4' => frame4 index h5' h4', ?_⟩
-  · rw [ram4, acc3, regs3.2.2.2.2.2, ram3, ram2, ram1, hw]
-  · rw [bits4, bits3, bits2, m1Def]; rfl
-  · intro index h0' h5' h4'
-    rw [frame4 index h5' h4', frame3 index h0' h5' h4', frame2 index h0' h5' h4',
-      frame1 index h0' h5' h4']
+  have regs4 := regs3.frame frame4
+  obtain ⟨m5, run5, ram5, bits5, frame5⟩ :=
+    memSem_finishTarget (openRow digit) (designatedCell (4 * digit + 1)) m4
+  rw [memSem_pure_seq run5]
+  have ramChain : m4.ram = memory.ram := by rw [ram4, ram3, ram2, ram1]
+  refine ⟨m5, rfl, ?_, ?_, regs4.frame fun index _ h5 h4 => frame5 index h5 h4, ?_⟩
+  · rw [ram5, acc4, regs4.2.2.2, ramChain, hw]
+  · rw [bits5, bits4, bits3, bits2, m1Def]; rfl
+  · intro index h0' h5 h4
+    rw [frame5 index h5 h4, frame4 index h0' h5 h4, frame3 index h0' h5 h4, frame2 index h0' h5 h4,
+      frame1 index h0' h5 h4]
 
-/-- **The solve's prefix**: `x, y, x², y², x y` and `κ` into `rA … rF`. -/
+/-- **The `Y` row** of a digit and its collector target `y*_1 = (W.y − Y) · κ · (x · x)⁻¹`: the
+collector `rowY_cubic` enters the row with coefficient `x²`. The row reads `y10`, then
+`gY · x²`, `cubic · x²` (the running sum without `j*`) and `y8 · y`. -/
+theorem run_rowY (digit : Nat) (rest : Prog) (memory : Memory) (x y kappaValue : BaseField)
+    (regsHold : SolveRegs memory x y kappaValue)
+    (c4 vc v8 v10 target : BaseField)
+    (h4 : wordField (memory.ram (word (Opening.rowCell digit 1))) = c4)
+    (hc : wordField (memory.ram (word (Opening.xCell (4 * digit + 2)))) = vc)
+    (h8 : wordField (memory.ram (word (Opening.yCell (3 * digit + 1)))) = v8)
+    (h10 : wordField (memory.ram (word (Opening.yCell (3 * digit + 2)))) = v10)
+    (hw : wordField (memory.ram (word (openRow digit + 1))) = target) :
+    ∃ after, (Prog.seq (loadAt rAcc (Opening.yCell (3 * digit + 2)))
+        (Prog.seq (Opening.addScaled (Opening.rowCell digit 1) rC)
+        (Prog.seq (Opening.addScaled (Opening.xCell (4 * digit + 2)) rC)
+        (Prog.seq (Opening.addScaled (Opening.yCell (3 * digit + 1)) rB)
+        (Prog.seq (Opening.finishScaled (openRow digit + 1) (designatedCell (4 * digit + 2)))
+          rest))))).memSem memory = rest.memSem after ∧
+      after.ram = Function.update memory.ram (word (designatedCell (4 * digit + 2)))
+        (fieldWord ((target - (v10 + c4 * (x * x) + vc * (x * x) + v8 * y)) *
+          kappaValue * (x * x)⁻¹)) ∧
+      after.bits = memory.bits ∧ SolveRegs after x y kappaValue ∧
+      ∀ index, index ≠ rAcc → index ≠ rSel → index ≠ rAddr →
+        after.registers index = memory.registers index := by
+  obtain ⟨ra, rb, rc, rf⟩ := regsHold
+  rw [memSem_loadAt_seq]
+  set m1 := setReg (setReg memory rAddr (word (Opening.yCell (3 * digit + 2)))) rAcc
+    (memory.ram (word (Opening.yCell (3 * digit + 2)))) with m1Def
+  have frame1 : ∀ index, index ≠ rAcc → index ≠ rSel → index ≠ rAddr →
+      m1.registers index = memory.registers index := fun index h0' _ h4' => by
+    rw [m1Def]; simp only [setReg_registers, if_neg h0', if_neg h4']
+  have regs1 : SolveRegs m1 x y kappaValue := SolveRegs.frame ⟨ra, rb, rc, rf⟩ frame1
+  have ram1 : m1.ram = memory.ram := by rw [m1Def]; rfl
+  obtain ⟨m2, run2, ram2, bits2, acc2, frame2⟩ := step_addScaled _ rC m1 v10 c4 (x * x)
+    (by decide) (by decide) (by rw [m1Def, reg_same, h10]) (by rw [ram1]; exact h4) regs1.2.2.1
+  rw [memSem_pure_seq run2]
+  have regs2 := regs1.frame frame2
+  obtain ⟨m3, run3, ram3, bits3, acc3, frame3⟩ := step_addScaled _ rC m2 _ vc (x * x) (by decide)
+    (by decide) acc2 (by rw [ram2, ram1]; exact hc) regs2.2.2.1
+  rw [memSem_pure_seq run3]
+  have regs3 := regs2.frame frame3
+  obtain ⟨m4, run4, ram4, bits4, acc4, frame4⟩ := step_addScaled _ rB m3 _ v8 y (by decide)
+    (by decide) acc3 (by rw [ram3, ram2, ram1]; exact h8) regs3.2.1
+  rw [memSem_pure_seq run4]
+  have regs4 := regs3.frame frame4
+  obtain ⟨m5, run5, ram5, bits5, frame5⟩ :=
+    memSem_finishScaled (openRow digit + 1) (designatedCell (4 * digit + 2)) m4
+  rw [memSem_pure_seq run5]
+  have ramChain : m4.ram = memory.ram := by
+    rw [ram4, ram3, ram2, ram1]
+  refine ⟨m5, rfl, ?_, ?_, regs4.frame fun index h0' h5' h4' => frame5 index h0' h5' h4', ?_⟩
+  · rw [ram5, acc4, regs4.2.2.2, regs4.2.2.1, ramChain, hw]
+  · rw [bits5, bits4, bits3, bits2, m1Def]; rfl
+  · intro index h0' h5' h4'
+    rw [frame5 index h0' h5' h4', frame4 index h0' h5' h4',
+      frame3 index h0' h5' h4', frame2 index h0' h5' h4', frame1 index h0' h5' h4']
+
+/-- **The `Z` row** of a digit and its collector target `y*_2 = (W.z − Z) · κ`:
+`Z = gZ + x9`. -/
+theorem run_rowZ (digit : Nat) (rest : Prog) (memory : Memory) (x y kappaValue : BaseField)
+    (regsHold : SolveRegs memory x y kappaValue)
+    (c0 v9 target : BaseField)
+    (h0 : wordField (memory.ram (word (Opening.rowCell digit 2))) = c0)
+    (h9 : wordField (memory.ram (word (Opening.xCell (4 * digit + 3)))) = v9)
+    (hw : wordField (memory.ram (word (openRow digit + 2))) = target) :
+    ∃ after, (Prog.seq (loadAt rAcc (Opening.rowCell digit 2))
+        (Prog.seq (Opening.addCell (Opening.xCell (4 * digit + 3)))
+        (Prog.seq (Opening.finishTarget (openRow digit + 2) (designatedCell (4 * digit + 3)))
+          rest))).memSem memory = rest.memSem after ∧
+      after.ram = Function.update memory.ram (word (designatedCell (4 * digit + 3)))
+        (fieldWord ((target - (c0 + v9)) * kappaValue)) ∧
+      after.bits = memory.bits ∧ SolveRegs after x y kappaValue ∧
+      ∀ index, index ≠ rAcc → index ≠ rSel → index ≠ rAddr →
+        after.registers index = memory.registers index := by
+  obtain ⟨ra, rb, rc, rf⟩ := regsHold
+  rw [memSem_loadAt_seq]
+  set m1 := setReg (setReg memory rAddr (word (Opening.rowCell digit 2))) rAcc
+    (memory.ram (word (Opening.rowCell digit 2))) with m1Def
+  have frame1 : ∀ index, index ≠ rAcc → index ≠ rSel → index ≠ rAddr →
+      m1.registers index = memory.registers index := fun index h0' _ h4' => by
+    rw [m1Def]; simp only [setReg_registers, if_neg h0', if_neg h4']
+  have regs1 : SolveRegs m1 x y kappaValue := SolveRegs.frame ⟨ra, rb, rc, rf⟩ frame1
+  have ram1 : m1.ram = memory.ram := by rw [m1Def]; rfl
+  obtain ⟨m2, run2, ram2, bits2, acc2, frame2⟩ := step_addCell _ m1 c0 v9
+    (by rw [m1Def, reg_same, h0]) (by rw [ram1]; exact h9)
+  rw [memSem_pure_seq run2]
+  have regs2 := regs1.frame frame2
+  obtain ⟨m3, run3, ram3, bits3, frame3⟩ :=
+    memSem_finishTarget (openRow digit + 2) (designatedCell (4 * digit + 3)) m2
+  rw [memSem_pure_seq run3]
+  refine ⟨m3, rfl, ?_, ?_, regs2.frame fun index _ h5' h4' => frame3 index h5' h4', ?_⟩
+  · rw [ram3, acc2, regs2.2.2.2, ram2, ram1, hw]
+  · rw [bits3, bits2, m1Def]; rfl
+  · intro index h0' h5' h4'
+    rw [frame3 index h5' h4', frame2 index h0' h5' h4', frame1 index h0' h5' h4']
+
+/-- **The solve's prefix**: `x, y, x²` and `κ` into `rA, rB, rC, rF`. -/
 theorem run_solvePrefix (rest : Prog) (memory : Memory) (x y kappaValue : BaseField)
     (hx : wordField (memory.ram (word reqX)) = x) (hy : wordField (memory.ram (word reqY)) = y)
     (hk : wordField (memory.ram (word tmpKappa)) = kappaValue) :
     ∃ after, (Prog.seq (loadAt rA reqX) (Prog.seq (loadAt rB reqY)
-        (Prog.seq (ar .fieldMul rC rA rA) (Prog.seq (ar .fieldMul rD rB rB)
-        (Prog.seq (ar .fieldMul rE rA rB) (Prog.seq (loadAt rF tmpKappa) rest)))))).memSem memory =
+        (Prog.seq (ar .fieldMul rC rA rA) (Prog.seq (loadAt rF tmpKappa) rest)))).memSem memory =
         rest.memSem after ∧
       after.ram = memory.ram ∧ after.bits = memory.bits ∧ SolveRegs after x y kappaValue ∧
-      ∀ index, index ≠ rAddr → index ≠ rA → index ≠ rB → index ≠ rC → index ≠ rD → index ≠ rE →
+      ∀ index, index ≠ rAddr → index ≠ rA → index ≠ rB → index ≠ rC →
         index ≠ rF → after.registers index = memory.registers index := by
   rw [memSem_loadAt_seq, memSem_loadAt_seq]
   simp only [setReg_ram]
   rw [memSem_ar_val _ _ _ _ _ _ (memory.ram (word reqX)) (memory.ram (word reqX)) (by regv)
-      (by regv), eval_fieldMul,
-    memSem_ar_val _ _ _ _ _ _ (memory.ram (word reqY)) (memory.ram (word reqY)) (by regv)
-      (by regv), eval_fieldMul,
-    memSem_ar_val _ _ _ _ _ _ (memory.ram (word reqX)) (memory.ram (word reqY)) (by regv)
       (by regv), eval_fieldMul, memSem_loadAt_seq]
   simp only [setReg_ram]
-  refine ⟨_, rfl, rfl, rfl, ⟨?_, ?_, ?_, ?_, ?_, ?_⟩, fun index n4 n6 n7 n8 n9 n10 n11 => ?_⟩
+  refine ⟨_, rfl, rfl, rfl, ⟨?_, ?_, ?_, ?_⟩, fun index n4 n6 n7 n8 n11 => ?_⟩
   · simp only [setReg_registers]
     simp (config := { decide := true }) only [if_true, if_false]
     exact hx
@@ -400,31 +353,17 @@ theorem run_solvePrefix (rest : Prog) (memory : Memory) (x y kappaValue : BaseFi
     rw [wordField_fieldWord, ← hx]; rfl
   · simp only [setReg_registers]
     simp (config := { decide := true }) only [if_true, if_false]
-    rw [wordField_fieldWord, ← hy]; rfl
-  · simp only [setReg_registers]
-    simp (config := { decide := true }) only [if_true, if_false]
-    rw [wordField_fieldWord, ← hx, ← hy]; rfl
-  · simp only [setReg_registers]
-    simp (config := { decide := true }) only [if_true, if_false]
     exact hk
-  · simp only [setReg_registers, if_neg n4, if_neg n6, if_neg n7, if_neg n8, if_neg n9, if_neg n10,
-      if_neg n11]
+  · simp only [setReg_registers, if_neg n4, if_neg n6, if_neg n7, if_neg n8, if_neg n11]
 
 /-! ### One digit -/
 
 omit [FieldCertificate] in
 /-- A row constant by its position in `Opening.rowCell` order (the `Wire` order of `RowGamma`). -/
 def gammaConst (gamma : RowGamma) : Nat → BaseField
-  | 0 => gamma.xC0
-  | 1 => gamma.xC1
-  | 2 => gamma.xC2
-  | 3 => gamma.xC4
-  | 4 => gamma.yC0
-  | 5 => gamma.yC2
-  | 6 => gamma.yC4
-  | 7 => gamma.yC5
-  | 8 => gamma.zC0
-  | _ => gamma.zC1
+  | 0 => gamma.gX
+  | 1 => gamma.gY
+  | _ => gamma.gZ
 
 /-- The three collector targets as words: `κ · (W.c − row.c)` for `X` and `Z`, and
 `κ · (W.y − row.y) · (x · x)⁻¹` for the sign row, whose collector `rowY_cubic` has coefficient
@@ -481,7 +420,7 @@ theorem memSem_solveDigit (digit : Nat) (small : digit < 91) (memory : Memory)
     (hx : wordField (memory.ram (word reqX)) = input.x)
     (hy : wordField (memory.ram (word reqY)) = input.y)
     (hk : wordField (memory.ram (word tmpKappa)) = kappaValue)
-    (hg : ∀ k, k < 10 → wordField (memory.ram (word (Opening.rowCell digit k))) = gammaConst gamma k)
+    (hg : ∀ k, k < 3 → wordField (memory.ram (word (Opening.rowCell digit k))) = gammaConst gamma k)
     (hvx : ∀ element : XElement,
       wordField (memory.ram (word (Opening.xCell (4 * digit + element.slot.val)))) =
         values (.inl element))
@@ -506,10 +445,9 @@ theorem memSem_solveDigit (digit : Nat) (small : digit < 91) (memory : Memory)
     run_solvePrefix _ memory input.x input.y kappaValue hx hy hk
   rw [runPre]
   obtain ⟨rowX, runX, ramX, bitsX, regsX, frameX⟩ := run_rowX digit _ pre input.x input.y kappaValue
-    regsPre (gammaConst gamma 0) (gammaConst gamma 1) (gammaConst gamma 2) (gammaConst gamma 3)
+    regsPre (gammaConst gamma 0)
     (values (.inl .rowX_x7)) (values (.inl .rowX_x9)) (values (.inr .rowX_y10)) target.x
-    (by rw [ramPre]; exact hg 0 (by omega)) (by rw [ramPre]; exact hg 1 (by omega))
-    (by rw [ramPre]; exact hg 2 (by omega)) (by rw [ramPre]; exact hg 3 (by omega))
+    (by rw [ramPre]; exact hg 0 (by omega))
     (by rw [ramPre]; exact hvx .rowX_x7) (by rw [ramPre]; exact hvx .rowX_x9)
     (by rw [ramPre]; exact hvy .rowX_y10) (by rw [ramPre]; exact hwx)
   rw [runX]
@@ -519,13 +457,9 @@ theorem memSem_solveDigit (digit : Nat) (small : digit < 91) (memory : Memory)
     rw [ramX, Function.update_of_ne (word_ne bound (by addr_arith) different),
       ramPre]
   obtain ⟨rowY, runY, ramY, bitsY, regsY, frameY⟩ := run_rowY digit _ rowX input.x input.y
-    kappaValue regsX (gammaConst gamma 4) (gammaConst gamma 5) (gammaConst gamma 6)
-    (gammaConst gamma 7) (values (.inl .rowY_cubic)) (values (.inr .rowY_y8))
+    kappaValue regsX (gammaConst gamma 1) (values (.inl .rowY_cubic)) (values (.inr .rowY_y8))
     (values (.inr .rowY_y10)) target.y
-    (by rw [readX _ (by addr_arith) (by addr_arith)]; exact hg 4 (by omega))
-    (by rw [readX _ (by addr_arith) (by addr_arith)]; exact hg 5 (by omega))
-    (by rw [readX _ (by addr_arith) (by addr_arith)]; exact hg 6 (by omega))
-    (by rw [readX _ (by addr_arith) (by addr_arith)]; exact hg 7 (by omega))
+    (by rw [readX _ (by addr_arith) (by addr_arith)]; exact hg 1 (by omega))
     (by rw [readX _ (by addr_arith) (by addr_arith)]; exact hvx .rowY_cubic)
     (by rw [readX _ (by addr_arith) (by addr_arith)]; exact hvy .rowY_y8)
     (by rw [readX _ (by addr_arith) (by addr_arith)]; exact hvy .rowY_y10)
@@ -537,9 +471,8 @@ theorem memSem_solveDigit (digit : Nat) (small : digit < 91) (memory : Memory)
     rw [ramY, Function.update_of_ne (word_ne bound (by addr_arith) different1),
       readX address bound different0]
   obtain ⟨rowZ, runZ, ramZ, bitsZ, _, frameZ⟩ := run_rowZ digit _ rowY input.x input.y
-    kappaValue regsY (gammaConst gamma 8) (gammaConst gamma 9) (values (.inl .rowZ_x9)) target.z
-    (by rw [readY _ (by addr_arith) (by addr_arith) (by addr_arith)]; exact hg 8 (by omega))
-    (by rw [readY _ (by addr_arith) (by addr_arith) (by addr_arith)]; exact hg 9 (by omega))
+    kappaValue regsY (gammaConst gamma 2) (values (.inl .rowZ_x9)) target.z
+    (by rw [readY _ (by addr_arith) (by addr_arith) (by addr_arith)]; exact hg 2 (by omega))
     (by rw [readY _ (by addr_arith) (by addr_arith) (by addr_arith)]; exact hvx .rowZ_x9)
     (by rw [readY _ (by addr_arith) (by addr_arith) (by addr_arith)]; exact hwz)
   rw [runZ, memSem_zeroRegs_seq, memSem_skip]
@@ -550,28 +483,21 @@ theorem memSem_solveDigit (digit : Nat) (small : digit < 91) (memory : Memory)
     rw [show collectorCell digit 0 = designatedCell (4 * digit + 1) from rfl,
       show collectorCell digit 1 = designatedCell (4 * digit + 2) from rfl,
       show collectorCell digit 2 = designatedCell (4 * digit + 3) from rfl]
-    have eX : (target.x - (gammaConst gamma 0 + gammaConst gamma 1 * input.x +
-        gammaConst gamma 2 * input.y + gammaConst gamma 3 * (input.x * input.x) +
-        values (.inl .rowX_x7) * input.x + values (.inl .rowX_x9) + values (.inr .rowX_y10))) *
-          kappaValue =
+    have eX : (target.x - (gammaConst gamma 0 + values (.inl .rowX_x7) * input.x +
+        values (.inl .rowX_x9) + values (.inr .rowX_y10))) * kappaValue =
         kappaValue * (target.x - (FieldMacToECMac.evaluateGamma gamma input values).x) := by
-      simp only [FieldMacToECMac.evaluateGamma, Biquadratic.evaluateX, FieldMacToECMac.xGammaOf,
-        gammaConst]
+      simp only [FieldMacToECMac.evaluateGamma, Biquadratic.evaluateX, gammaConst]
       ring
-    have eY : (target.y - (gammaConst gamma 4 + gammaConst gamma 5 * input.y +
-        gammaConst gamma 6 * (input.x * input.x) + gammaConst gamma 7 * (input.y * input.y) +
-        values (.inl .rowY_cubic) * (input.x * input.x) + values (.inr .rowY_y8) * input.y +
-        values (.inr .rowY_y10))) * kappaValue * (input.x * input.x)⁻¹ =
+    have eY : (target.y - (values (.inr .rowY_y10) + gammaConst gamma 1 * (input.x * input.x) +
+        values (.inl .rowY_cubic) * (input.x * input.x) + values (.inr .rowY_y8) * input.y)) *
+          kappaValue * (input.x * input.x)⁻¹ =
         kappaValue * (target.y - (FieldMacToECMac.evaluateGamma gamma input values).y) *
           (input.x * input.x)⁻¹ := by
-      simp only [FieldMacToECMac.evaluateGamma, Biquadratic.evaluateY, FieldMacToECMac.yGammaOf,
-        gammaConst]
+      simp only [FieldMacToECMac.evaluateGamma, Biquadratic.evaluateY, gammaConst]
       ring
-    have eZ : (target.z - (gammaConst gamma 8 + gammaConst gamma 9 * input.x +
-        values (.inl .rowZ_x9))) * kappaValue =
+    have eZ : (target.z - (gammaConst gamma 2 + values (.inl .rowZ_x9))) * kappaValue =
         kappaValue * (target.z - (FieldMacToECMac.evaluateGamma gamma input values).z) := by
-      simp only [FieldMacToECMac.evaluateGamma, Biquadratic.evaluateZ, FieldMacToECMac.zGammaOf,
-        gammaConst]
+      simp only [FieldMacToECMac.evaluateGamma, Biquadratic.evaluateZ, gammaConst]
       ring
     rw [eX, eY, eZ]
   · rw [bitsZ, bitsY, bitsX, bitsPre]
@@ -579,7 +505,7 @@ theorem memSem_solveDigit (digit : Nat) (small : digit < 91) (memory : Memory)
     simp only [List.mem_cons, List.not_mem_nil, or_false, not_or] at outside
     obtain ⟨n0, n4, n5, n6, n7, n8, n9, n10, n11⟩ := outside
     rw [frameZ index n0 n5 n4, frameY index n0 n5 n4, frameX index n0 n5 n4,
-      framePre index n4 n6 n7 n8 n9 n10 n11]
+      framePre index n4 n6 n7 n8 n11]
 
 /-! ### All digits -/
 
@@ -591,7 +517,7 @@ theorem memSem_solve (memory : Memory) (input : AffineInput) (kappaValue : BaseF
     (hx : wordField (memory.ram (word reqX)) = input.x)
     (hy : wordField (memory.ram (word reqY)) = input.y)
     (hk : wordField (memory.ram (word tmpKappa)) = kappaValue)
-    (hg : ∀ (digit : Fin 91) k, k < 10 →
+    (hg : ∀ (digit : Fin 91) k, k < 3 →
       wordField (memory.ram (word (Opening.rowCell digit k))) = gammaConst (gammas digit) k)
     (hvx : ∀ (digit : Fin 91) (element : XElement),
       wordField (memory.ram (word (Opening.xCell (4 * digit.val + element.slot.val)))) =

@@ -17,7 +17,7 @@ module named here.
 | `FixedIndex`, `EncIndex`, `fixedFinite`, `encFinite` | `Construction/PGS/Index.lean`, `Construction/ArgoMAC/EncPRF.lean` | `PlanB.FixedIndex` (`card_fixedIndex = 159,016`), `EncPRF.PermutationIndex` (`card_encIndex = 508`) | proved |
 | `Randomness`, `randomnessFinite`, `randomness` | `Construction/Scheme.lean` | `Scheme.Coins`, `coinsFinite`, `Scheme.witness` | proved |
 | `Public`, `EncodingKey`, `encoding` | `Construction/ArgoMAC/Public.lean`, `Construction/ArgoMAC/Input.lean`, `Construction/PGS/Encoding.lean` | `PlanB.Public`, `InputMacKey`, `PlanB.Wire.encoding` | proved |
-| `ciphertextBytes`, `ciphertextSize` | `Proof/CiphertextSize.lean` | `PlanB.Wire.ciphertextSize` (1,103,204) | proved |
+| `ciphertextBytes`, `ciphertextSize` | `Proof/CiphertextSize.lean` | `PlanB.Wire.ciphertextSize` (1,082,820) | proved |
 | `scheme` | `Construction/Scheme.lean` | `Scheme.scheme` | proved |
 | `garbleQueries`, `garbleProgram`, `garbleProgramCorrect` | `Construction/OraclePrograms.lean` | `Programs.garbleProgram`, `garbleBudget_eq` (1,123,253), `garbleProgram_correct` | proved |
 | `evaluateQueries`, `evaluateProgram`, `evaluateProgramCorrect` | `Construction/OraclePrograms.lean` | `Programs.evaluateProgram`, `evaluateBudget_eq` (1,042,077), `evaluateProgram_correct` | proved |
@@ -147,12 +147,12 @@ the closed formulas by `norm_num` and `totalCost_le` proves the bound.
 
 | | count |
 |---|---:|
-| code table `size + 1` | 25,678,530,595 |
-| `firstFuel` (stage 1: 34,297 field cells by bounded rejection, the 1,092 gadget bytes, the 808 fold joins, the key, serialisation) | 11,249,070,097 |
-| `secondFuel` (stage 2, valid arm: parse, replay with the digit extraction of every replayed mask vector, opening, labels) | 9,909,560,535 |
-| **total** `size + 1 + firstFuel + secondFuel` | **46,837,161,227 ≈ 2^35.45 ≤ 2^60** |
+| code table `size + 1` | 25,386,781,319 |
+| `firstFuel` (stage 1: 33,660 field cells by bounded rejection, the 1,092 gadget bytes, the 808 fold joins, the key, serialisation) | 11,040,165,947 |
+| `secondFuel` (stage 2, valid arm: parse, replay with the digit extraction of every replayed mask vector, opening, labels) | 9,909,557,896 |
+| **total** `size + 1 + firstFuel + secondFuel` | **46,336,505,162 ≈ 2^35.43 ≤ 2^60** |
 
-The 34,297 field cells are the 3 curve constants, the `91·10` row constants and the `52·642` scale
+The 33,660 field cells are the 3 curve constants, the `91·3` row constants and the `52·642` scale
 cells. The stage-2 oracle traffic is 994,979 lazy queries (`Design.stage2Queries_eq`: 10,256 fold,
 984,214 hash, the bridge hash and 508 whitening pads) and 362 hash programs (`stage2Programs_eq`).
 These reconcile with the honest evaluator (`evaluator_queries`):
@@ -216,7 +216,7 @@ the gadget and `C = 52`:
 | `Construction/OraclePrograms.lean` | the garbler's gadget `gadgetPairsM`, `pairsDigest`, `pairsMask` (`pairsMask_eval`); the budgets `1,123,253` and `1,042,077` |
 | `Proof/Correctness/JacobianMixed.lean` | the sign-row decoding lemmas listed in §1 |
 | `Proof/Privacy/Phase3/Opening.lean`, `OpeningBound.lean` | the two-scale `lift`, `realRow_double`, `realRow_triple`, `lifts_law`, `bn254_doubling_real_le` (`273/#Point`); `HW → H` at `455/(r−1)` |
-| `Proof/Privacy/Phase3/JointExactness.lean` | F4 with the seven row randomisers (`digitEquiv`), and the two-slot gadget bijection `gadgetEquiv2` through the triangular mix `mixCoins` |
+| `Proof/Privacy/Phase3/JointExactness.lean` | F4 for the three-constant rows (`digitEquiv`): the 7 offsets read back from `gX, gY, gZ` and the visible values, `(K[y8], K[S.y10])` through `3 − y²` (`solvedY10`); and the two-slot gadget bijection `gadgetEquiv2` through the triangular mix `mixCoins` |
 | `Proof/Privacy/Phase3/PublicFirst/Shadow.lean`, `BoundsReveal.lean`, `BoundsRevealBound.lean` | the reveal event with both kinds (`kindInput`, `RevealsAt`), `differKind_card_le`, `reveal_numeric`, `revealBound_planBShadow` at `364/(r−1)` |
 | `Proof/Privacy/Phase3/PublicFirst/LawsOffCells.lean`, `LawsOffMatch.lean`, `LawsOffLaw.lean` | off the curve: the differing position `diffPos`, the index involution `indexSwap`, `omegaEquiv` |
 | `Proof/Privacy/Phase3/PublicFirst/LawsOnE*.lean` | on the curve: two hidden gadget indices per digit (`PosPair`, `positionsOf`, `posK`, `posK_valid`), read through `mixW` (`ValidPair`, `readW`, `digest_splitW`) |

@@ -259,7 +259,7 @@ theorem valid_agree [GroupCertificate] (law : OpeningLaw) (source : Stage1Source
     (start : ReplayStart source input labels middle)
     (outputs : (middle.ram (word reqTag0), middle.ram (word reqQX), middle.ram (word reqQY)) =
       outputWords target)
-    (rows : ∀ (digit : Fin digitCount) (slot : Nat), slot < 10 →
+    (rows : ∀ (digit : Fin digitCount) (slot : Nat), slot < 3 →
       middle.ram (word (Opening.rowCell digit.val slot)) =
         fieldWord (rowField (source.rows.get digit) slot))
     (empty : middle.bits 3 = [])
@@ -372,7 +372,7 @@ theorem valid_law [GroupCertificate] (law : OpeningLaw) (source : Stage1Source)
     (start : ReplayStart source input labels middle)
     (outputs : (middle.ram (word reqTag0), middle.ram (word reqQX), middle.ram (word reqQY)) =
       outputWords target)
-    (rows : ∀ (digit : Fin digitCount) (slot : Nat), slot < 10 →
+    (rows : ∀ (digit : Fin digitCount) (slot : Nat), slot < 3 →
       middle.ram (word (Opening.rowCell digit.val slot)) =
         fieldWord (rowField (source.rows.get digit) slot))
     (empty : middle.bits 3 = []) (oracle : OState PlanB.FixedIndex EncPRF.PermutationIndex) :

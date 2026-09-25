@@ -673,7 +673,7 @@ theorem exceptionDigitCorrect [FieldCertificate] [GroupCertificate]
     (xZeroRow : (FieldMacToECMac.evaluateRow
         ((FieldMacToECMac.rowsForOutputKeys keys randomness).get index) input).x = 0) :
     (FieldMacToECMac.expectedResult keys (FieldMacToECMac.rowsForOutputKeys keys randomness)
-        randomness K inputKey perms pad input).exceptionDigits.get index =
+        K inputKey perms pad input).exceptionDigits.get index =
       (keys.get index).digit := by
   have rhoNe : (randomness.get index).rho.value ≠ 0 := (randomness.get index).rho.nonzero
   rw [rowsForOutputKeys_get] at zZeroRow xZeroRow
@@ -721,7 +721,7 @@ theorem exceptionDigitCorrect [FieldCertificate] [GroupCertificate]
         exact ⟨xValue, yValue⟩
       rw [inputEq]
       exact FieldMacToECMac.unlockExceptional keys
-        (FieldMacToECMac.rowsForOutputKeys keys randomness) randomness K inputKey perms pad
+        (FieldMacToECMac.rowsForOutputKeys keys randomness) K inputKey perms pad
         index phi selected
 
 /-- A row with `S = 0 ≠ Z` is the tangent's other zero `2K`, and the gadget unlocks the digit that
@@ -738,7 +738,7 @@ theorem tripleDigitCorrect [FieldCertificate] [GroupCertificate]
     (sZeroRow : (FieldMacToECMac.evaluateRow
         ((FieldMacToECMac.rowsForOutputKeys keys randomness).get index) input).y = 0) :
     (FieldMacToECMac.expectedResult keys (FieldMacToECMac.rowsForOutputKeys keys randomness)
-        randomness K inputKey perms pad input).tripleDigits.get index =
+        K inputKey perms pad input).tripleDigits.get index =
       (keys.get index).digit := by
   have tauNe : (randomness.get index).tau.value ≠ 0 := (randomness.get index).tau.nonzero
   rw [rowsForOutputKeys_get] at zNeRow sZeroRow
@@ -792,7 +792,7 @@ theorem tripleDigitCorrect [FieldCertificate] [GroupCertificate]
         exact ⟨xValue, yValue⟩
       rw [inputEq]
       exact FieldMacToECMac.unlockTriple keys
-        (FieldMacToECMac.rowsForOutputKeys keys randomness) randomness K inputKey perms pad
+        (FieldMacToECMac.rowsForOutputKeys keys randomness) K inputKey perms pad
         index phi selected
 
 /-- Every expected row decodes, with its gadget digits, to the digit multiple plus the offset. -/
@@ -806,10 +806,10 @@ theorem decodeExpectedRow [FieldCertificate] [GroupCertificate]
         (FieldMacToECMac.evaluateRow
           ((FieldMacToECMac.rowsForOutputKeys keys randomness).get index) input)
         ((FieldMacToECMac.expectedResult keys
-          (FieldMacToECMac.rowsForOutputKeys keys randomness) randomness K inputKey perms pad
+          (FieldMacToECMac.rowsForOutputKeys keys randomness) K inputKey perms pad
           input).exceptionDigits.get index)
         ((FieldMacToECMac.expectedResult keys
-          (FieldMacToECMac.rowsForOutputKeys keys randomness) randomness K inputKey perms pad
+          (FieldMacToECMac.rowsForOutputKeys keys randomness) K inputKey perms pad
           input).tripleDigits.get index)
         (affinePoint input inputOnCurve) =
       some (digitScalar (keys.get index).digit • affinePoint input inputOnCurve +
@@ -853,13 +853,13 @@ theorem decodeRowsForOutputKeys [FieldCertificate] [GroupCertificate]
     (input : AffineInput) (inputOnCurve : OnCurve input) :
     Garbling.decodePointMacs
         (FieldMacToECMac.expectedResult keys
-          (FieldMacToECMac.rowsForOutputKeys keys randomness) randomness K inputKey perms pad
+          (FieldMacToECMac.rowsForOutputKeys keys randomness) K inputKey perms pad
           input).pointMacs
         (FieldMacToECMac.expectedResult keys
-          (FieldMacToECMac.rowsForOutputKeys keys randomness) randomness K inputKey perms pad
+          (FieldMacToECMac.rowsForOutputKeys keys randomness) K inputKey perms pad
           input).exceptionDigits
         (FieldMacToECMac.expectedResult keys
-          (FieldMacToECMac.rowsForOutputKeys keys randomness) randomness K inputKey perms pad
+          (FieldMacToECMac.rowsForOutputKeys keys randomness) K inputKey perms pad
           input).tripleDigits
         (affinePoint input inputOnCurve) =
       some ((Vector.ofFn fun index =>
@@ -962,7 +962,7 @@ theorem decodeExpectedResult [FieldCertificate] [GroupCertificate]
         (FieldMacToECMac.expectedResult (FieldMacToECMac.outputKeys construction scalar offsets)
           (FieldMacToECMac.rowsForOutputKeys
             (FieldMacToECMac.outputKeys construction scalar offsets) randomness)
-          randomness K inputKey perms pad input) =
+          K inputKey perms pad input) =
       some (scalarMultiplication scalar point) := by
   have inputOnCurve : OnCurve input := (decodePoint_defined input).mp (by simp [decoded])
   have pointEq : affinePoint input inputOnCurve = point :=
@@ -971,25 +971,25 @@ theorem decodeExpectedResult [FieldCertificate] [GroupCertificate]
       (FieldMacToECMac.expectedResult (FieldMacToECMac.outputKeys construction scalar offsets)
         (FieldMacToECMac.rowsForOutputKeys
           (FieldMacToECMac.outputKeys construction scalar offsets) randomness)
-        randomness K inputKey perms pad input).point = some point := decoded
+        K inputKey perms pad input).point = some point := decoded
   have step : Garbling.decodeResult
       (FieldMacToECMac.expectedResult (FieldMacToECMac.outputKeys construction scalar offsets)
         (FieldMacToECMac.rowsForOutputKeys
           (FieldMacToECMac.outputKeys construction scalar offsets) randomness)
-        randomness K inputKey perms pad input) =
+        K inputKey perms pad input) =
       (Garbling.decodePointMacs
         (FieldMacToECMac.expectedResult (FieldMacToECMac.outputKeys construction scalar offsets)
           (FieldMacToECMac.rowsForOutputKeys
             (FieldMacToECMac.outputKeys construction scalar offsets) randomness)
-          randomness K inputKey perms pad input).pointMacs
+          K inputKey perms pad input).pointMacs
         (FieldMacToECMac.expectedResult (FieldMacToECMac.outputKeys construction scalar offsets)
           (FieldMacToECMac.rowsForOutputKeys
             (FieldMacToECMac.outputKeys construction scalar offsets) randomness)
-          randomness K inputKey perms pad input).exceptionDigits
+          K inputKey perms pad input).exceptionDigits
         (FieldMacToECMac.expectedResult (FieldMacToECMac.outputKeys construction scalar offsets)
           (FieldMacToECMac.rowsForOutputKeys
             (FieldMacToECMac.outputKeys construction scalar offsets) randomness)
-          randomness K inputKey perms pad input).tripleDigits
+          K inputKey perms pad input).tripleDigits
         point).map (pointHorner radix) := by
     unfold Garbling.decodeResult
     rw [decodedPoint]
@@ -1092,7 +1092,6 @@ theorem evaluateCorrectValid [FieldCertificate] [GroupCertificate]
       (FieldMacToECMac.rowsForOutputKeys
         (FieldMacToECMac.outputKeys construction scalar.value randomness.offsets)
         randomness.pointRandomness)
-      randomness.pointRandomness
       (Pipeline.digitK randomness.fixedKeyOracle randomness.hashOracle randomness.inputDelta
       (Pipeline.whitenedKey randomness.encPRFOracle randomness.hashOracle
         randomness.bridgeKey randomness.inputMacKey))

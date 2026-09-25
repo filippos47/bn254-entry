@@ -1,7 +1,7 @@
 /-
 **The machine's stage-1 source law against the uniform source.**
 
-The machine's draws are `34,297` field cells (bounded rejection), `1,092` bytes, `808` fold-join
+The machine's draws are `33,660` field cells (bounded rejection), `1,092` bytes, `808` fold-join
 blocks and the `1016`-block key (fair coins). `sourceOfDraws` reads them as a `Stage1Source`, and
 this reading is a bijection from the exact draws (`drawsEquiv`), so exact draws give the uniform
 source (`idealSource_eq`). The field cells are the only cut-off draws: `source_close`.
@@ -30,29 +30,22 @@ def sourceOf (draws : Draws) : Stage1Source :=
 
 /-- Field `k` of a row, in the machine's cell order. -/
 def rowField (row : RowGamma) : Nat → BaseField
-  | 0 => row.xC0
-  | 1 => row.xC1
-  | 2 => row.xC2
-  | 3 => row.xC4
-  | 4 => row.yC0
-  | 5 => row.yC2
-  | 6 => row.yC4
-  | 7 => row.yC5
-  | 8 => row.zC0
-  | _ => row.zC1
+  | 0 => row.gX
+  | 1 => row.gY
+  | _ => row.gZ
 
-theorem digit_lt (index : Nat) (above : 3 ≤ index) (below : index < 913) :
-    (index - 3) / 10 < digitCount := by
+theorem digit_lt (index : Nat) (above : 3 ≤ index) (below : index < 276) :
+    (index - 3) / 3 < digitCount := by
   unfold digitCount
   omega
 
 theorem chunk_lt (index : Nat) (below : index < fieldCellCount) :
-    (index - 913) / 642 < chunkCount := by
+    (index - 276) / 642 < chunkCount := by
   unfold chunkCount
   rw [fieldCellCount_eq] at below
   omega
 
-theorem slot_lt (index : Nat) : (index - 913) % 642 < elementCount := by
+theorem slot_lt (index : Nat) : (index - 276) % 642 < elementCount := by
   unfold elementCount
   omega
 
@@ -61,11 +54,11 @@ def cellsOf (source : Stage1Source) (index : Fin fieldCellCount) : BaseField :=
   if small : index.val < 3 then
     (if index.val = 0 then source.curve.1 else if index.val = 1 then source.curve.2.1
       else source.curve.2.2)
-  else if below : index.val < 913 then
-    rowField (source.rows.get ⟨(index.val - 3) / 10, digit_lt index.val (by omega) below⟩)
-      ((index.val - 3) % 10)
-  else source.joins ⟨(index.val - 913) / 642, chunk_lt index.val index.isLt⟩
-    ⟨(index.val - 913) % 642, slot_lt index.val⟩
+  else if below : index.val < 276 then
+    rowField (source.rows.get ⟨(index.val - 3) / 3, digit_lt index.val (by omega) below⟩)
+      ((index.val - 3) % 3)
+  else source.joins ⟨(index.val - 276) / 642, chunk_lt index.val index.isLt⟩
+    ⟨(index.val - 276) % 642, slot_lt index.val⟩
 
 theorem byteDigit_lt (index : Fin exceptionByteCount) : index.val / 12 < digitCount := by
   have := index.isLt
@@ -127,7 +120,7 @@ theorem total_apply {count : Nat} {α : Type} (zero : α) (family : Fin count �
 
 /-! ### The cells of a source, by position -/
 
-theorem cell_lt (index : Nat) (below : index < 34297) : index < fieldCellCount := by
+theorem cell_lt (index : Nat) (below : index < 33660) : index < fieldCellCount := by
   rw [fieldCellCount_eq]
   exact below
 
@@ -147,25 +140,25 @@ theorem cellsOf_curve2 (source : Stage1Source) :
   simp [cellsOf]
 
 theorem cellsOf_row (source : Stage1Source) (digit : Fin digitCount) (field : Nat)
-    (small : field < 10) :
-    total 0 (cellsOf source) (3 + 10 * digit.val + field) =
+    (small : field < 3) :
+    total 0 (cellsOf source) (3 + 3 * digit.val + field) =
       rowField (source.rows.get digit) field := by
   have digitSmall : digit.val < 91 := digit.isLt
   rw [total_apply _ _ _ (cell_lt _ (by omega))]
   unfold cellsOf
   rw [dif_neg (by simp only; omega), dif_pos (by simp only; omega)]
-  simp only [show (3 + 10 * digit.val + field - 3) / 10 = digit.val by omega,
-    show (3 + 10 * digit.val + field - 3) % 10 = field by omega, Fin.eta]
+  simp only [show (3 + 3 * digit.val + field - 3) / 3 = digit.val by omega,
+    show (3 + 3 * digit.val + field - 3) % 3 = field by omega, Fin.eta]
 
 theorem cellsOf_join (source : Stage1Source) (chunk : Fin chunkCount) (slot : Fin elementCount) :
-    total 0 (cellsOf source) (913 + 642 * chunk.val + slot.val) = source.joins chunk slot := by
+    total 0 (cellsOf source) (276 + 642 * chunk.val + slot.val) = source.joins chunk slot := by
   have chunkSmall : chunk.val < 52 := chunk.isLt
   have slotSmall : slot.val < 642 := slot.isLt
   rw [total_apply _ _ _ (cell_lt _ (by omega))]
   unfold cellsOf
   rw [dif_neg (by simp only; omega), dif_neg (by simp only; omega)]
-  have first : (913 + 642 * chunk.val + slot.val - 913) / 642 = chunk.val := by omega
-  have second : (913 + 642 * chunk.val + slot.val - 913) % 642 = slot.val := by omega
+  have first : (276 + 642 * chunk.val + slot.val - 276) / 642 = chunk.val := by omega
+  have second : (276 + 642 * chunk.val + slot.val - 276) % 642 = slot.val := by omega
   exact congrArg₂ source.joins (Fin.ext first) (Fin.ext second)
 
 /-! ### The bytes, blocks and key of a source, by position -/
@@ -292,9 +285,7 @@ theorem bitAdaptorKey_ext {first second : BitAdaptor.Key}
   simp_all
 
 theorem rowGamma_eq (row : RowGamma) :
-    (⟨rowField row 0, rowField row 1, rowField row 2, rowField row 3, rowField row 4,
-      rowField row 5, rowField row 6, rowField row 7, rowField row 8, rowField row 9⟩ :
-      RowGamma) = row := by
+    (⟨rowField row 0, rowField row 1, rowField row 2⟩ : RowGamma) = row := by
   cases row
   rfl
 
@@ -309,9 +300,7 @@ theorem sourceOf_drawsOf (source : Stage1Source) : sourceOf (drawsOf source) = s
     have row := cellsOf_row source ⟨digit, bound⟩
     have row0 := row 0 (by omega)
     simp only [Nat.add_zero] at row0
-    rw [row0, row 1 (by omega), row 2 (by omega), row 3 (by omega), row 4 (by omega),
-      row 5 (by omega), row 6 (by omega), row 7 (by omega), row 8 (by omega), row 9 (by omega),
-      rowGamma_eq]
+    rw [row0, row 1 (by omega), row 2 (by omega), rowGamma_eq]
     simp only [Vector.get_eq_getElem]
   · apply Vector.ext
     intro digit bound
@@ -364,7 +353,7 @@ theorem sourceOf_drawsOf (source : Stage1Source) : sourceOf (drawsOf source) = s
 
 theorem cellsOf_sourceOf (draws : Draws) (index : Fin fieldCellCount) :
     cellsOf (sourceOf draws) index = draws.1 index := by
-  have indexSmall : index.val < 34297 := lt_of_lt_of_eq index.isLt fieldCellCount_eq
+  have indexSmall : index.val < 33660 := lt_of_lt_of_eq index.isLt fieldCellCount_eq
   unfold cellsOf
   by_cases small : index.val < 3
   · rw [dif_pos small]
@@ -378,22 +367,22 @@ theorem cellsOf_sourceOf (draws : Draws) (index : Fin fieldCellCount) :
       · rw [if_neg zero, if_neg one, total_apply _ _ _ (cell_lt 2 (by omega))]
         exact congrArg draws.1 (Fin.ext (by simp only; omega))
   · rw [dif_neg small]
-    by_cases below : index.val < 913
+    by_cases below : index.val < 276
     · rw [dif_pos below]
-      have remainder : (index.val - 3) % 10 < 10 := Nat.mod_lt _ (by norm_num)
-      have position : 3 + 10 * ((index.val - 3) / 10) + (index.val - 3) % 10 = index.val := by
+      have remainder : (index.val - 3) % 3 < 3 := Nat.mod_lt _ (by norm_num)
+      have position : 3 + 3 * ((index.val - 3) / 3) + (index.val - 3) % 3 = index.val := by
         omega
-      have read : ∀ field, field < 10 →
-          rowField ((sourceOf draws).rows.get ⟨(index.val - 3) / 10,
+      have read : ∀ field, field < 3 →
+          rowField ((sourceOf draws).rows.get ⟨(index.val - 3) / 3,
             digit_lt index.val (by omega) below⟩) field =
-          total 0 draws.1 (3 + 10 * ((index.val - 3) / 10) + field) := by
+          total 0 draws.1 (3 + 3 * ((index.val - 3) / 3) + field) := by
         intro field fieldSmall
         simp only [sourceOf, sourceOfDraws, Vector.get_ofFn]
         interval_cases field <;> rfl
       rw [read _ remainder, total_apply _ _ _ (cell_lt _ (by omega))]
       exact congrArg draws.1 (Fin.ext position)
     · rw [dif_neg below]
-      have position : 913 + 642 * ((index.val - 913) / 642) + (index.val - 913) % 642 =
+      have position : 276 + 642 * ((index.val - 276) / 642) + (index.val - 276) % 642 =
           index.val := by omega
       simp only [sourceOf, sourceOfDraws]
       rw [total_apply _ _ _ (cell_lt _ (by omega))]

@@ -18,12 +18,11 @@ context, as the note says.
 
 The **G1U coins** (`JointCoins`) are what is uniform after `G0 → G0U` (`MaskSwap`) and the
 hidden-entry deletion of `G0U → G1U`: every scale mask of every lane (both point lanes of every
-digit, both curve lanes, all 52 chunks, all `2 ^ b_c` switches), the seven row randomisers per
-digit, the curve coins `(t, mask, r1, r2)`, the hidden fold material of every (lane, chunk), and
+digit, both curve lanes, all 52 chunks, all `2 ^ b_c` switches), the curve coins `(t, mask, r1, r2)`, the hidden fold material of every (lane, chunk), and
 the gadget pad and hidden digest part of every digit.
 
 The claimed object is the **published cells** (`PublicCells`: every digit's joins on both lanes
-and its ten row constants, the curve joins and three constants, every fold join, every gadget
+and its three row constants, the curve joins and three constants, every fold join, every gadget
 entry) **together with the visible masks** (`VisibleCells`: every inactive scale mask the
 evaluator queries, minus the three designated collector masks per digit).
 
@@ -311,56 +310,25 @@ end JointShape
 
 /-! ## Finite-type plumbing for the row data -/
 
-/-- `XRandomness` is a plain triple. -/
-def xRandomnessEquiv : Biquadratic.XRandomness ≃ BaseField × BaseField × BaseField where
-  toFun r := (r.r1, r.r2, r.r4)
+/-- `RowGamma` is a plain triple. -/
+def rowGammaEquiv' : RowGamma ≃ BaseField × BaseField × BaseField where
+  toFun g := (g.gX, g.gY, g.gZ)
   invFun t := ⟨t.1, t.2.1, t.2.2⟩
   left_inv _ := rfl
   right_inv _ := rfl
 
-/-- `YRandomness` is a plain triple. -/
-def yRandomnessEquiv : Biquadratic.YRandomness ≃ BaseField × BaseField × BaseField where
-  toFun r := (r.r2, r.r4, r.r5)
-  invFun t := ⟨t.1, t.2.1, t.2.2⟩
-  left_inv _ := rfl
-  right_inv _ := rfl
-
-/-- `ZRandomness` is a single field element. -/
-def zRandomnessEquiv : Biquadratic.ZRandomness ≃ BaseField where
-  toFun r := r.r1
-  invFun t := ⟨t⟩
-  left_inv _ := rfl
-  right_inv _ := rfl
-
-/-- `RowGamma` is a plain ten-fold product. -/
-def rowGammaEquiv' : RowGamma ≃ BaseField × BaseField × BaseField × BaseField × BaseField ×
-    BaseField × BaseField × BaseField × BaseField × BaseField where
-  toFun g := (g.xC0, g.xC1, g.xC2, g.xC4, g.yC0, g.yC2, g.yC4, g.yC5, g.zC0, g.zC1)
-  invFun t := ⟨t.1, t.2.1, t.2.2.1, t.2.2.2.1, t.2.2.2.2.1, t.2.2.2.2.2.1, t.2.2.2.2.2.2.1,
-    t.2.2.2.2.2.2.2.1, t.2.2.2.2.2.2.2.2.1, t.2.2.2.2.2.2.2.2.2⟩
-  left_inv _ := rfl
-  right_inv _ := rfl
-
-instance : Fintype Biquadratic.XRandomness := Fintype.ofEquiv _ xRandomnessEquiv.symm
-instance : Fintype Biquadratic.YRandomness := Fintype.ofEquiv _ yRandomnessEquiv.symm
-instance : Fintype Biquadratic.ZRandomness := Fintype.ofEquiv _ zRandomnessEquiv.symm
 instance : Fintype RowGamma := Fintype.ofEquiv _ rowGammaEquiv'.symm
-instance : Nonempty Biquadratic.XRandomness := ⟨xRandomnessEquiv.symm (0, 0, 0)⟩
-instance : Nonempty Biquadratic.YRandomness := ⟨yRandomnessEquiv.symm (0, 0, 0)⟩
-instance : Nonempty Biquadratic.ZRandomness := ⟨zRandomnessEquiv.symm 0⟩
-instance : Nonempty RowGamma := ⟨rowGammaEquiv'.symm (0, 0, 0, 0, 0, 0, 0, 0, 0, 0)⟩
+instance : Nonempty RowGamma := ⟨rowGammaEquiv'.symm (0, 0, 0)⟩
 
-/-! ## One digit: both lanes, all chunks, the ten row constants -/
+/-! ## One digit: both lanes, all chunks, the three row constants -/
 
 /-- One digit's scale masks: seven elements (four on `pointX`, three on `pointY`), every chunk,
 every switch. -/
 abbrev DigitMasks := Biquadratic.Element → ChunkSwitch → BaseField
 
-/-- One digit's seven row randomisers. -/
-abbrev RowRand := Biquadratic.XRandomness × Biquadratic.YRandomness × Biquadratic.ZRandomness
-
-/-- One digit's G1U coins: its masks and its randomisers. -/
-abbrev DigitCoins := DigitMasks × RowRand
+/-- One digit's G1U coins: its masks. The slopes carry the true row coefficients, so a digit has
+no row randomisers; its element offsets are its only masks. -/
+abbrev DigitCoins := DigitMasks
 
 /-- One digit's joins, both lanes, every chunk. -/
 abbrev DigitJoins := Biquadratic.Element → Fin chunkCount → BaseField
@@ -369,25 +337,29 @@ abbrev DigitJoins := Biquadratic.Element → Fin chunkCount → BaseField
 abbrev DigitVisible (shape : JointShape) :=
   (element : Biquadratic.Element) → {cs : ChunkSwitch // shape.DigitVisibleAt element cs} → BaseField
 
+/-- `3 − y² ≠ 0` for every field element: `3` is not a square. -/
+theorem three_sub_sq_ne_zero [FieldCertificate] (value : BaseField) : 3 - value ^ 2 ≠ 0 := by
+  intro zero
+  exact sq_sub_three_ne_zero value (by linear_combination -zero)
+
 section Digit
 
-variable [FieldCertificate] (shape : JointShape) (rows : Coordinates.Rows) (rho : NonZeroBase)
+variable [FieldCertificate] (shape : JointShape) (rows : Coordinates.Rows)
 
 /-- The element offsets `K` of a digit, from its masks (`Pipeline.digitK`). -/
 def digitOffsets (masks : DigitMasks) : Biquadratic.Values := fun element => offsetOf (masks element)
 
-/-- The seven slopes, from the offsets and the randomisers (`Pipeline.pointSlopes`). -/
-def digitSlopes (masks : DigitMasks) (rand : RowRand) : Biquadratic.Values :=
-  Biquadratic.slopes rand.1 rand.2.1 rand.2.2 (digitOffsets masks)
+/-- The seven slopes, from the true row coefficients and the offsets (`Pipeline.pointSlopes`). -/
+def digitSlopes (masks : DigitMasks) : Biquadratic.Values :=
+  Biquadratic.slopes rows (digitOffsets masks)
 
 /-- **The digit's published joins** (`Pipeline.pointXGarbled`/`pointYGarbled`, per element). -/
-def digitJoins (masks : DigitMasks) (rand : RowRand) : DigitJoins :=
-  fun element c => joinOf (masks element) (digitSlopes masks rand element) c
+def digitJoins (masks : DigitMasks) : DigitJoins :=
+  fun element c => joinOf (masks element) (digitSlopes rows masks element) c
 
-/-- **The digit's ten published constants** (`FieldMacToECMac.garbleRow`). The randomiser record's
-`rho` and `tau` are not read by `garbleRow` (they enter only through `rows`); `rho` fills both. -/
-def digitGamma (masks : DigitMasks) (rand : RowRand) : RowGamma :=
-  garbleRow rows ⟨rho, rho, rand.1, rand.2.1, rand.2.2⟩ (digitOffsets masks)
+/-- **The digit's three published constants** (`FieldMacToECMac.garbleRow`). -/
+def digitGamma (masks : DigitMasks) : RowGamma :=
+  garbleRow rows (digitOffsets masks)
 
 /-- The digit's visible masks. -/
 def digitVisible (masks : DigitMasks) : DigitVisible shape := fun element cs => masks element cs.1
@@ -406,61 +378,47 @@ def digitPartial (joins : DigitJoins) (visible : DigitVisible shape)
 /-- The coordinate an element is chunked against, as `σ(α)`. -/
 def digitSigma (element : Biquadratic.Element) : BaseField := sigmaOf (shape.digitAlpha element)
 
-/-- `r4 · (y² − 3)` for the sign row, from public and visible cells only: the published `c0` hides
-`3 r4 + K[y10]`, and the delivered `y10` and `y8` give `K[y10]` up to `r4 · y²`
-(`solvedR4_forward`). -/
-def solvedR4Numerator (joins : DigitJoins) (gamma : RowGamma) (visible : DigitVisible shape) :
-    BaseField :=
-  gamma.yC0 - rows.y.constant + digitPartial shape joins visible (.inr .rowY_y10)
-    + ((gamma.yC2 - rows.y.y) + digitPartial shape joins visible (.inr .rowY_y8)
-      + (gamma.yC5 - rows.y.ySquared) * digitSigma shape (.inr .rowY_y8))
+/-- The numerator of the sign row's `y10` offset read-back. With `d8`, `d10` the delivered `y8`,
+`y10` values, the chain `d8 = (c5 + (c0 − K10)/3) y + K8`,
+`d10 = (c2 − K8) y + K10` is a `2 × 2` system in `(K8, K10)` whose determinant is
+`(3 − y²)/3`; this is `3 − y²` times `K10 / 3` (`solvedY10_forward`). -/
+def solvedY10Numerator (joins : DigitJoins) (visible : DigitVisible shape) : BaseField :=
+  digitPartial shape joins visible (.inr .rowY_y10)
+    - (rows.y.y - digitPartial shape joins visible (.inr .rowY_y8))
       * digitSigma shape (.inr .rowY_y10)
+    - (rows.y.ySquared + rows.y.constant * Biquadratic.inv3)
+      * digitSigma shape (.inr .rowY_y10) ^ 2
 
-/-- **The sign row's randomiser `r4`, read back.** It is the only randomiser not published outright
-(the `cubic` offset takes its place in `c4`). The division is by `y² − 3`, which is never zero,
-because `3` is not a square in the base field (`sq_sub_three_ne_zero`), so the read-back is exact
+/-- **The sign row's `y10` offset, read back.** The division is by `3 − y²`, which is never zero,
+because `3` is not a square in the base field (`three_sub_sq_ne_zero`), so the read-back is exact
 at every input, on or off the curve. -/
-def solvedR4 (joins : DigitJoins) (gamma : RowGamma) (visible : DigitVisible shape) : BaseField :=
-  solvedR4Numerator shape rows joins gamma visible / (digitSigma shape (.inr .rowY_y10) ^ 2 - 3)
+def solvedY10 (joins : DigitJoins) (visible : DigitVisible shape) : BaseField :=
+  3 * solvedY10Numerator shape rows joins visible / (3 - digitSigma shape (.inr .rowY_y10) ^ 2)
 
-/-- The seven randomisers read back: six straight off the published constants, the sign row's
-`r4` by `solvedR4`. -/
-def solvedRand (joins : DigitJoins) (gamma : RowGamma) (visible : DigitVisible shape) : RowRand :=
-  (⟨gamma.xC1 - rows.x.x, gamma.xC2 - rows.x.y, gamma.xC4 - rows.x.xSquared⟩,
-   ⟨gamma.yC2 - rows.y.y, solvedR4 shape rows joins gamma visible, gamma.yC5 - rows.y.ySquared⟩,
-   ⟨gamma.zC1 - rows.z.x⟩)
-
-/-- **The offsets solved from the public and visible cells** — the acyclic chain of note §1.5:
-the four free elements from their delivered values (`y8` after `r4`, then the sign row's `y10`
-after `y8`), the three collectors from the published constants (`c0` for the `X` and `Z` rows'
-`x9`, `c4` for the sign row's `cubic`). -/
+/-- **The offsets solved from the public and visible cells.** The four free elements come from
+their delivered values -- `x7` and the `X` row's `y10` directly, the sign row's `y10` from the
+`2 × 2` system (`solvedY10`), then `y8` -- and the three collectors from the published constants
+(`gX` for the `X` row's `x9`, `gY` for the sign row's `cubic`, `gZ` for the `Z` row's `x9`). -/
 def solvedOffsets (joins : DigitJoins) (gamma : RowGamma) (visible : DigitVisible shape) :
     Biquadratic.Values
   | .inl .rowX_x7 => digitPartial shape joins visible (.inl .rowX_x7)
-      + (solvedRand shape rows joins gamma visible).1.r4 * digitSigma shape (.inl .rowX_x7)
+      - rows.x.xSquared * digitSigma shape (.inl .rowX_x7)
   | .inr .rowX_y10 => digitPartial shape joins visible (.inr .rowX_y10)
-      + (solvedRand shape rows joins gamma visible).1.r2 * digitSigma shape (.inr .rowX_y10)
+      - rows.x.y * digitSigma shape (.inr .rowX_y10)
+  | .inr .rowY_y10 => solvedY10 shape rows joins visible
   | .inr .rowY_y8 => digitPartial shape joins visible (.inr .rowY_y8)
-      - (solvedR4 shape rows joins gamma visible - (gamma.yC5 - rows.y.ySquared))
-        * digitSigma shape (.inr .rowY_y8)
-  | .inr .rowY_y10 => digitPartial shape joins visible (.inr .rowY_y10)
-      + ((gamma.yC2 - rows.y.y)
-          + (digitPartial shape joins visible (.inr .rowY_y8)
-            - (solvedR4 shape rows joins gamma visible - (gamma.yC5 - rows.y.ySquared))
-              * digitSigma shape (.inr .rowY_y8)))
-        * digitSigma shape (.inr .rowY_y10)
-  | .inl .rowX_x9 => rows.x.constant - gamma.xC0
+      - (rows.y.ySquared + (rows.y.constant - solvedY10 shape rows joins visible)
+          * Biquadratic.inv3) * digitSigma shape (.inr .rowY_y8)
+  | .inl .rowX_x9 => rows.x.constant - gamma.gX
       - (digitPartial shape joins visible (.inr .rowX_y10)
-        + (solvedRand shape rows joins gamma visible).1.r2 * digitSigma shape (.inr .rowX_y10))
-  | .inl .rowY_cubic => rows.y.xSquared - gamma.yC4
-  | .inl .rowZ_x9 => rows.z.constant - gamma.zC0
+        - rows.x.y * digitSigma shape (.inr .rowX_y10))
+  | .inl .rowY_cubic => rows.y.xSquared - gamma.gY
+  | .inl .rowZ_x9 => rows.z.constant - gamma.gZ
 
 /-- The slopes at the solved offsets. -/
 def solvedSlopes (joins : DigitJoins) (gamma : RowGamma) (visible : DigitVisible shape) :
     Biquadratic.Values :=
-  Biquadratic.slopes (solvedRand shape rows joins gamma visible).1
-    (solvedRand shape rows joins gamma visible).2.1 (solvedRand shape rows joins gamma visible).2.2
-    (solvedOffsets shape rows joins gamma visible)
+  Biquadratic.slopes rows (solvedOffsets shape rows joins gamma visible)
 
 /-- **The designated mask of a collector, solved**: what makes its offset come out right. -/
 def solvedDesignated (joins : DigitJoins) (gamma : RowGamma) (visible : DigitVisible shape)
@@ -550,6 +508,23 @@ theorem digitMasksOf_visible (joins : DigitJoins) (gamma : RowGamma) (visible : 
   simp only [digitMasksOf]
   rw [withHidden_inactive _ _ _ h.1, inactiveFill_visible shape visible _ element cs h]
 
+/-- `solvedY10` times `3 − y²` is three times its numerator (`y² ≠ 3`). -/
+theorem solvedY10_mul (joins : DigitJoins) (visible : DigitVisible shape) :
+    solvedY10 shape rows joins visible * (3 - digitSigma shape (.inr .rowY_y10) ^ 2)
+      = 3 * solvedY10Numerator shape rows joins visible :=
+  div_mul_cancel₀ _ (three_sub_sq_ne_zero _)
+
+/-- The fixed-point form of the `y10` read-back: `K10 = num + K10 y² / 3`. -/
+theorem solvedY10_fixed (joins : DigitJoins) (visible : DigitVisible shape) :
+    solvedY10 shape rows joins visible
+      = solvedY10Numerator shape rows joins visible
+        + solvedY10 shape rows joins visible * Biquadratic.inv3
+          * digitSigma shape (.inr .rowY_y10) ^ 2 := by
+  have key := solvedY10_mul shape rows joins visible
+  have third := Biquadratic.three_mul_inv3
+  linear_combination Biquadratic.inv3 * key
+    - (solvedY10 shape rows joins visible - solvedY10Numerator shape rows joins visible) * third
+
 /-- **The key identity of the rebuild**: the rebuilt masks have exactly the solved offsets. -/
 theorem offsetOf_digitMasksOf (joins : DigitJoins) (gamma : RowGamma)
     (visible : DigitVisible shape) (element : Biquadratic.Element) :
@@ -588,137 +563,113 @@ theorem offsetOf_digitMasksOf (joins : DigitJoins) (gamma : RowGamma)
     rw [offset]
     -- the cases in constructor order: x7, x9, cubic, z9 | y10 (X row), y8, y10 (sign row)
     rcases element with (_ | _ | _ | _) | (_ | _ | _)
-    · simp only [solvedSlopes, solvedOffsets, solvedRand, Biquadratic.slopes, digitSigma]; ring
+    · simp only [solvedSlopes, solvedOffsets, Biquadratic.slopes, digitSigma] <;> ring
     · exact absurd (Or.inl rfl) collector
     · exact absurd (Or.inr (Or.inl rfl)) collector
     · exact absurd (Or.inr (Or.inr rfl)) collector
-    · simp only [solvedSlopes, solvedOffsets, solvedRand, Biquadratic.slopes, digitSigma]; ring
-    · simp only [solvedSlopes, solvedOffsets, solvedRand, Biquadratic.slopes, digitSigma]
-    · simp only [solvedSlopes, solvedOffsets, solvedRand, Biquadratic.slopes, digitSigma]; ring
+    · simp only [solvedSlopes, solvedOffsets, Biquadratic.slopes, digitSigma] <;> ring
+    · simp only [solvedSlopes, solvedOffsets, Biquadratic.slopes, Biquadratic.cubicSlope,
+        digitSigma] <;> ring
+    · have fixed := solvedY10_fixed shape rows joins visible
+      rw [solvedY10Numerator] at fixed
+      simp only [solvedSlopes, solvedOffsets, Biquadratic.slopes, digitSigma,
+        JointShape.digitAlpha] at fixed ⊢
+      linear_combination (-1 : BaseField) * fixed
 
 /-! ### The digit bijection -/
 
 /-- At the published cells of a mask family, the visible part of the delivered value is the offset
 plus slope times coordinate, less the designated term. -/
-theorem digitPartial_forward (masks : DigitMasks) (rand : RowRand) (element : Biquadratic.Element) :
-    digitPartial shape (digitJoins masks rand) (digitVisible shape masks) element
-      = digitOffsets masks element + digitSlopes masks rand element * digitSigma shape element
+theorem digitPartial_forward (masks : DigitMasks) (element : Biquadratic.Element) :
+    digitPartial shape (digitJoins rows masks) (digitVisible shape masks) element
+      = digitOffsets masks element + digitSlopes rows masks element * digitSigma shape element
         - (if IsCollector element then shape.kappa * masks element shape.designated else 0) := by
   have delivered := deliveredOf_joinOf (shape.digitAlpha element) (masks element)
-    (digitSlopes masks rand element)
-  have split := deliveredOf_split shape (digitJoins masks rand) (digitVisible shape masks) element
+    (digitSlopes rows masks element)
+  have split := deliveredOf_split shape (digitJoins rows masks) (digitVisible shape masks) element
     (masks element) (fun cs h => rfl)
-  have joinsEq : digitJoins masks rand element = joinOf (masks element) (digitSlopes masks rand element) :=
-    rfl
+  have joinsEq : digitJoins rows masks element
+      = joinOf (masks element) (digitSlopes rows masks element) := rfl
   rw [joinsEq] at split
   rw [split] at delivered
   rw [digitSigma, digitOffsets]
   rw [← delivered]
   ring
 
-/-- `solvedR4` times `y² − 3` is its numerator (`y² ≠ 3`). -/
-theorem solvedR4_mul (joins : DigitJoins) (gamma : RowGamma) (visible : DigitVisible shape) :
-    solvedR4 shape rows joins gamma visible * (digitSigma shape (.inr .rowY_y10) ^ 2 - 3)
-      = solvedR4Numerator shape rows joins gamma visible :=
-  div_mul_cancel₀ _ (sq_sub_three_ne_zero _)
-
-/-- **`r4` is read back exactly**: at the published and visible cells of a mask family, the
-numerator is `r4 · (y² − 3)`. -/
-theorem solvedR4_forward (masks : DigitMasks) (rand : RowRand) :
-    solvedR4 shape rows (digitJoins masks rand) (digitGamma rows rho masks rand)
-      (digitVisible shape masks) = rand.2.1.r4 := by
-  have evalParts := digitPartial_forward shape masks rand
-  rw [solvedR4, div_eq_iff (sq_sub_three_ne_zero _)]
-  simp only [solvedR4Numerator, evalParts, digitSlopes, Biquadratic.slopes,
-    IsCollector, reduceCtorEq, Sum.inl.injEq, or_self, if_false, sub_zero, digitGamma, garbleRow,
-    Biquadratic.garbleY, digitSigma, JointShape.digitAlpha]
-  ring
-
-/-- The randomisers are read back exactly. -/
-theorem solvedRand_forward (masks : DigitMasks) (rand : RowRand) :
-    solvedRand shape rows (digitJoins masks rand) (digitGamma rows rho masks rand)
-      (digitVisible shape masks) = rand := by
-  have r4Back := solvedR4_forward shape rows rho masks rand
-  obtain ⟨⟨x1, x2, x4⟩, ⟨y2, y4, y5⟩, ⟨z1⟩⟩ := rand
-  simp only [solvedRand, r4Back]
-  simp only [digitGamma, garbleRow, Biquadratic.garbleX, Biquadratic.garbleY,
-    Biquadratic.garbleZ, add_sub_cancel_left]
+/-- **`K[y10]` is read back exactly**: at the published and visible cells of a mask family, the
+numerator is `(3 − y²) K10 / 3`. -/
+theorem solvedY10_forward (masks : DigitMasks) :
+    solvedY10 shape rows (digitJoins rows masks) (digitVisible shape masks)
+      = digitOffsets masks (.inr .rowY_y10) := by
+  have evalParts := digitPartial_forward shape rows masks
+  have third := Biquadratic.three_mul_inv3
+  rw [solvedY10, div_eq_iff (three_sub_sq_ne_zero _)]
+  simp only [solvedY10Numerator, evalParts, digitSlopes, Biquadratic.slopes,
+    Biquadratic.cubicSlope, IsCollector, reduceCtorEq, Sum.inl.injEq, or_self, if_false, sub_zero,
+    digitSigma, JointShape.digitAlpha]
+  linear_combination (-(digitOffsets masks (.inr .rowY_y10) * sigmaOf shape.alphaY ^ 2)) * third
 
 /-- The solved offsets are the true offsets. -/
-theorem solvedOffsets_forward (masks : DigitMasks) (rand : RowRand) :
-    solvedOffsets shape rows (digitJoins masks rand) (digitGamma rows rho masks rand)
+theorem solvedOffsets_forward (masks : DigitMasks) :
+    solvedOffsets shape rows (digitJoins rows masks) (digitGamma rows masks)
       (digitVisible shape masks) = digitOffsets masks := by
-  have randBack := solvedRand_forward shape rows rho masks rand
-  have r4Back := solvedR4_forward shape rows rho masks rand
-  have evalParts := digitPartial_forward shape masks rand
+  have y10Back := solvedY10_forward shape rows masks
+  have evalParts := digitPartial_forward shape rows masks
   funext element
-  rcases element with (_ | _ | _ | _) | (_ | _ | _) <;>
-    simp only [solvedOffsets, randBack, r4Back, evalParts, digitSlopes,
-      Biquadratic.slopes, IsCollector, reduceCtorEq, Sum.inl.injEq, or_self, if_false,
+  rcases element with (_ | _ | _ | _ | _) | (_ | _ | _) <;>
+    simp only [solvedOffsets, y10Back, evalParts, digitSlopes, Biquadratic.slopes,
+      Biquadratic.cubicSlope, IsCollector, reduceCtorEq, Sum.inl.injEq, or_self, if_false,
       sub_zero] <;>
-    (try simp only [digitGamma, garbleRow, Biquadratic.garbleX, Biquadratic.garbleY,
-      Biquadratic.garbleZ]) <;> ring
+    (try simp only [digitGamma, garbleRow, Biquadratic.garble]) <;> ring
 
 /-- The solved slopes are the true slopes. -/
-theorem solvedSlopes_forward (masks : DigitMasks) (rand : RowRand) :
-    solvedSlopes shape rows (digitJoins masks rand) (digitGamma rows rho masks rand)
-      (digitVisible shape masks) = digitSlopes masks rand := by
-  rw [solvedSlopes, solvedOffsets_forward, solvedRand_forward]
+theorem solvedSlopes_forward (masks : DigitMasks) :
+    solvedSlopes shape rows (digitJoins rows masks) (digitGamma rows masks)
+      (digitVisible shape masks) = digitSlopes rows masks := by
+  rw [solvedSlopes, solvedOffsets_forward]
   rfl
 
 /-- **The solved designated mask is the true one.** -/
-theorem solvedDesignated_forward (masks : DigitMasks) (rand : RowRand)
+theorem solvedDesignated_forward (masks : DigitMasks)
     (element : Biquadratic.Element) (collector : IsCollector element) :
-    solvedDesignated shape rows (digitJoins masks rand) (digitGamma rows rho masks rand)
+    solvedDesignated shape rows (digitJoins rows masks) (digitGamma rows masks)
       (digitVisible shape masks) element = masks element shape.designated := by
   rw [solvedDesignated, solvedOffsets_forward, solvedSlopes_forward, digitPartial_forward,
     if_pos collector]
   have cancel : digitOffsets masks element
-      - (digitOffsets masks element + digitSlopes masks rand element * digitSigma shape element
+      - (digitOffsets masks element + digitSlopes rows masks element * digitSigma shape element
         - shape.kappa * masks element shape.designated)
-      + digitSlopes masks rand element * digitSigma shape element
+      + digitSlopes rows masks element * digitSigma shape element
       = shape.kappa * masks element shape.designated := by ring
   rw [cancel, ← mul_assoc, inv_mul_cancel₀ shape.kappa_ne_zero, one_mul]
 
-/-- **The published constants come back** from the solved offsets and randomisers. The sign row's
-`c0` comes back through `r4 · (y² − 3)` (`solvedR4_mul`); the other nine constants are linear. -/
+/-- **The published constants come back** from the solved offsets. -/
 theorem garbleRow_solved (joins : DigitJoins) (gamma : RowGamma) (visible : DigitVisible shape) :
-    garbleRow rows ⟨rho, rho, (solvedRand shape rows joins gamma visible).1,
-        (solvedRand shape rows joins gamma visible).2.1,
-        (solvedRand shape rows joins gamma visible).2.2⟩
-        (solvedOffsets shape rows joins gamma visible) = gamma := by
-  have key := solvedR4_mul shape rows joins gamma visible
-  obtain ⟨xC0, xC1, xC2, xC4, yC0, yC2, yC4, yC5, zC0, zC1⟩ := gamma
-  simp only [solvedR4Numerator, digitSigma, JointShape.digitAlpha] at key
-  simp only [garbleRow, Biquadratic.garbleX, Biquadratic.garbleY, Biquadratic.garbleZ,
-    solvedOffsets, solvedRand, digitSigma, JointShape.digitAlpha, RowGamma.mk.injEq]
-  refine ⟨by ring1, by ring1, by ring1, by ring1, by linear_combination key, by ring1, by ring1,
-    by ring1, by ring1, by ring1⟩
+    garbleRow rows (solvedOffsets shape rows joins gamma visible) = gamma := by
+  obtain ⟨gX, gY, gZ⟩ := gamma
+  simp only [garbleRow, Biquadratic.garble, solvedOffsets, RowGamma.mk.injEq]
+  refine ⟨by ring1, by ring1, by ring1⟩
 
-/-- **The digit bijection**: a digit's masks (both lanes, every chunk and switch) and seven
-randomisers against its published joins, its ten published constants and its visible masks. -/
+/-- **The digit bijection**: a digit's masks (both lanes, every chunk and switch) against its
+published joins, its three published constants and its visible masks. -/
 def digitEquiv : DigitCoins ≃ (DigitJoins × RowGamma) × DigitVisible shape where
-  toFun coins := ((digitJoins coins.1 coins.2, digitGamma rows rho coins.1 coins.2),
-    digitVisible shape coins.1)
-  invFun out := (digitMasksOf shape rows out.1.1 out.1.2 out.2,
-    solvedRand shape rows out.1.1 out.1.2 out.2)
-  left_inv coins := by
-    obtain ⟨masks, rand⟩ := coins
-    refine Prod.ext ?_ (solvedRand_forward shape rows rho masks rand)
+  toFun masks := ((digitJoins rows masks, digitGamma rows masks), digitVisible shape masks)
+  invFun out := digitMasksOf shape rows out.1.1 out.1.2 out.2
+  left_inv masks := by
     funext element
     show withHidden (shape.digitAlpha element)
         (inactiveFill shape (digitVisible shape masks)
-          (solvedDesignated shape rows (digitJoins masks rand) (digitGamma rows rho masks rand)
+          (solvedDesignated shape rows (digitJoins rows masks) (digitGamma rows masks)
             (digitVisible shape masks)) element)
-        (hiddenOf (shape.digitAlpha element) (digitJoins masks rand element)
-          (solvedSlopes shape rows (digitJoins masks rand) (digitGamma rows rho masks rand)
+        (hiddenOf (shape.digitAlpha element) (digitJoins rows masks element)
+          (solvedSlopes shape rows (digitJoins rows masks) (digitGamma rows masks)
             (digitVisible shape masks) element)
           (inactiveFill shape (digitVisible shape masks)
-            (solvedDesignated shape rows (digitJoins masks rand) (digitGamma rows rho masks rand)
+            (solvedDesignated shape rows (digitJoins rows masks) (digitGamma rows masks)
               (digitVisible shape masks)) element)) = masks element
     have agree : ∀ cs, ¬ Active (shape.digitAlpha element) cs →
         inactiveFill shape (digitVisible shape masks)
-          (solvedDesignated shape rows (digitJoins masks rand) (digitGamma rows rho masks rand)
+          (solvedDesignated shape rows (digitJoins rows masks) (digitGamma rows masks)
             (digitVisible shape masks)) element cs = masks element cs := by
       intro cs inactive
       by_cases visibleHere : shape.DigitVisibleAt element cs
@@ -728,10 +679,10 @@ def digitEquiv : DigitCoins ≃ (DigitJoins × RowGamma) × DigitVisible shape w
           by_contra hnot
           exact visibleHere ⟨inactive, hnot⟩
         rw [des.2, inactiveFill_designated shape _ _ element des.1,
-          solvedDesignated_forward shape rows rho masks rand element des.1]
+          solvedDesignated_forward shape rows masks element des.1]
     have sameFill : withHidden (shape.digitAlpha element)
         (inactiveFill shape (digitVisible shape masks)
-          (solvedDesignated shape rows (digitJoins masks rand) (digitGamma rows rho masks rand)
+          (solvedDesignated shape rows (digitJoins rows masks) (digitGamma rows masks)
             (digitVisible shape masks)) element)
         = withHidden (shape.digitAlpha element) (masks element) := by
       funext hidden cs
@@ -739,31 +690,26 @@ def digitEquiv : DigitCoins ≃ (DigitJoins × RowGamma) × DigitVisible shape w
       · simp only [withHidden, if_pos active]
       · rw [withHidden_inactive _ _ _ active, withHidden_inactive _ _ _ active, agree cs active]
     rw [sameFill, hiddenOf_congr _ _ _ agree, solvedSlopes_forward]
-    exact withHidden_joinOf _ (masks element) (digitSlopes masks rand element)
+    exact withHidden_joinOf _ (masks element) (digitSlopes rows masks element)
   right_inv out := by
     obtain ⟨⟨joins, gamma⟩, visible⟩ := out
     have offsets : digitOffsets (digitMasksOf shape rows joins gamma visible)
         = solvedOffsets shape rows joins gamma visible :=
       funext fun element => offsetOf_digitMasksOf shape rows joins gamma visible element
-    have slopes : digitSlopes (digitMasksOf shape rows joins gamma visible)
-        (solvedRand shape rows joins gamma visible) = solvedSlopes shape rows joins gamma visible := by
+    have slopes : digitSlopes rows (digitMasksOf shape rows joins gamma visible)
+        = solvedSlopes shape rows joins gamma visible := by
       rw [digitSlopes, offsets]
       rfl
     refine Prod.ext (Prod.ext ?_ ?_) ?_
     · funext element c
       show joinOf (digitMasksOf shape rows joins gamma visible element)
-          (digitSlopes (digitMasksOf shape rows joins gamma visible)
-            (solvedRand shape rows joins gamma visible) element) c
+          (digitSlopes rows (digitMasksOf shape rows joins gamma visible) element) c
         = joins element c
       rw [slopes]
       exact congrFun (joinOf_withHidden_hiddenOf _ _ _ _) c
-    · show garbleRow rows ⟨rho, rho, (solvedRand shape rows joins gamma visible).1,
-          (solvedRand shape rows joins gamma visible).2.1,
-          (solvedRand shape rows joins gamma visible).2.2⟩
-          (digitOffsets (digitMasksOf shape rows joins gamma visible))
-        = gamma
+    · show garbleRow rows (digitOffsets (digitMasksOf shape rows joins gamma visible)) = gamma
       rw [offsets]
-      exact garbleRow_solved shape rows rho joins gamma visible
+      exact garbleRow_solved shape rows joins gamma visible
     · funext element cs
       exact digitMasksOf_visible shape rows joins gamma visible element cs.1 cs.2
 
@@ -1148,7 +1094,7 @@ only through these remainders: they are deferred, as the note says. -/
 structure JointContext where
   /-- The true row coefficients of each digit (`FieldMacToECMac.rowsForOutputKeys`). -/
   rows : Fin digitCount → Coordinates.Rows
-  /-- Each digit's `ρ` (read by the construction's `RowRandomness`, not by `garbleRow`). -/
+  /-- Each digit's `ρ` (read by the construction's `RowRandomness`; it enters the rows only). -/
   rho : Fin digitCount → NonZeroBase
   /-- The visible remainder of each fold join, given the bridge key. -/
   foldVisible : BaseField → Lane → Fin foldStepCount → Block
@@ -1192,8 +1138,8 @@ variable [FieldCertificate] (shape : JointShape) (context : JointContext)
 /-- **The published cells** of the G1U coins, component by component, by the construction's own
 formulas. -/
 def publicOf (coins : JointCoins) : PublicCells :=
-  (fun digit => (digitJoins (coins.1 digit).1 (coins.1 digit).2,
-      digitGamma (context.rows digit) (context.rho digit) (coins.1 digit).1 (coins.1 digit).2),
+  (fun digit => (digitJoins (context.rows digit) (coins.1 digit),
+      digitGamma (context.rows digit) (coins.1 digit)),
    (curveJoins coins.2.1.1 coins.2.1.2.2.2.1 coins.2.1.2.2.2.2,
       curveTable coins.2.1.1 coins.2.1.2.1 coins.2.1.2.2.1 coins.2.1.2.2.2.1 coins.2.1.2.2.2.2),
    fun lane c => coins.2.2.1 lane c ^^^ context.foldVisible (bridgeKeyOf coins) lane c,
@@ -1203,12 +1149,12 @@ def publicOf (coins : JointCoins) : PublicCells :=
 
 /-- **The visible masks** of the G1U coins. -/
 def visibleOf (coins : JointCoins) : VisibleCells shape :=
-  (fun digit => digitVisible shape (coins.1 digit).1, curveVisible shape coins.2.1.1)
+  (fun digit => digitVisible shape (coins.1 digit), curveVisible shape coins.2.1.1)
 
 /-- The 91 digits at once. -/
 def digitsEquiv : (Fin digitCount → DigitCoins) ≃
     (Fin digitCount → DigitJoins × RowGamma) × (Fin digitCount → DigitVisible shape) :=
-  (Equiv.piCongrRight fun digit => digitEquiv shape (context.rows digit) (context.rho digit)).trans
+  (Equiv.piCongrRight fun digit => digitEquiv shape (context.rows digit)).trans
     (Equiv.arrowProdEquivProdArrow _ _ _)
 
 /-- The 91 gadget entries at once, given the bridge key. -/
@@ -1298,9 +1244,9 @@ theorem rowTarget_eq_evaluateRow (rows : Coordinates.Rows) (input : AffineInput)
   congr 1 <;> ring
 
 /-- The true delivered values of a digit are the construction's `Biquadratic.delivered`. -/
-theorem digitDelivered_eq (masks : DigitMasks) (rand : RowRand) :
-    (fun element => digitOffsets masks element + digitSlopes masks rand element * digitSigma shape element)
-      = Biquadratic.delivered rand.1 rand.2.1 rand.2.2 (digitOffsets masks) shape.input := by
+theorem digitDelivered_eq (rows : Coordinates.Rows) (masks : DigitMasks) :
+    (fun element => digitOffsets masks element + digitSlopes rows masks element * digitSigma shape element)
+      = Biquadratic.delivered rows (digitOffsets masks) shape.input := by
   funext element
   rw [Biquadratic.delivered, digitSigma]
   rcases element with element | element <;>
@@ -1309,17 +1255,14 @@ theorem digitDelivered_eq (masks : DigitMasks) (rand : RowRand) :
 
 /-- At the true delivered values the published rows hit the true row values, on the curve (the
 `Y` row is exact there, `Biquadratic.evaluateEncodedY`). -/
-theorem evaluateGamma_delivered (rows : Coordinates.Rows) (rho : NonZeroBase) (masks : DigitMasks)
-    (rand : RowRand) (onCurve : OnCurve shape.input) :
-    evaluateGamma (digitGamma rows rho masks rand) shape.input
-        (Biquadratic.delivered rand.1 rand.2.1 rand.2.2 (digitOffsets masks) shape.input)
+theorem evaluateGamma_delivered (rows : Coordinates.Rows) (masks : DigitMasks)
+    (onCurve : OnCurve shape.input) :
+    evaluateGamma (digitGamma rows masks) shape.input
+        (Biquadratic.delivered rows (digitOffsets masks) shape.input)
       = rowTarget rows shape.input := by
-  have hx := Biquadratic.evaluateEncodedX rows.x.constant rows.x.x rows.x.y rows.x.xSquared
-    rand.1 rand.2.1 rand.2.2 (digitOffsets masks) shape.input
-  have hy := Biquadratic.evaluateEncodedY rows.y.constant rows.y.y rows.y.xSquared
-    rows.y.ySquared rand.1 rand.2.1 rand.2.2 (digitOffsets masks) shape.input onCurve
-  have hz := Biquadratic.evaluateEncodedZ rows.z.constant rows.z.x rand.1 rand.2.1 rand.2.2
-    (digitOffsets masks) shape.input
+  have hx := Biquadratic.evaluateEncodedX rows (digitOffsets masks) shape.input
+  have hy := Biquadratic.evaluateEncodedY rows (digitOffsets masks) shape.input onCurve
+  have hz := Biquadratic.evaluateEncodedZ rows (digitOffsets masks) shape.input
   rw [evaluateGamma, rowTarget, HomogeneousValue.mk.injEq]
   exact ⟨hx, hy, hz⟩
 
@@ -1338,29 +1281,29 @@ def simDesignated (target : HomogeneousValue) (joins : DigitJoins) (gamma : RowG
     - digitPartial shape joins visible element)
 
 /-- **The designated masks are the simulator's collector solve at the true rows.** -/
-theorem designated_eq_solve (rows : Coordinates.Rows) (rho : NonZeroBase) (masks : DigitMasks)
-    (rand : RowRand) (element : Biquadratic.Element) (collector : IsCollector element)
+theorem designated_eq_solve (rows : Coordinates.Rows) (masks : DigitMasks)
+    (element : Biquadratic.Element) (collector : IsCollector element)
     (onCurve : OnCurve shape.input) :
     masks element shape.designated
-      = simDesignated shape (rowTarget rows shape.input) (digitJoins masks rand)
-          (digitGamma rows rho masks rand) (digitVisible shape masks) element := by
-  set values := Biquadratic.delivered rand.1 rand.2.1 rand.2.2 (digitOffsets masks) shape.input
+      = simDesignated shape (rowTarget rows shape.input) (digitJoins rows masks)
+          (digitGamma rows masks) (digitVisible shape masks) element := by
+  set values := Biquadratic.delivered rows (digitOffsets masks) shape.input
     with valuesDef
-  have evalParts := digitPartial_forward shape masks rand
+  have evalParts := digitPartial_forward shape rows masks
   have trueValues : ∀ e, values e
-      = digitOffsets masks e + digitSlopes masks rand e * digitSigma shape e :=
-    fun e => (congrFun (digitDelivered_eq shape masks rand) e).symm
+      = digitOffsets masks e + digitSlopes rows masks e * digitSigma shape e :=
+    fun e => (congrFun (digitDelivered_eq shape rows masks) e).symm
   have freeValues : ∀ e, ¬ IsCollector e →
-      digitPartial shape (digitJoins masks rand) (digitVisible shape masks) e = values e := by
+      digitPartial shape (digitJoins rows masks) (digitVisible shape masks) e = values e := by
     intro e notCollector
     rw [evalParts, if_neg notCollector, sub_zero, trueValues]
-  have solve := collectorsOf_eq_solve (digitGamma rows rho masks rand) shape.input values
+  have solve := collectorsOf_eq_solve (digitGamma rows masks) shape.input values
     (rowTarget rows shape.input) (onCurve_x_ne_zero shape.input onCurve)
-    (evaluateGamma_delivered shape rows rho masks rand onCurve)
-  have sameSolve : collectorSolve (digitGamma rows rho masks rand) shape.input values
+    (evaluateGamma_delivered shape rows masks onCurve)
+  have sameSolve : collectorSolve (digitGamma rows masks) shape.input values
       (rowTarget rows shape.input)
-      = collectorSolve (digitGamma rows rho masks rand) shape.input
-          (fun e => digitPartial shape (digitJoins masks rand) (digitVisible shape masks) e)
+      = collectorSolve (digitGamma rows masks) shape.input
+          (fun e => digitPartial shape (digitJoins rows masks) (digitVisible shape masks) e)
           (rowTarget rows shape.input) := by
     simp only [collectorSolve]
     rw [freeValues (.inl .rowX_x7) (by simp [IsCollector]),
@@ -1368,11 +1311,11 @@ theorem designated_eq_solve (rows : Coordinates.Rows) (rho : NonZeroBase) (masks
       freeValues (.inr .rowY_y8) (by simp [IsCollector]),
       freeValues (.inr .rowY_y10) (by simp [IsCollector])]
   have collectorValue : values element
-      = digitPartial shape (digitJoins masks rand) (digitVisible shape masks) element
+      = digitPartial shape (digitJoins rows masks) (digitVisible shape masks) element
         + shape.kappa * masks element shape.designated := by
     rw [evalParts, if_pos collector, trueValues]; ring
   have component : collectorComponent element
-      (collectorSolve (digitGamma rows rho masks rand) shape.input values (rowTarget rows shape.input))
+      (collectorSolve (digitGamma rows masks) shape.input values (rowTarget rows shape.input))
       = values element := by
     rw [← solve]
     rcases collector with rfl | rfl | rfl <;> simp [collectorComponent, collectorsOf]
@@ -1381,7 +1324,7 @@ theorem designated_eq_solve (rows : Coordinates.Rows) (rho : NonZeroBase) (masks
 
 /-- The designated masks of the coins (collectors only). -/
 def designatedOf (coins : JointCoins) : Fin digitCount → Biquadratic.Element → BaseField :=
-  fun digit element => if IsCollector element then (coins.1 digit).1 element shape.designated else 0
+  fun digit element => if IsCollector element then coins.1 digit element shape.designated else 0
 
 /-- The simulator's designated masks, from the published and visible cells and the true rows. -/
 def simulatorDesignated (cells : PublicCells × VisibleCells shape) :
@@ -1413,12 +1356,12 @@ theorem jointLaw (onCurve : OnCurve shape.input) :
     obtain ⟨digits, ⟨masks, bridgeKey, mask, r1, r2⟩, folds, gadgets⟩ := coins
     refine Prod.ext rfl (Prod.ext ?_ ?_)
     · funext digit element
-      show (if IsCollector element then (digits digit).1 element shape.designated else 0)
+      show (if IsCollector element then digits digit element shape.designated else 0)
         = if IsCollector element then _ else 0
       by_cases collector : IsCollector element
       · rw [if_pos collector, if_pos collector]
-        exact designated_eq_solve shape (context.rows digit) (context.rho digit) (digits digit).1
-          (digits digit).2 element collector onCurve
+        exact designated_eq_solve shape (context.rows digit) (digits digit) element collector
+          onCurve
       · rw [if_neg collector, if_neg collector]
     · exact (bridgeKey_eq_eval shape onCurve masks bridgeKey mask r1 r2).symm
   rw [factor, ← PMF.map_comp, jointExactness]

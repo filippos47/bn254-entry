@@ -5,12 +5,12 @@ The sources, with `ρ_F`, `ρ_λ ≤ 2^-500` the field-cell and randomiser cutof
 `lambdaAbort_le`), `ρ_x ≤ 2^-170` the curve-`x` cutoff (`curveXAbort_le`) and
 `ρ_t ≤ 2^-138` the designated preimage's `t` sampler (`BigInt.samplerAbort_le`):
 
-`34,297 ρ_F + (90 ρ_x + 1/#A) + 91 · 2 ρ_λ + 91 ρ_F + ρ_t
+`33,660 ρ_F + (90 ρ_x + 1/#A) + 91 · 2 ρ_λ + 91 ρ_F + ρ_t
   ≤ 2^16 · 2^-500 + (2^7 · 2^-170 + 2^-131) + 2^8 · 2^-500 + 2^7 · 2^-500 + 2^-138 ≤ 2^-128`
 
 (`cells ≤ 2^-129`, `tail ≤ 2^-130`, `lambdas ≤ 2^-131`, `free ≤ 2^-132`, `t ≤ 2^-132`). Every
 numeric step is exponent arithmetic on powers of two (`CutoffNat`, `CutoffPow`): the draw counts
-are bounded by powers of two (`34,297 ≤ 2^16`, `182 ≤ 2^8`, `91 ≤ 2^7`, `90 ≤ 2^7`) and the
+are bounded by powers of two (`33,660 ≤ 2^16`, `182 ≤ 2^8`, `91 ≤ 2^7`, `90 ≤ 2^7`) and the
 curve-`x` rejection ratio by `5/8` (`5^3 ≤ 2^7`), so no large numeral is formed.
 -/
 

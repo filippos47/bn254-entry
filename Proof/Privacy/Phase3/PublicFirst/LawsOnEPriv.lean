@@ -101,8 +101,7 @@ theorem coins_marginal (g : ClampedOffsets → (Fin digitCount → NonZeroBase �
       g ⟨(coinsSplit.symm (K, R, b)).offsets, (coinsSplit.symm (K, R, b)).offsetsClamped⟩
           (fun d => (((coinsSplit.symm (K, R, b)).pointRandomness.get d).rho,
             ((coinsSplit.symm (K, R, b)).pointRandomness.get d).tau)) =
-        g K (fun d => ((rowRandEquiv.trans (Equiv.prodAssoc NonZeroBase NonZeroBase
-          (Biquadratic.XRandomness × Biquadratic.YRandomness × Biquadratic.ZRandomness)).symm) (R d)).1) := by
+        g K (fun d => (rowRandEquiv (R d)).1) := by
     intro R b
     have rowEq : ∀ d : Fin digitCount, (coinsSplit.symm (K, R, b)).pointRandomness.get d = R d :=
       fun d => Vector.get_ofFn R d
@@ -111,8 +110,7 @@ theorem coins_marginal (g : ClampedOffsets → (Fin digitCount → NonZeroBase �
     rfl
   simp only [perR]
   simp only [tsum_const_uniform]
-  exact tsum_uniform_pi_fst (rowRandEquiv.trans (Equiv.prodAssoc NonZeroBase NonZeroBase
-          (Biquadratic.XRandomness × Biquadratic.YRandomness × Biquadratic.ZRandomness)).symm) (g K)
+  exact tsum_uniform_pi_fst rowRandEquiv (g K)
 
 omit [GroupCertificate] in
 theorem rowsAt_eq (coins : Coins) (K : ClampedOffsets) (hK : K.1 = coins.offsets) (d : Fin digitCount) :

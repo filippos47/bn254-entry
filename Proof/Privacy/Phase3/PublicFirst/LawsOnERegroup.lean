@@ -54,20 +54,20 @@ def regroupW : CoinsRest × (FixedIndex → Block) × (MaskCoord → BaseField) 
   toFun ω :=
     ((fun d => ((ω.1.1 d).rho, (ω.1.1 d).tau), ω.1.2.2.2.2.2.2.1, ω.1.2.2.2.2.2.2.2,
         (splitAlong (hidW input pos) (hidW_injective input pos) ω.2.1).2),
-      (fun d => ((maskSiteEquiv ω.2.2).1 d, ((ω.1.1 d).x, (ω.1.1 d).y, (ω.1.1 d).z)),
+      (fun d => (maskSiteEquiv ω.2.2).1 d,
         ((maskSiteEquiv ω.2.2).2, ω.1.2.2.1, ⟨ω.1.2.2.2.1.value, ω.1.2.2.2.1.nonzero⟩,
           ω.1.2.2.2.2.1, ω.1.2.2.2.2.2.1),
         (fun ℓ c => ω.2.1 (hidW input pos (.inl (ℓ, c))),
           fun d => (ω.1.2.1 d, (ω.2.1 (hidW input pos (.inr (d, false))),
             ω.2.1 (hidW input pos (.inr (d, true))))))))
   invFun p :=
-    ((fun d => ⟨(p.1.1 d).1, (p.1.1 d).2, (p.2.1 d).2.1, (p.2.1 d).2.2.1, (p.2.1 d).2.2.2⟩,
+    ((fun d => ⟨(p.1.1 d).1, (p.1.1 d).2⟩,
         fun d => (p.2.2.2.2 d).1, p.2.2.1.2.1, ⟨p.2.2.1.2.2.1.1, p.2.2.1.2.2.1.2⟩,
         p.2.2.1.2.2.2.1, p.2.2.1.2.2.2.2, p.1.2.1, p.1.2.2.1),
       (splitAlong (hidW input pos) (hidW_injective input pos)).symm
         (Sum.elim (fun q => p.2.2.2.1 q.1 q.2)
           (fun q => if q.2 then (p.2.2.2.2 q.1).2.2 else (p.2.2.2.2 q.1).2.1), p.1.2.2.2),
-      maskSiteEquiv.symm (fun d => (p.2.1 d).1, p.2.2.1.1))
+      maskSiteEquiv.symm (p.2.1, p.2.2.1.1))
   left_inv ω := by
     obtain ⟨⟨pR, pad, t, mask, r1, r2, Z, Δ⟩, v, m⟩ := ω
     have hidden : (Sum.elim (fun q : Lane × Fin foldStepCount => v (hidW input pos (.inl (q.1, q.2))))
@@ -89,15 +89,15 @@ def regroupW : CoinsRest × (FixedIndex → Block) × (MaskCoord → BaseField) 
       rw [Prod.mk.eta, Equiv.symm_apply_apply]
   right_inv p := by
     obtain ⟨⟨rho, Z, Δ, rest⟩, digits, ⟨cm, t, mask, r1, r2⟩, fold, gadget⟩ := p
-    have masks : maskSiteEquiv (maskSiteEquiv.symm (fun d => (digits d).1, cm)) =
-        (fun d => (digits d).1, cm) := Equiv.apply_symm_apply _ _
+    have masks : maskSiteEquiv (maskSiteEquiv.symm (digits, cm)) =
+        (digits, cm) := Equiv.apply_symm_apply _ _
     refine Prod.ext (Prod.ext rfl (Prod.ext rfl (Prod.ext rfl ?_)))
       (Prod.ext (funext fun d => ?_) (Prod.ext (Prod.ext ?_ rfl) (Prod.ext
         (funext fun ℓ => funext fun c => ?_) (funext fun d => ?_))))
     · show ((splitAlong (hidW input pos) (hidW_injective input pos))
         ((splitAlong (hidW input pos) (hidW_injective input pos)).symm (_, rest))).2 = rest
       rw [Equiv.apply_symm_apply]
-    · exact Prod.ext (congrFun (congrArg Prod.fst masks) d) rfl
+    · exact congrFun (congrArg Prod.fst masks) d
     · exact congrArg Prod.snd masks
     · exact splitAlong_symm_image (hidW input pos) (hidW_injective input pos) _ _ (.inl (ℓ, c))
     · exact Prod.ext rfl (Prod.ext
@@ -258,8 +258,7 @@ theorem tablePub_cellsW (coins : Coins) (v : FixedIndex → Block) (T : Tape) (k
       (fun d => ((coins.pointRandomness.get d).rho, (coins.pointRandomness.get d).tau), coins.inputZero,
         coins.inputDelta, (splitAlong (hidW input pos) (hidW_injective input pos) v).2) := rfl
   have coinsEq : (regroupW input pos (coinsRest coins, v, maskCoordEquiv (masksOf VectorSite.lane T))).2 =
-      (fun d => ((maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).1 d, ((coins.pointRandomness.get d).x,
-          (coins.pointRandomness.get d).y, (coins.pointRandomness.get d).z)),
+      (fun d => (maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).1 d,
         ((maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).2, coins.bridgeKey,
           ⟨coins.curveMask.value, coins.curveMask.nonzero⟩, coins.curveR1, coins.curveR2),
         (fun ℓ c => v (hidW input pos (.inl (ℓ, c))),
@@ -277,22 +276,21 @@ theorem tablePub_cellsW (coins : Coins) (v : FixedIndex → Block) (T : Tape) (k
       digitOffsets ((maskSiteEquiv m).1 d) := fun d => digitValues_fixed v T _ _ _ _ d
   have curveK := curveValues_fixed v T (coins.inputDelta .x) (coins.inputDelta .y)
     (Pipeline.bitKeyOf coins.inputMacKey .x) (Pipeline.bitKeyOf coins.inputMacKey .y)
+  have rowsGet : ∀ i : Fin outputMacCount,
+      (FieldMacToECMac.rowsForOutputKeys keys coins.pointRandomness).get i =
+        Coordinates.rows (keys.get i).offset.coordinates (digitEndomorphismBase (keys.get i).digit)
+          (coins.pointRandomness.get i).rho.value (coins.pointRandomness.get i).tau.value := by
+    intro i
+    unfold FieldMacToECMac.rowsForOutputKeys
+    exact Vector.get_ofFn _ i
   apply public_ext
   · change CurveMembership.garble _ _ _ _ _ = CurveMembership.garble _ _ _ _ _
     rw [curveK]
   · change Vector.ofFn _ = Vector.ofFn _
     refine congrArg Vector.ofFn (funext fun d => ?_)
-    change garbleRow _ _ _ = garbleRow _ _ _
+    change garbleRow _ _ = garbleRow _ _
     beta_reduce
-    rw [digitK]
-    have rowsGet : ∀ i : Fin outputMacCount,
-        (FieldMacToECMac.rowsForOutputKeys keys coins.pointRandomness).get i =
-          Coordinates.rows (keys.get i).offset.coordinates (digitEndomorphismBase (keys.get i).digit)
-            (coins.pointRandomness.get i).rho.value (coins.pointRandomness.get i).tau.value := by
-      intro i
-      unfold FieldMacToECMac.rowsForOutputKeys
-      exact Vector.get_ofFn _ i
-    rw [rowsGet d]
+    rw [digitK, rowsGet d]
     rfl
   · rw [assemble_exception, cellsSource_exception]
     unfold Programs.gadgetM
@@ -308,13 +306,13 @@ theorem tablePub_cellsW (coins : Coins) (v : FixedIndex → Block) (T : Tape) (k
     exact congrArg Vector.ofFn (funext fun slot => foldJoin_splitW input pos v .pointX slot _)
   · rw [(assemble_hot _ _ _ _ _ _ _ _ _ _ _).2.2.2, (cellsSource_hot _ _).2.2.2, laneHotJoins_fixed]
     exact congrArg Vector.ofFn (funext fun slot => foldJoin_splitW input pos v .pointY slot _)
-  · have pointSlopes : ∀ d : Fin digitCount, Biquadratic.slopes (coins.pointRandomness.get d).x
-        (coins.pointRandomness.get d).y (coins.pointRandomness.get d).z
+  · have pointSlopes : ∀ d : Fin digitCount,
+        Biquadratic.slopes ((FieldMacToECMac.rowsForOutputKeys keys coins.pointRandomness).get d)
           (Pipeline.digitValues PX.offsets PY.offsets d) =
-        digitSlopes ((maskSiteEquiv m).1 d) ((coins.pointRandomness.get d).x,
-          (coins.pointRandomness.get d).y, (coins.pointRandomness.get d).z) := by
+        digitSlopes ((ctxW input pos pads keys (regroupW input pos (coinsRest coins, v,
+          maskCoordEquiv (masksOf VectorSite.lane T))).1).rows d) ((maskSiteEquiv m).1 d) := by
       intro d
-      rw [digitK]
+      rw [digitK, rowsGet d]
       rfl
     have curveSlopesEq : CurveMembership.slopes coins.curveR1 coins.curveR2
         (Pipeline.curveValues

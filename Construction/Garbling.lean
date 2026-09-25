@@ -157,7 +157,6 @@ theorem evaluateEncodeRows [FieldCertificate] (construction : Construction)
         (FieldMacToECMac.rowsForOutputKeys
           (FieldMacToECMac.outputKeys construction key.scalar.value key.randomness.offsets)
           key.randomness.pointRandomness)
-        key.randomness.pointRandomness
         (Pipeline.digitK key.randomness.fixedKeyOracle key.randomness.hashOracle
           key.randomness.inputDelta
           (Pipeline.whitenedKey key.randomness.encPRFOracle key.randomness.hashOracle

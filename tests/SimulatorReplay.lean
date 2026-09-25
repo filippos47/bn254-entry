@@ -19,7 +19,7 @@ hash is `Seed`'s hash), against the construction's honest evaluator on the same 
 * `bridgeCheck`: the bridge asks `bridgeInput t` (both branches: `t ≥ 2 ^ 150` and a small `t`).
 * `programsCheck`: the `452` hash programs are `scaleInput pointX 0 j* i E* ↦` the halves.
 * `solveCheck`: the opening's collector solve of one digit (`Opening.solveDigit`) on random row
-  constants, accumulators, targets and `κ = ±1`: once `κ · Y*[c]` is added at the three
+  constants `gX, gY, gZ`, accumulators, targets and `κ = ±1`: once `κ · Y*[c]` is added at the three
   collectors (`rowX_x9`, `rowY_cubic`, `rowZ_x9`), the digit's rows `Biquadratic.evaluateX/Y/Z`
   hit the targets exactly; the `Y` collector's coefficient is `x²`.
 
@@ -246,17 +246,17 @@ def programsCheck (jStar : Nat) : Bool :=
 /-- The opening's solve of digit `digit` at the input `(x, y)` and `κ`, against the row algebra. -/
 def solveCheck (digit : Nat) (x y kappa : BaseField) : Bool :=
   let word (value : BaseField) : Word := BitVec.ofNat 256 value.val
-  let gamma (k : Nat) : BaseField := Seed.field seed (30_000 + 11 * digit + k)
-  let xAcc (slot : Nat) : BaseField := Seed.field seed (31_000 + 5 * digit + slot)
+  let gamma (k : Nat) : BaseField := Seed.field seed (30_000 + 3 * digit + k)
+  let xAcc (slot : Nat) : BaseField := Seed.field seed (31_000 + 4 * digit + slot)
   let yAcc (slot : Nat) : BaseField := Seed.field seed (32_000 + 3 * digit + slot)
   let target (row : Nat) : BaseField := Seed.field seed (33_000 + 3 * digit + row)
   let s0 : St := Id.run do
     let mut s : St := {}
     s := ((s.write reqX (word x)).write reqY (word y)).write tmpKappa (word kappa)
-    for k in List.range 11 do
+    for k in List.range 3 do
       s := s.write (Opening.rowCell digit k) (word (gamma k))
-    for slot in List.range 5 do
-      s := s.write (Opening.xCell (5 * digit + slot)) (word (xAcc slot))
+    for slot in List.range 4 do
+      s := s.write (Opening.xCell (4 * digit + slot)) (word (xAcc slot))
     for slot in List.range 3 do
       s := s.write (Opening.yCell (3 * digit + slot)) (word (yAcc slot))
     for row in List.range 3 do
@@ -265,22 +265,20 @@ def solveCheck (digit : Nat) (x y kappa : BaseField) : Bool :=
   match exec (Opening.solveDigit digit) s0 with
   | none => false
   | some s =>
-      let star (slot : Nat) : BaseField := ((s.read (designatedCell (5 * digit + slot))).toNat : BaseField)
+      let star (slot : Nat) : BaseField := ((s.read (designatedCell (4 * digit + slot))).toNat : BaseField)
       let values : Biquadratic.Values := fun element => match element with
         | .inl .rowX_x7 => xAcc 0
         | .inl .rowX_x9 => xAcc 1 + kappa * star 1
-        | .inl .rowY_mixed => xAcc 2
-        | .inl .rowY_cubic => xAcc 3 + kappa * star 3
-        | .inl .rowZ_x9 => xAcc 4 + kappa * star 4
+        | .inl .rowY_cubic => xAcc 2 + kappa * star 2
+        | .inl .rowZ_x9 => xAcc 3 + kappa * star 3
         | .inr .rowX_y10 => yAcc 0
         | .inr .rowY_y8 => yAcc 1
         | .inr .rowY_y10 => yAcc 2
       let input : AffineInput := ⟨x, y⟩
       s.log.size == 0 &&
-        Biquadratic.evaluateX ⟨gamma 0, gamma 1, gamma 2, gamma 3⟩ input values == target 0 &&
-        Biquadratic.evaluateY ⟨gamma 4, gamma 5, gamma 6, gamma 7, gamma 8⟩ input values
-          == target 1 &&
-        Biquadratic.evaluateZ ⟨gamma 9, gamma 10⟩ input values == target 2
+        Biquadratic.evaluateX ⟨gamma 0, gamma 1, gamma 2⟩ input values == target 0 &&
+        Biquadratic.evaluateY ⟨gamma 0, gamma 1, gamma 2⟩ input values == target 1 &&
+        Biquadratic.evaluateZ ⟨gamma 0, gamma 1, gamma 2⟩ values == target 2
 
 #eval laneCheck Replay.curveXSpec
 #eval laneCheck Replay.curveYSpec

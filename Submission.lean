@@ -8,7 +8,7 @@ The Plan B entry at the query-gated challenge library (`aaf2789`).
   (`Construction/PGS/BatchSampler.lean`);
 * `Randomness` is `Scheme.Coins`: a Plan B tape without its three public tables, which the
   library now supplies as a separate oracle;
-* `Public` is the eight-field, tag-free public value of design D.5, `1,103,204` bytes (`642`
+* `Public` is the eight-field, tag-free public value of design D.5, `1,082,820` bytes (`642`
   elements per chunk word: seven per digit, with the three-element sign row);
 * `scheme` is `Scheme.scheme`, the Plan B garbler and evaluator on `coins.withOracle oracle`;
 * `garbleProgram`/`evaluateProgram` are the query programs of `Construction/OraclePrograms.lean`
@@ -70,7 +70,7 @@ theorem evaluateProgramCorrect (field : FieldCertificate) (group : @GroupCertifi
       (@Scheme.scheme field group).evaluate oracle table input labels :=
   @Programs.evaluateProgram_correct field group table input labels oracle
 
-/-- The Plan B submission at `1,103,204` bytes. -/
+/-- The Plan B submission at `1,082,820` bytes. -/
 def solution : Kriterion.Solution := {
   FixedIndex := PlanB.FixedIndex
   EncIndex := EncPRF.PermutationIndex
@@ -82,7 +82,7 @@ def solution : Kriterion.Solution := {
   Public := PlanB.Public
   EncodingKey := InputMacKey
   encoding := PlanB.Wire.encoding
-  ciphertextBytes := 1103204
+  ciphertextBytes := 1082820
   garbleQueries := Programs.garbleQueries
   evaluateQueries := Programs.evaluateQueries
   scheme := @Scheme.scheme

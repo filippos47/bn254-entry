@@ -33,11 +33,10 @@ variable [FieldCertificate] [GroupCertificate] (scalar : NonZeroScalar) (input :
 
 noncomputable instance restWFintype : Fintype (RestW input pos) := Fintype.ofFinite _
 
-/-- A row randomness is its five fields. -/
-def rowRandEquiv : RowRandomness ≃ NonZeroBase × NonZeroBase × Biquadratic.XRandomness ×
-    Biquadratic.YRandomness × Biquadratic.ZRandomness where
-  toFun r := (r.rho, r.tau, r.x, r.y, r.z)
-  invFun p := ⟨p.1, p.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2⟩
+/-- A row randomness is its two lift scales (the slopes carry the true row coefficients). -/
+def rowRandEquiv : RowRandomness ≃ (NonZeroBase × NonZeroBase) × Unit where
+  toFun r := ((r.rho, r.tau), ())
+  invFun p := ⟨p.1.1, p.1.2⟩
   left_inv _ := rfl
   right_inv _ := rfl
 
@@ -60,23 +59,22 @@ def ctxOn (E : PermutationOracle EncPRF.PermutationIndex Block) (H : OtherTable)
   gadgetCode := (ctxW input pos (padsOf E (bridgeOf H 0)) keys o).gadgetCode
 
 omit [GroupCertificate] in
-/-- `publicOf` reads a context through its rows, `ρ`, its visible parts at the bridge key, its slots,
+/-- `publicOf` reads a context through its rows, its visible parts at the bridge key, its slots,
 mixes and codes. -/
 theorem publicOf_congr (first second : JointContext) (jc : JointCoins) (rows : first.rows = second.rows)
-    (rho : first.rho = second.rho)
     (fold : first.foldVisible (bridgeKeyOf jc) = second.foldVisible (bridgeKeyOf jc))
     (gadget : first.gadgetVisible (bridgeKeyOf jc) = second.gadgetVisible (bridgeKeyOf jc))
     (slot : first.gadgetSlot = second.gadgetSlot) (mix : first.gadgetMix = second.gadgetMix)
     (code : first.gadgetCode = second.gadgetCode) :
     publicOf first jc = publicOf second jc := by
   unfold publicOf
-  rw [rows, rho, fold, gadget, slot, mix, code]
+  rw [rows, fold, gadget, slot, mix, code]
 
 theorem publicOf_ctxOn (E : PermutationOracle EncPRF.PermutationIndex Block) (H : OtherTable)
     (keys : OutputKeys) (o : OuterW input pos) (jc : JointCoins) :
     publicOf (ctxOn input pos E H keys o) jc =
       publicOf (ctxW input pos (padsOf E (bridgeOf H (bridgeKeyOf jc))) keys o) jc :=
-  publicOf_congr _ _ jc rfl rfl rfl rfl rfl rfl rfl
+  publicOf_congr _ _ jc rfl rfl rfl rfl rfl rfl
 
 /-! ### 2. The published value through the masks -/
 
@@ -136,7 +134,7 @@ theorem regroup_facts (K : ClampedOffsets) (o : OuterW input pos) (jc : JointCoi
         ((regroupW input pos).symm (o, jc)).1 ∧
       (coinsSplit.symm (K, ((regroupW input pos).symm (o, jc)).1)).bridgeKey = bridgeKeyOf jc ∧
       (coinsSplit.symm (K, ((regroupW input pos).symm (o, jc)).1)).inputMacKey = labelKey o.2.1 o.2.2.1 ∧
-      maskSiteEquiv ((regroupW input pos).symm (o, jc)).2.2 = (fun d => (jc.1 d).1, jc.2.1.1) ∧
+      maskSiteEquiv ((regroupW input pos).symm (o, jc)).2.2 = (jc.1, jc.2.1.1) ∧
       (splitAlong (hidW input pos) (hidW_injective input pos) ((regroupW input pos).symm (o, jc)).2.1).2 =
         o.2.2.2 ∧
       regroupW input pos (((regroupW input pos).symm (o, jc)).1, ((regroupW input pos).symm (o, jc)).2.1,
@@ -146,7 +144,7 @@ theorem regroup_facts (K : ClampedOffsets) (o : OuterW input pos) (jc : JointCoi
     (regroupW input pos).apply_symm_apply (o, jc)
   refine ⟨congrArg Prod.snd (coinsSplit.apply_symm_apply (K, ((regroupW input pos).symm (o, jc)).1)),
     congrArg (fun p : OuterW input pos × JointCoins => bridgeKeyOf p.2) back, ?_,
-    congrArg (fun p => ((fun d => (p.2.1 d).1, p.2.2.1.1) : (Fin digitCount → DigitMasks) × CurveMasks)) back,
+    congrArg (fun p => ((p.2.1, p.2.2.1.1) : (Fin digitCount → DigitMasks) × CurveMasks)) back,
     congrArg (fun p => p.1.2.2.2) back, back⟩
   have labels := congrArg (fun p => (p.1.2.1, p.1.2.2.1)) back
   simp only at labels

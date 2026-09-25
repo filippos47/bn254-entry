@@ -370,17 +370,7 @@ def zeroLabelBase : PlanB.Coord → Nat
 def rowRandomness (seed : BitVec 256) (row : Nat) : FieldMacToECMac.RowRandomness :=
   let base := 60_000 + row * 16
   { rho := nonZeroBase (field seed base)
-    tau := nonZeroBase (field seed (base + 9))
-    x := {
-      r1 := field seed (base + 1)
-      r2 := field seed (base + 2)
-      r4 := field seed (base + 3) }
-    y := {
-      r2 := field seed (base + 4)
-      r4 := field seed (base + 6)
-      r5 := field seed (base + 7) }
-    z := {
-      r1 := field seed (base + 8) } }
+    tau := nonZeroBase (field seed (base + 9)) }
 
 /-- This is the complete benchmark tape for one seed. -/
 def randomness (seed : BitVec 256) : Garbling.Randomness := {

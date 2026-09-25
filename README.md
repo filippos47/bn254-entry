@@ -6,7 +6,7 @@ multiplication `f_k(u) = k·u`, checked in Lean against the challenge library
 
 | metric | value | rule |
 |---|---|---|
-| `ciphertextBytes` | **1,103,204** `= 96 + 29,120 + 1,092 + 4·(254 − 52)·16 + 52·20,384` | ranked, lower is better |
+| `ciphertextBytes` | **1,082,820** `= 96 + 8,736 + 1,092 + 4·(254 − 52)·16 + 52·20,384` | ranked, lower is better |
 | `garbleQueries` | **1,123,253** `≤ 1,759,967` | acceptance gate |
 | `evaluateQueries` | **1,042,077** `≤ 1,055,879` | acceptance gate |
 
@@ -18,7 +18,14 @@ simulator machine. `#print axioms Submission.solution` reports exactly `propext`
 
 ## Changes from the previous entries
 
-Phases 3 to 5b are xinshu's entry (`xinshudong/bn254-entry`); this entry starts from phase 5b.
+**This is a fork of Lazar's sign-row entry (`Lazar955/bn254-planb`, commit `a79310d`,
+1,103,204 bytes), itself built on xinshu's entry (`xinshudong/bn254-entry`).** Everything in it is
+their work except one change made in this fork: the **three-constant rows** (§1.7). The slopes of
+a digit's 7 encodings carry the true row coefficients, so the row randomisers are gone and each
+digit publishes 3 row constants instead of 10. That saves `91·7·32 = 20,384` bytes. The lift
+scales `ρ` and `τ` stay.
+
+Phases 3 to 5b are xinshu's entry (`xinshudong/bn254-entry`); the sign row is Lazar's.
 The digit MACs, the `X` and `Z` rows, the four lanes, the fold and the EncPRF gate are the same
 in all five versions, and the gadget is the same in the first four. The metrics are
 `ciphertextBytes / garbleQueries / evaluateQueries`.
@@ -29,9 +36,10 @@ in all five versions, and the gadget is the same in the first four. The metrics 
 | phase 4 | 1,719,202 / 885,169 / 831,105 | the batched hash-vector sampler (§1.5): a switch's whole lane mask vector from `k` hash answers; ragged-first chunks `[2, 4 × 63]` |
 | phase 5a | 1,534,306 / 794,089 / 745,785 | Lazar's four-element `Y` row: 8 encodings per digit, `733` elements per chunk word instead of `824` |
 | phase 5b | 1,348,634 / 1,077,993 / 1,035,473 | mixed chunk widths `[2, 5 × 32, 4 × 23]`: `56` chunk words instead of `64` |
-| sign row (this entry) | **1,103,204 / 1,123,253 / 1,042,077** | the sign row replaces the `Y` row (§1.7): 7 encodings per digit, `642` elements per chunk word instead of `733`; a second exceptional case in a 12-byte gadget (§1.8); chunk widths `[2, 5 × 48, 4 × 3]`: `52` chunk words (§1.2, §3) |
+| sign row (Lazar) | 1,103,204 / 1,123,253 / 1,042,077 | the sign row replaces the `Y` row (§1.7): 7 encodings per digit, `642` elements per chunk word instead of `733`; a second exceptional case in a 12-byte gadget (§1.8); chunk widths `[2, 5 × 48, 4 × 3]`: `52` chunk words (§1.2, §3) |
+| three-constant rows (this fork) | **1,082,820 / 1,123,253 / 1,042,077** | the slopes carry the true row coefficients: 3 published constants per digit instead of 10, no row randomisers (§1.7) |
 
-**Credit.** This entry builds on xinshu's phase-5b entry. Its changes are the sign row and its
+**Credit.** Lazar's sign-row entry builds on xinshu's phase-5b entry. Its changes are the sign row and its
 randomiser `τ` (§1.7), the second exceptional case `T = 2K` with the 12-byte gadget and
 bit-indexed gadget permutations (§1.8), the garbler's gadget that asks each fixed-key index once
 (§1.8), the `C = 52` profile (§1.2), and the correctness, privacy and machine proofs for all of
@@ -53,7 +61,7 @@ the gadget (§1.8):
 - the curve-membership check;
 - the EncPRF whitening.
 
-The `Y` slot of each digit carries a sign row instead, so a digit publishes 10 constants, and the
+The `Y` slot of each digit carries a sign row instead, a digit publishes 3 row constants, and the
 doubling-exception gadget gains a second exceptional case, 12 bytes per digit.
 
 The entry replaces how the **642 affine encodings** (`a_e·x + b_e` or `a_e·y + b_e`) reach the
@@ -179,23 +187,59 @@ is then a lift whose two scales are nonzero multiples of `ρ` and of `τ`, so th
 is `τ²·b`.
 
 `S₀` has support `{1, y, x², y²}`: no `x` and no `xy` term. So the row reads **three**
-encodings, `cubic` (x-type, read with `x²`, slope `−r4`), `y8` (read with `y`, slope `r4 − r5`)
-and `y10` (read with 1, slope `−(r2 + b_y8)`), and publishes four constants, `c0 − 3r4 − b_y10`,
-`c2 + r2`, `c4 − b_cubic` and `c5 + r5`, where `b_e` is element `e`'s offset (§1.4). The `cubic`
-slope contributes `−r4·x³`, which the curve equation turns into `r4·(3 − y²)`; the `y8` slope
-absorbs the `y²` part and `c0` the constant `3·r4`. So the row takes its exact value on the curve
-(`evaluateEncodedY`), is off by `r4·(y² − x³ − 3)` elsewhere (`evaluateEncodedY_raw`), and the
-evaluator never reaches it off the curve, because it refuses such an input before any query.
-Against the four-element `Y` row, the `mixed` element, its randomiser `r3` and its constant `c3`
-are gone: a digit reads 7 encodings instead of 8 and publishes 10 constants instead of 11.
+encodings: `cubic` (x-type, read with `x²`), `y8` (read with `y`) and `y10` (read with 1).
 
-The row changes two things in the proofs, as the four-element row did. Its collector (§5.2) is
-`cubic`, whose coefficient is `x²`, so the simulator divides the sign-row target by `x²`; every
-curve point has `x ≠ 0` because `3` is not a square in the base field
-(`Proof/Correctness/PGS/NonResidue.lean`). And `r4` does not appear on its own in a published
-constant, so the digit bijection of the public-first core (F4, `JointExactness.digitEquiv`) reads
-it back from the published and visible values by dividing by `y² − 3`, which is never zero; F4
-therefore still holds at every input, on or off the curve.
+**The slopes carry the true row coefficients.** Write `c·` for the digit's scaled row coefficients
+(`Coordinates.rows offset digit ρ τ`) and `K[e]` for element `e`'s offset (§1.4), which the
+projectivized garbling scheme forces to be uniform. Then:
+
+| element | read with | slope |
+|---|---|---|
+| `x7` | `x` | `X.c4` |
+| `x9` (X collector) | `1` | `X.c1 − K[x7]` |
+| `y10` (X row) | `1` | `X.c2` |
+| `cubic` (S collector) | `x²` | `−s` |
+| `y8` | `y` | `S.c5 + s` |
+| `y10` (S row) | `1` | `S.c2 − K[y8]` |
+| `x9` (Z collector) | `1` | `Z.c1` |
+
+Here `s = (S.c0 − K[S.y10]) / 3`. Each slope reads offsets only, never another slope, so the
+garbler computes all of them in one pass from the tape. The published constants are
+
+```
+gX = X.c0 − K[x9] − K[X.y10],   gY = S.c4 − K[cubic],   gZ = Z.c0 − K[z9]
+```
+
+and the evaluator computes
+
+```
+X = gX + x·d_x7 + d_x9 + d_Xy10
+S = (gY + d_cubic)·x² + y·d_y8 + d_Sy10
+Z = gZ + d_z9
+```
+
+`X` and `Z` are exact at every input (`evaluateEncodedX`, `evaluateEncodedZ`). `S` equals its
+target plus `s·(y² − x³ − 3)` (`evaluateEncodedY_raw`), so it is exact on the curve
+(`evaluateEncodedY`); the evaluator refuses an off-curve input before any query. `ρ` and `τ` stay:
+they are the lift scales (`λ = ρ·(u − a)`, `t = τ·L`), and the rows are still `(λ²·x_R, t²·y_R, λ)`
+multiples.
+
+**Why this is private.** The offsets alone do the masking. For a fixed digit, the map from the 7
+offsets to the 3 constants and the 4 non-collector delivered values is a bijection, and the 3
+collector values are then fixed by the rows. The digit bijection of the public-first core (F4,
+`JointExactness.digitEquiv`) proves this by reading the offsets back from the published and
+visible cells: `K[x7]` and `K[X.y10]` directly; `(K[y8], K[S.y10])` from a `2 × 2` system
+(`solvedY10`) whose determinant is `(3 − y²)/3`, never zero because `3` is not a square
+(`Proof/Correctness/PGS/NonResidue.lean`); the three collector offsets from `gX`, `gY`, `gZ`. The
+read-back is exact at every input, on or off the curve. The collectors' coefficients are unchanged
+(`1`, `x²`, `1`), so the simulator's collector solve (§5.2) divides the sign-row target by `x²` as
+before and only reads different constants. Each digit publishes `3·32 = 96` bytes instead of 320,
+and `RowRandomness` keeps only `ρ` and `τ`.
+
+**Credit.** The sign row and `τ` are Lazar's (`Lazar955/bn254-planb`); the rows' structure, the
+`cubic` collector trick (the "Y4" row of `Lazar955/argomac-lean`) and the proof tree are from
+Lazar's and xinshu's entries. This fork contributes only the true-coefficient slopes and the three
+constants.
 
 ### 1.8 Output and gadget
 
@@ -231,11 +275,11 @@ most once, which the privacy proof needs (`FixedOnce`).
 | field | contents | bytes |
 |---|---|---|
 | `curve` | 3 constants | 96 |
-| `rows` | 91 × 10 constants × 32 B | 29,120 |
+| `rows` | 91 × 3 constants × 32 B | 8,736 |
 | `exception` | 91 × 12 B (two kinds × 6 slots) | 1,092 |
 | `curveXHot`, `curveYHot`, `pointXHot`, `pointYHot` | 4 lanes × 202 fold joins × 16 B | 12,928 |
 | `scale` | 52 chunk words × (642 elements × 254 bits + 4 zero bits), 20,384 B each | 1,059,968 |
-| **total** | | **1,103,204** |
+| **total** | | **1,082,820** |
 
 Every field has a fixed width, so every public value encodes to the same length
 (`PlanB.Wire.ciphertextSize`, `Proof/CiphertextSize.lean`; the table is `Wire.byteArithmetic`).
@@ -410,12 +454,12 @@ For `q ≥ 2^100` the bound holds because `Adv ≤ 1`.
 
 ### 5.5 The machine
 
-The simulator machine `planBSimulator` costs `size + 1 + firstFuel + secondFuel = 46,837,161,227`
-(about `2^35.45`) against the allowance `2^60` (`Design.totalCost_eq`, `Design.totalCost_le`). Its
+The simulator machine `planBSimulator` costs `size + 1 + firstFuel + secondFuel = 46,336,505,162`
+(about `2^35.43`) against the allowance `2^60` (`Design.totalCost_eq`, `Design.totalCost_le`). Its
 machine law `machineLaw_planB : MachineLaw planBSimulator 2^-128` is proved
 (`Proof/Simulator/OpeningMachine.lean`).
 
-- Stage 1 is dominated by bounded-rejection sampling of 34,297 field cells and by serialising
+- Stage 1 is dominated by bounded-rejection sampling of 33,660 field cells and by serialising
   the table.
 - Stage 2 is dominated by the replay (994,979 lazy queries, with the base-`p` digit extraction of
   every replayed mask vector) and the 362 programs. Its opening draws 91 lift pairs `(λ, t)` and
@@ -486,7 +530,7 @@ adaptivePrivacy := Phase3.Glue.planB_oracleAdaptivePrivacy_of
 | `H_joint.hidden = planB_hidden` | `G0U → G1U`, identical until a hidden entry is touched, `L1 = 3q/2^128 + 2q/(p−1)` | **proved** |
 | `H_joint.publicFirst = planB_publicFirst` | `G1U → HW`: `stageOneHitError q₁ + exceptionalError + maskSwapError + coincidenceError`; from the F4 `jointLaw` core, `designedLaws` and `designedBounds` | **proved** |
 | `H_abort = AbortBound.of_keyAveraged rfl rfl Lazy.keyAveragedFailBound` | `H → I^U`, per abort site, `1/(2^128 − q₁)` per stage-1 entry | **proved** |
-| `H_machine = MachineBound.of_law machineLaw_planB` | `I → M`, `MachineLaw planBSimulator 2^-128`; the cost field is `planBSimulator.within` (`46,837,161,227 ≤ 2^60`) | **proved** |
+| `H_machine = MachineBound.of_law machineLaw_planB` | `I → M`, `MachineLaw planBSimulator 2^-128`; the cost field is `planBSimulator.within` (`46,336,505,162 ≤ 2^60`) | **proved** |
 
 ## 8. Build and verify
 

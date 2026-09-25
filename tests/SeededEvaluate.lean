@@ -169,15 +169,14 @@ def garbleFast (outputKeys : FieldMacToECMac.OutputKeys)
   let digitK : FieldMacToECMac.DigitValues := fun digit =>
     Pipeline.digitValues (fun e => offPX.get e) (fun e => offPY.get e) digit
   let curveSlopes := CurveMembership.slopes curveR1 curveR2 curveK
+  let rows := FieldMacToECMac.rowsForOutputKeys outputKeys pointRandomness
   let pointSlopes : Fin digitCount → Biquadratic.Values := fun digit =>
-    Biquadratic.slopes (pointRandomness.get digit).x (pointRandomness.get digit).y
-      (pointRandomness.get digit).z (digitK digit)
+    Biquadratic.slopes (rows.get digit) (digitK digit)
   let joinCX := joinsVec .curveX maskCX (Vector.ofFn (Pipeline.curveXAssemble curveSlopes))
   let joinCY := joinsVec .curveY maskCY (Vector.ofFn (Pipeline.curveYAssemble curveSlopes))
   let joinPX := joinsVec .pointX maskPX (Vector.ofFn (Pipeline.pointXAssemble pointSlopes))
   let joinPY := joinsVec .pointY maskPY (Vector.ofFn (Pipeline.pointYAssemble pointSlopes))
-  let table := FieldMacToECMac.garble outputKeys
-    (FieldMacToECMac.rowsForOutputKeys outputKeys pointRandomness) pointRandomness digitK
+  let table := FieldMacToECMac.garble outputKeys rows digitK
     (EncPRF.transformKey encPRFOracle (EncPRF.whiteningKeys hashOracle bridgeKey) inputKey)
     (Pipeline.gadgetPermutations fixedKeyOracle) exceptionPad
   { curve := CurveMembership.garble bridgeKey curveMask.value curveR1 curveR2 curveK

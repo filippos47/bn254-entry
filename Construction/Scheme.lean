@@ -116,31 +116,9 @@ instance nonZeroBaseFinite : Finite NonZeroBase :=
     cases second
     simp_all)
 
-instance xRandomnessFinite : Finite Biquadratic.XRandomness :=
-  Finite.of_injective (fun value : Biquadratic.XRandomness => (value.r1, value.r2, value.r4)) (by
-    intro first second equal
-    cases first
-    cases second
-    simp_all)
-
-instance yRandomnessFinite : Finite Biquadratic.YRandomness :=
-  Finite.of_injective
-    (fun value : Biquadratic.YRandomness => (value.r2, value.r4, value.r5)) (by
-      intro first second equal
-      cases first
-      cases second
-      simp_all)
-
-instance zRandomnessFinite : Finite Biquadratic.ZRandomness :=
-  Finite.of_injective (fun value : Biquadratic.ZRandomness => value.r1) (by
-    intro first second equal
-    cases first
-    cases second
-    simp_all)
-
 instance rowRandomnessFinite : Finite FieldMacToECMac.RowRandomness :=
   Finite.of_injective
-    (fun value : FieldMacToECMac.RowRandomness => (value.rho, value.tau, value.x, value.y, value.z)) (by
+    (fun value : FieldMacToECMac.RowRandomness => (value.rho, value.tau)) (by
       intro first second equal
       cases first
       cases second

@@ -1,12 +1,19 @@
 # Intuition: chunked one-hot projectivization of ArgoMAC
 
-This entry garbles BN254 scalar multiplication at **1,103,204 bytes** of public ciphertext.
+This entry garbles BN254 scalar multiplication at **1,082,820 bytes** of public ciphertext.
 Garbling makes at most **1,123,253** oracle queries (gate 1,759,967) and evaluation at most
 **1,042,077** (gate 1,055,879). Both figures are the exact bounds carried in the types of
 `garbleProgram` and `evaluateProgram`.
 
 This note explains the design, the byte count, the query count and the privacy argument.
 Section 7 states what is proved: every obligation.
+
+**This version is a fork of Lazar's sign-row entry (`Lazar955/bn254-planb`, commit `a79310d`,
+1,103,204 bytes), which builds on xinshu's entry (`xinshudong/bn254-entry`).** It makes one
+change: the **three-constant rows** (§2.6). The slopes of a digit's 7 encodings now carry the true
+row coefficients, so the row randomisers go away and each digit publishes 3 row constants instead
+of 10. That saves `91 · 7 · 32 = 20,384` bytes. Everything else, including Lazar's sign row and
+its lift scale `τ`, is Lazar's and xinshu's work as it was.
 
 This entry builds on xinshu's Plan B entry (`xinshudong/bn254-entry`), which went through four
 versions. The first (3,363,376 bytes) drew each switch mask element from three fixed-key
@@ -161,16 +168,16 @@ EncPRF labels, as in the baseline.
 ### 2.5 The input interface
 
 The encoding key is exactly the 508 Lamport label pairs `(Z_j, Z_j ⊕ Δ_coord)`, and `Encode`
-selects one label per bit. The private coins hold the offsets, row randomizers (with the sign
-row's own `τ`), gadget pads, bridge key, curve mask and the free-XOR label material. The library
+selects one label per bit. The private coins hold the offsets, the lift scales `ρ` and `τ`
+(the sign row's own), gadget pads, bridge key, curve mask and the free-XOR label material. The library
 supplies the three public oracle families (fixed-key permutations, EncPRF permutations, and the
 field hash) separately.
 
 ### 2.6 The rows, the sign row and the gadget
 
-Each row is affine in the delivered encodings once `γ` is fixed: the published constants cancel
-the offsets of the encodings the row reads, and each encoding's slope cancels the randomizer of
-the monomial it rides on.
+Each row is affine in the delivered encodings `d_e = a_e · coord + K[e]` once `γ` is fixed. The
+offsets `K[e]` are uniform, because the projectivized garbling scheme defines them from the switch
+masks, and they are the rows' only masks: the slopes are the true scaled row coefficients.
 
 A digit's MAC point is `R = T + K`, where `T = (u, v)` is the digit's image of the input and
 `K = (a, b)` its secret offset. The `X` and `Z` rows are the Jacobian `X` and `Z` of `R`, with the
@@ -195,12 +202,28 @@ by Fermat: `p ≡ 3 (mod 4)`, so the second factor is a square root of `y_R²`, 
 (§6.3 says why).
 
 `S₀` has no `x` and no `xy` term, so the row reads three encodings: `cubic` (of `x`, read with
-`x²`), `y8` (read with `y`) and `y10` (read with 1). The `cubic` slope `−r4` contributes
-`−r4 · x³`. On the curve `x³ = y² − 3`, so that term becomes `r4 · (3 − y²)`: the `y8` slope
-absorbs the `y²` part and the published `c0` the constant. So the row is exact on the curve. Off
-the curve it would be off by `r4 · (y² − x³ − 3)`, but the evaluator refuses an off-curve input
-before it asks anything. The four-element `Y` row's `mixed` encoding, which carried its `xy` term,
-is gone, and with it one randomizer and one published constant.
+`x²`), `y8` (read with `y`) and `y10` (read with 1).
+
+**Three constants per digit.** The earlier entries put a random monomial randomiser into each
+slope, cancelled it in a published coefficient, and so published 10 constants per digit. Here the
+slopes are the true scaled row coefficients. The `X` row reads `x7` (slope `c4`, read with `x`),
+`x9` (slope `c1 − K[x7]`) and `y10` (slope `c2`), and publishes `gX = c0 − K[x9] − K[y10]`. The
+`Z` row reads `x9` (slope `c1`) and publishes `gZ = c0 − K[x9]`. For the sign row, with
+`s = (c0 − K[y10]) / 3`, the `cubic` slope `−s` contributes `−s · x³`. On the curve
+`x³ = y² − 3`, so that term becomes `s · (3 − y²)`: the `y8` slope `c5 + s` absorbs the `y²`
+part, and `3s = c0 − K[y10]` supplies the constant monomial. The `y10` slope is `c2 − K[y8]`, and
+the published constant is `gY = c4 − K[cubic]`, the `x²` coefficient. The evaluator computes
+`S = (gY + d_cubic) · x² + y · d_y8 + d_y10`. So the row is exact on the curve; off the curve it
+would be off by `s · (y² − x³ − 3)`, but the evaluator refuses an off-curve input before it asks
+anything. Each chained slope subtracts an offset the garbler already knows from the tape, so all
+slopes are computed in one pass. `ρ` and `τ` stay: they are the lift scales.
+
+Why three constants suffice: each row has a *collector* (`x9` for `X` and `Z`, `cubic` for the
+sign row) that no other row reads. The 3 constants fix the 3 collector offsets, and the 4 other
+encodings fix the other 4 offsets. So the 7 offsets map one-to-one onto the 3 constants and 4 of
+the delivered values, and the view is uniform whatever the digit. Reading `K[y8]` and `K[y10]`
+back means solving a `2 × 2` system with determinant `(3 − y²)/3`, which is never zero because
+`3` is not a square in the base field.
 
 **Three degenerate inputs.** A row cannot be decoded where `Z = 0` or `L = 0`:
 
@@ -219,22 +242,24 @@ position once, 1,016 queries per nonzero digit, then reads both digests from tho
 Computing the two digests separately would ask an index twice wherever the two exceptional inputs
 share a bit, and the privacy proof needs every fixed-key index asked at most once.
 
-The sign row keeps the `cubic` element and the read-back of `r4` (§6.3) from Lazar's four-element
-`Y` row (the "Y4" row of `Lazar955/argomac-lean`), which xinshu's third version adopted; the
-README credits each part.
+**Credit.** The sign row, `τ` and the 12-byte gadget are Lazar's (`Lazar955/bn254-planb`). The
+sign row keeps the `cubic` element and the `3`-is-not-a-square fact from Lazar's four-element `Y`
+row (the "Y4" row of `Lazar955/argomac-lean`), which xinshu's third version adopted; the rest of
+the construction and proof tree is xinshu's. This fork adds the true-coefficient slopes and the
+three constants; the README credits each part.
 
 ---
 
-## 3. Why the ciphertext is 1,103,204 bytes
+## 3. Why the ciphertext is 1,082,820 bytes
 
 | Field | Contents | Bytes |
 |---|---|---|
 | `curve` | 3 curve-check constants | 96 |
-| `rows` | 91 digits × 10 constants × 32 B | 29,120 |
+| `rows` | 91 digits × 3 constants × 32 B | 8,736 |
 | `exception` | 91 digits × 12-byte gadget entry | 1,092 |
 | 4 × `hot` | 4 lanes × 202 fold joins × 16 B | 12,928 |
 | `scale` | 52 chunk words × (642 elements × 254 bits + 4 zero bits) = 20,384 B | 1,059,968 |
-| **total** | | **1,103,204** |
+| **total** | | **1,082,820** |
 
 Every field has a fixed width and there are no tags. So every public value encodes to the same
 length, and the byte-count theorem (`PlanB.Wire.ciphertextSize`) does not mention `garble` at
@@ -413,10 +438,11 @@ Seven points in this chain are worth stating.
 
 - **The public-first core.** The published cells and the masks the evaluator can see are
   exactly uniform, jointly, for every input: the garbler's coins map onto them by an explicit
-  bijection, one digit at a time, with a residual part the adversary never sees. In the sign row
-  the randomizer `r4` does not appear on its own in a published constant, so the inverse map
-  reads it back from the published and visible values by dividing by `y² − 3`. That is never
-  zero, because `3` is not a square, so the core holds at every input, on or off the curve.
+  bijection, one digit at a time, with a residual part the adversary never sees. A digit's coins
+  are only its switch masks: the inverse map reads its 7 offsets back from the 3 published
+  constants and the visible values, solving for the sign row's `y8` and `y10` offsets by dividing
+  by `3 − y²`. That is never zero, because `3` is not a square, so the core holds at every input,
+  on or off the curve.
 - **The abort term.** A hash program needs only a fresh input, and the replay never asks a
   designated input: every other replayed input has another tag, or is `bridgeInput t`, outside the
   switch range. So only the adversary's stage-1 queries can block a program. A hash input names
@@ -461,10 +487,10 @@ Seven points in this chain are worth stating.
 
 ### 6.4 The machine
 
-The simulator's machine samples 34,297 field cells by bounded rejection and serialises the
+The simulator's machine samples 33,660 field cells by bounded rejection and serialises the
 table. In stage 2 it replays 994,979 lazy queries, extracting the base-`p` digits of every
 replayed mask vector with division-free big-integer arithmetic, draws the 91 lift pairs `(λ, t)`,
-and makes 362 hash programs. Its exact total is `size + 1 + fuels = 46,837,161,227 ≈ 2^35.4`, far
+and makes 362 hash programs. Its exact total is `size + 1 + fuels = 46,336,505,162 ≈ 2^35.4`, far
 inside `2^60`.
 
 The machine reaches `FixedIndex` through `Fintype.equivFin`, and it embeds those ordinals as
@@ -504,7 +530,8 @@ Also proved are:
 - the exact identification of the library's ideal game with the abstract simulator of §6.2;
 - the budget arithmetic.
 
-This entry was written with AI coding agents under human direction and review. It builds on
-xinshu's phase-5b entry (`xinshudong/bn254-entry`); its own changes are the sign row, the second
-exceptional case of the gadget and the 52-chunk profile (§2.6, §4). The README's credit paragraph
-gives the details.
+This entry was written with AI coding agents under human direction and review. It is a fork of
+Lazar's sign-row entry (`Lazar955/bn254-planb`), which builds on xinshu's phase-5b entry
+(`xinshudong/bn254-entry`). Lazar's changes are the sign row, the second exceptional case of the
+gadget and the 52-chunk profile (§2.6, §4); this fork's only change is the three-constant rows.
+The README's credit paragraph gives the details.

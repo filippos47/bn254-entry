@@ -73,7 +73,7 @@ noncomputable section
 structure Stage1Source where
   /-- The curve-membership constants. -/
   curve : BaseField × BaseField × BaseField
-  /-- The ten row constants of each digit. -/
+  /-- The three row constants of each digit. -/
   rows : Vector RowGamma digitCount
   /-- The gadget bytes. -/
   exception : Vector Exception.Entry digitCount
@@ -113,8 +113,7 @@ local instance vectorFinite {α : Type} [Finite α] {count : Nat} : Finite (Vect
       exact congrFun equal ⟨index, bound⟩)
 
 instance rowGammaFinite : Finite RowGamma :=
-  Finite.of_injective (fun row : RowGamma => (row.xC0, row.xC1, row.xC2, row.xC4, row.yC0,
-      row.yC2, row.yC4, row.yC5, row.zC0, row.zC1)) (by
+  Finite.of_injective (fun row : RowGamma => (row.gX, row.gY, row.gZ)) (by
     intro first second equal
     cases first
     cases second
@@ -158,7 +157,7 @@ noncomputable instance nonZeroBaseFintype : Fintype NonZeroBase := Fintype.ofFin
 
 instance stage1SourceNonempty : Nonempty Stage1Source :=
   ⟨{ curve := (0, 0, 0)
-     rows := Vector.replicate _ ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0⟩
+     rows := Vector.replicate _ ⟨0, 0, 0⟩
      exception := Vector.replicate _ (Vector.replicate _ 0)
      curveXHot := Vector.replicate _ 0
      curveYHot := Vector.replicate _ 0
@@ -735,10 +734,10 @@ def idealHybrid : HybridGame := fun adversary parameter scalar =>
   planBIdealGame idealSamplers adversary parameter scalar ()
 
 /-- `M`: the library's ideal game with a closed machine, as a chain game. The byte count is the
-Plan B ciphertext size, `1,103,204` (`PlanB.Wire.ciphertextSize`). -/
+Plan B ciphertext size, `1,082,820` (`PlanB.Wire.ciphertextSize`). -/
 def machineHybrid (simulator : BoundedMachine.Simulator) : HybridGame :=
   fun adversary parameter scalar =>
-    LazySimulatorProtocol.idealGame Scheme.scheme Wire.encoding 1103204 simulator adversary
+    LazySimulatorProtocol.idealGame Scheme.scheme Wire.encoding 1082820 simulator adversary
       parameter scalar ()
 
 /-! ### The interface P2's machine must match -/

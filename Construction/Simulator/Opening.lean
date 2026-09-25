@@ -138,7 +138,7 @@ def liftOne (digit : Nat) : Prog :=
 def lifts : Prog := rep 91 liftOne
 
 /-- The row-constant cell `k` of digit `d`. -/
-def rowCell (digit slot : Nat) : Nat := fieldBase + curveCellCount + 10 * digit + slot
+def rowCell (digit slot : Nat) : Nat := fieldBase + curveCellCount + 3 * digit + slot
 
 /-- The accumulator cell of x-slot `s` and y-slot `s` of the point lanes. -/
 def xCell (slot : Nat) : Nat := accBase + slot
@@ -180,21 +180,18 @@ def finishScaled (row target : Nat) : Prog :=
 /-- The three collector coordinates of digit `d` (rows in `evaluateX/Y/Z` order), each into its
 designated cell. -/
 def solveDigit (digit : Nat) : Prog :=
-  seqList [loadAt rA reqX, loadAt rB reqY, ar .fieldMul rC rA rA, ar .fieldMul rD rB rB,
-    ar .fieldMul rE rA rB, loadAt rF tmpKappa,
-    -- X row: c0 + c1 x + c2 y + c4 x² + v[x7] x + v[x9] + v[y10]
-    loadAt rAcc (rowCell digit 0), addScaled (rowCell digit 1) rA, addScaled (rowCell digit 2) rB,
-    addScaled (rowCell digit 3) rC, addScaled (xCell (4 * digit)) rA,
+  seqList [loadAt rA reqX, loadAt rB reqY, ar .fieldMul rC rA rA, loadAt rF tmpKappa,
+    -- X row: gX + v[x7] x + v[x9] + v[y10]
+    loadAt rAcc (rowCell digit 0), addScaled (xCell (4 * digit)) rA,
     addCell (xCell (4 * digit + 1)), addCell (yCell (3 * digit)),
     finishTarget (openRow digit) (designatedCell (4 * digit + 1)),
-    -- sign row: c0 + c2 y + c4 x² + c5 y² + v[cubic] x² + v[y8] y + v[y10];
+    -- sign row: v[y10] + gY x² + v[cubic] x² + v[y8] y;
     -- the collector `cubic` has coefficient x², so its target is κ · (W − S) / x²
-    loadAt rAcc (rowCell digit 4), addScaled (rowCell digit 5) rB, addScaled (rowCell digit 6) rC,
-    addScaled (rowCell digit 7) rD, addScaled (xCell (4 * digit + 2)) rC,
-    addScaled (yCell (3 * digit + 1)) rB, addCell (yCell (3 * digit + 2)),
+    loadAt rAcc (yCell (3 * digit + 2)), addScaled (rowCell digit 1) rC,
+    addScaled (xCell (4 * digit + 2)) rC, addScaled (yCell (3 * digit + 1)) rB,
     finishScaled (openRow digit + 1) (designatedCell (4 * digit + 2)),
-    -- Z row: c0 + c1 x + v[x9]
-    loadAt rAcc (rowCell digit 8), addScaled (rowCell digit 9) rA, addCell (xCell (4 * digit + 3)),
+    -- Z row: gZ + v[x9]
+    loadAt rAcc (rowCell digit 2), addCell (xCell (4 * digit + 3)),
     finishTarget (openRow digit + 2) (designatedCell (4 * digit + 3)),
     zeroRegs [rAcc, rAddr, rSel, rA, rB, rC, rD, rE, rF]]
 
@@ -354,13 +351,13 @@ theorem size_nonCollectors : nonCollectors.size = 91 * 457249 :=
 theorem cost_nonCollectors : nonCollectors.cost = 91 * 327190 :=
   cost_rep _ _ _ fun _ _ => cost_nonCollectorOne _
 
-theorem size_solveDigit (digit : Nat) : (solveDigit digit).size = 96 := by
+theorem size_solveDigit (digit : Nat) : (solveDigit digit).size = 67 := by
   unfold solveDigit addScaled addCell finishTarget finishScaled; prog_size
-theorem cost_solveDigit (digit : Nat) : (solveDigit digit).cost = 96 := by
+theorem cost_solveDigit (digit : Nat) : (solveDigit digit).cost = 67 := by
   unfold solveDigit addScaled addCell finishTarget finishScaled; prog_size
 
-theorem size_solve : solve.size = 91 * 96 := size_rep _ _ _ fun _ _ => size_solveDigit _
-theorem cost_solve : solve.cost = 91 * 96 := cost_rep _ _ _ fun _ _ => cost_solveDigit _
+theorem size_solve : solve.size = 91 * 67 := size_rep _ _ _ fun _ _ => size_solveDigit _
+theorem cost_solve : solve.cost = 91 * 67 := cost_rep _ _ _ fun _ _ => cost_solveDigit _
 
 theorem size_preimage :
     preimage.size = BigInt.preimageSamplerSize BigInt.samplerLimbs BigInt.samplerDigits
@@ -381,13 +378,13 @@ theorem cost_programs : programs.cost = 362 * 14 := cost_rep _ _ _ fun _ _ => co
 
 /-- The opening's code size. -/
 def programSize : Nat :=
-  90 * 589865 + (3 + 90 * 397 + 439) + 91 * (2 * 457743) + 91 * 33 + 91 * 457249 + 91 * 96 +
+  90 * 589865 + (3 + 90 * 397 + 439) + 91 * (2 * 457743) + 91 * 33 + 91 * 457249 + 91 * 67 +
     BigInt.preimageSamplerSize BigInt.samplerLimbs BigInt.samplerDigits BigInt.samplerAttempts +
     362 * 14 + 16
 
 /-- The opening's cost. -/
 def programCost : Nat :=
-  90 * 459290 + (3 + 90 * 397 + 415) + 91 * (2 * 327692) + 91 * 33 + 91 * 327190 + 91 * 96 +
+  90 * 459290 + (3 + 90 * 397 + 415) + 91 * (2 * 327692) + 91 * 33 + 91 * 327190 + 91 * 67 +
     BigInt.preimageSamplerCost BigInt.samplerLimbs BigInt.samplerDigits BigInt.samplerAttempts +
     362 * 14 + 16
 

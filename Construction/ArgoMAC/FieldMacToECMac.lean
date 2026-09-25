@@ -3,7 +3,7 @@ This file defines the observable `C_23` table operation: the 91 output MACs, the
 (Jacobian `X` and `Z`, and the sign row in the `Y` slot) and the exception gadget.
 
 Plan B changes the delivery of the row elements and nothing else. `Table` is now the published
-`RowGamma` vector and the gadget entries; the five per-adaptor window families are gone, and
+`RowGamma` vector (three constants per digit) and the gadget entries; the five per-adaptor window families are gone, and
 `garble`/`evaluate` take the per-digit element families the projectivized garbling scheme
 produces. The exception gadget hashes the 508 post-EncPRF selected Lamport labels, one
 `daviesMeyer` call per label, XOR-folded, low byte taken. It does *not* hash one-hot or switch
@@ -41,25 +41,21 @@ deriving DecidableEq
 /-- `ExceptionPad` is the fresh pad the garbler draws for the exception gadget. -/
 abbrev ExceptionPad := Vector Exception.Entry outputMacCount
 
-/-- The published table: the ten row constants of each digit, and the gadget entries. -/
+/-- The published table: the three row constants of each digit, and the gadget entries. -/
 abbrev Table := Vector RowGamma outputMacCount × Vector Exception.Entry outputMacCount
 
 /-- One element family per digit: the garbler reads the element offsets through it, the
 evaluator the delivered values. -/
 abbrev DigitValues := Fin outputMacCount → Biquadratic.Values
 
+/-- One digit's row randomness: the lift scales `rho` and `tau` alone. The slopes carry the true
+row coefficients, so the rows need no randomisers of their own. -/
 structure RowRandomness where
   /-- The row randomizer `rho` of the Jacobian `X` and `Z` rows. -/
   rho : NonZeroBase
   /-- The sign row randomizer `tau`, independent of `rho`: the sign row is `tau²` times its
   polynomial. -/
   tau : NonZeroBase
-  /-- The `X` row randomizers. -/
-  x : Biquadratic.XRandomness
-  /-- The `Y` row randomizers. -/
-  y : Biquadratic.YRandomness
-  /-- The `Z` row randomizer. -/
-  z : Biquadratic.ZRandomness
 
 abbrev Randomness := Vector RowRandomness outputMacCount
 abbrev Rows := Vector Coordinates.Rows outputMacCount
@@ -137,35 +133,16 @@ theorem rowsForOutputKeysSparse (keys : OutputKeys) (randomness : Randomness) :
   intro index
   simp [rowsForOutputKeys, coordinatesRowsSparse]
 
-/-- The ten published constants of one digit's three rows. -/
-def garbleRow (rows : Coordinates.Rows) (randomness : RowRandomness)
-    (K : Biquadratic.Values) : RowGamma :=
-  let x := Biquadratic.garbleX rows.x.constant rows.x.x rows.x.y rows.x.xSquared randomness.x K
-  let y := Biquadratic.garbleY rows.y.constant rows.y.y rows.y.xSquared rows.y.ySquared
-    randomness.y K
-  let z := Biquadratic.garbleZ rows.z.constant rows.z.x randomness.z K
-  { xC0 := x.c0, xC1 := x.c1, xC2 := x.c2, xC4 := x.c4
-    yC0 := y.c0, yC2 := y.c2, yC4 := y.c4, yC5 := y.c5
-    zC0 := z.c0, zC1 := z.c1 }
-
-/-- The `X` row constants of one digit's published gamma. -/
-def xGammaOf (gamma : RowGamma) : Biquadratic.XGamma :=
-  { c0 := gamma.xC0, c1 := gamma.xC1, c2 := gamma.xC2, c4 := gamma.xC4 }
-
-/-- The sign row constants of one digit's published gamma. -/
-def yGammaOf (gamma : RowGamma) : Biquadratic.YGamma :=
-  { c0 := gamma.yC0, c2 := gamma.yC2, c4 := gamma.yC4, c5 := gamma.yC5 }
-
-/-- The `Z` row constants of one digit's published gamma. -/
-def zGammaOf (gamma : RowGamma) : Biquadratic.ZGamma :=
-  { c0 := gamma.zC0, c1 := gamma.zC1 }
+/-- The three published constants of one digit's three rows. -/
+def garbleRow (rows : Coordinates.Rows) (K : Biquadratic.Values) : RowGamma :=
+  Biquadratic.garble rows K
 
 /-- One digit's homogeneous row value. -/
 def evaluateGamma (gamma : RowGamma) (input : AffineInput) (values : Biquadratic.Values) :
     HomogeneousValue := {
-  x := Biquadratic.evaluateX (xGammaOf gamma) input values
-  y := Biquadratic.evaluateY (yGammaOf gamma) input values
-  z := Biquadratic.evaluateZ (zGammaOf gamma) input values }
+  x := Biquadratic.evaluateX gamma input values
+  y := Biquadratic.evaluateY gamma input values
+  z := Biquadratic.evaluateZ gamma values }
 
 /-- The gadget mask reads one dedicated fixed-key permutation family per output digit.
 Each output digit and coordinate gets two permutations per label position, one per label bit. -/
@@ -209,11 +186,11 @@ def garbleEntry (perms : GadgetPermutations) (output : Fin outputMacCount) (key 
         (writeCase perms output key inputKey false
           (Exception.exceptionalInput phi key.offset.coordinates) pad)
 
-/-- `garble` publishes the ten constants of each digit and the gadget entries.
+/-- `garble` publishes the three constants of each digit and the gadget entries.
 `K` carries the element offsets the projectivized garbling scheme computed from the tape. -/
-def garble (keys : OutputKeys) (rows : Rows) (randomness : Randomness) (K : DigitValues)
+def garble (keys : OutputKeys) (rows : Rows) (K : DigitValues)
     (inputKey : InputMacKey) (perms : GadgetPermutations) (pad : ExceptionPad) : Table :=
-  (Vector.ofFn fun index => garbleRow (rows.get index) (randomness.get index) (K index),
+  (Vector.ofFn fun index => garbleRow (rows.get index) (K index),
     Vector.ofFn fun index =>
       garbleEntry perms index (keys.get index) inputKey (pad.get index))
 
@@ -283,64 +260,62 @@ theorem evaluateRowsSome (offset input : AffineInput) (phi randomizer signRandom
   rw [xRow, yRow, zRow]
   rfl
 
-def expectedResult (keys : OutputKeys) (rows : Rows) (randomness : Randomness)
+def expectedResult (keys : OutputKeys) (rows : Rows)
     (K : DigitValues) (inputKey : InputMacKey) (perms : GadgetPermutations)
     (pad : ExceptionPad) (input : AffineInput) : Result := {
   point := input
   pointMacs := evaluateRows rows input
   exceptionDigits := Vector.ofFn fun index =>
     Exception.unlock (gadgetMask perms index input (inputKey.encodeAffine input))
-      ((garble keys rows randomness K inputKey perms pad).2.get index) false input
+      ((garble keys rows K inputKey perms pad).2.get index) false input
   tripleDigits := Vector.ofFn fun index =>
     Exception.unlock (gadgetMask perms index input (inputKey.encodeAffine input))
-      ((garble keys rows randomness K inputKey perms pad).2.get index) true input
+      ((garble keys rows K inputKey perms pad).2.get index) true input
 }
 
 /-- The delivered element family of one digit: `a_e * coord + K e` for every element slot. -/
-def delivered (randomness : Randomness) (K : DigitValues) (input : AffineInput) : DigitValues :=
-  fun index =>
-    Biquadratic.delivered (randomness.get index).x (randomness.get index).y
-      (randomness.get index).z (K index) input
+def delivered (rows : Rows) (K : DigitValues) (input : AffineInput) : DigitValues :=
+  fun index => Biquadratic.delivered (rows.get index) (K index) input
 
 /-- On the curve, the delivered values evaluate every digit's three rows to the rows' own
 values (the `Y` row is exact only there: `Biquadratic.evaluateEncodedY`). -/
 theorem evaluateHomogeneousEncoded (keys : OutputKeys) (rows : Rows)
-    (randomness : Randomness) (K : DigitValues) (inputKey : InputMacKey)
+    (K : DigitValues) (inputKey : InputMacKey)
     (perms : GadgetPermutations) (pad : ExceptionPad) (input : AffineInput)
     (onCurve : OnCurve input) :
     (∀ index, SparseRow (rows.get index)) →
-    evaluateHomogeneous (garble keys rows randomness K inputKey perms pad)
-        (delivered randomness K input) input =
+    evaluateHomogeneous (garble keys rows K inputKey perms pad)
+        (delivered rows K input) input =
       evaluateRows rows input := by
   intro sparse
   apply Vector.ext
   intro index inRange
   have rowSparse := sparse ⟨index, inRange⟩
   rcases rowSparse with ⟨xXY, xY2, yX, yXY, zY, zXY, zX2, zY2⟩
-  simp only [evaluateHomogeneous, garble, garbleRow, evaluateGamma, xGammaOf,
-    yGammaOf, zGammaOf, delivered, Vector.getElem_ofFn, Vector.get_ofFn]
+  simp only [evaluateHomogeneous, garble, garbleRow, evaluateGamma, delivered,
+    Vector.getElem_ofFn, Vector.get_ofFn]
   rw [Biquadratic.evaluateEncodedX, Biquadratic.evaluateEncodedY (onCurve := onCurve),
     Biquadratic.evaluateEncodedZ]
   simp [evaluateRows, evaluateRow, Coordinates.evaluate, xXY, xY2, yX, yXY, zY, zXY, zX2, zY2]
 
 /-- On the curve, the evaluator's result is the expected one. -/
-theorem evaluateEncoded (keys : OutputKeys) (rows : Rows) (randomness : Randomness)
+theorem evaluateEncoded (keys : OutputKeys) (rows : Rows)
     (K : DigitValues) (inputKey : InputMacKey) (perms : GadgetPermutations)
     (pad : ExceptionPad) (input : AffineInput) (onCurve : OnCurve input) :
     (∀ index, SparseRow (rows.get index)) →
-    evaluate (garble keys rows randomness K inputKey perms pad)
-        (delivered randomness K input) perms input (inputKey.encodeAffine input) =
-      expectedResult keys rows randomness K inputKey perms pad input := by
+    evaluate (garble keys rows K inputKey perms pad)
+        (delivered rows K input) perms input (inputKey.encodeAffine input) =
+      expectedResult keys rows K inputKey perms pad input := by
   intro sparse
   simp only [evaluate, expectedResult,
-    evaluateHomogeneousEncoded keys rows randomness K inputKey perms pad input onCurve sparse]
+    evaluateHomogeneousEncoded keys rows K inputKey perms pad input onCurve sparse]
 
 /-- The doubling slot written for one output key unlocks that key's digit. -/
-theorem unlockExceptional (keys : OutputKeys) (rows : Rows) (randomness : Randomness)
+theorem unlockExceptional (keys : OutputKeys) (rows : Rows)
     (K : DigitValues) (inputKey : InputMacKey) (perms : GadgetPermutations)
     (pad : ExceptionPad) (index : Fin outputMacCount) (phi : BaseField)
     (selected : digitEndomorphismBase (keys.get index).digit = some phi) :
-    (expectedResult keys rows randomness K inputKey perms pad
+    (expectedResult keys rows K inputKey perms pad
         (Exception.exceptionalInput phi (keys.get index).offset.coordinates)).exceptionDigits.get
       index = (keys.get index).digit := by
   simp only [expectedResult, garble, Vector.get_ofFn, garbleEntry, selected, writeCase]
@@ -348,11 +323,11 @@ theorem unlockExceptional (keys : OutputKeys) (rows : Rows) (randomness : Random
   exact Exception.unlock_writeEntry _ _ _ _ _
 
 /-- The sign row's zero slot written for one output key unlocks that key's digit. -/
-theorem unlockTriple (keys : OutputKeys) (rows : Rows) (randomness : Randomness)
+theorem unlockTriple (keys : OutputKeys) (rows : Rows)
     (K : DigitValues) (inputKey : InputMacKey) (perms : GadgetPermutations)
     (pad : ExceptionPad) (index : Fin outputMacCount) (phi : BaseField)
     (selected : digitEndomorphismBase (keys.get index).digit = some phi) :
-    (expectedResult keys rows randomness K inputKey perms pad
+    (expectedResult keys rows K inputKey perms pad
         (Exception.tripleInput phi (keys.get index).offset.coordinates)).tripleDigits.get
       index = (keys.get index).digit := by
   simp only [expectedResult, garble, Vector.get_ofFn, garbleEntry, selected, writeCase]

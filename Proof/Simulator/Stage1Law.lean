@@ -108,7 +108,7 @@ variable [FieldCertificate]
 
 /-- **The protocol's parse of the final response stack.** -/
 theorem publicValue_final (memory : Memory) (empty : memory.bits 3 = []) (draw : Stage1Draw) :
-    SimulatorProtocol.publicValue Wire.encoding 1103204 ((stage1Final memory draw).bits 3) =
+    SimulatorProtocol.publicValue Wire.encoding 1082820 ((stage1Final memory draw).bits 3) =
       some (drawSource draw).publicValue := by
   rw [stage1Final_bits, Function.update_self, empty, List.append_nil, serial_wire]
   exact publicValue_encode _ _ _ (Wire.garble_length _)
@@ -122,12 +122,12 @@ theorem optionT_mk_pure_some {α : Type} (value : α) :
 /-- The initial stage-1 memory of the protocol. -/
 def stage1Memory (parameter : Nat) : Memory :=
   { bits := fun stack => if stack = 0 then
-      [false, false] ++ SimulatorProtocol.natural parameter ++ SimulatorProtocol.natural 1103204
+      [false, false] ++ SimulatorProtocol.natural parameter ++ SimulatorProtocol.natural 1082820
     else [] }
 
 /-- The request after the two tag bits. -/
 def stage1Rest (parameter : Nat) : List Bool :=
-  SimulatorProtocol.natural parameter ++ SimulatorProtocol.natural 1103204
+  SimulatorProtocol.natural parameter ++ SimulatorProtocol.natural 1082820
 
 theorem stage1Memory_request (parameter : Nat) :
     (stage1Memory parameter).bits 0 = false :: false :: stage1Rest parameter := by
@@ -143,7 +143,7 @@ theorem planB_stage1_run (parameter : Nat) :
         (Fintype.ofFinite _) (Classical.decEq _) (Classical.decEq _) planBSimulator
         planBSimulator.firstFuel ⟨0, { bits := fun stack =>
           if stack = 0 then ([false, false] ++ SimulatorProtocol.natural parameter ++
-            SimulatorProtocol.natural 1103204) else [] }⟩ LazyOracle.empty =
+            SimulatorProtocol.natural 1082820) else [] }⟩ LazyOracle.empty =
       stage1Draws.map (Option.map fun draw =>
         (atPc planBSimulator Design.stage1Halt
           (stage1Final (Top.afterTag (stage1Memory parameter) (stage1Rest parameter)) draw),

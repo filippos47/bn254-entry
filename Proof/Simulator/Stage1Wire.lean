@@ -81,16 +81,12 @@ theorem entry_bits (value : Exception.Entry) :
 
 theorem rowGamma_bits (value : RowGamma) :
     byteBits (encodeOf rowGamma value) =
-      (List.ofFn fun index : Fin 10 => lsbs 256 (rowField value index.val).val).flatten := by
-  rw [show rowGamma = (field.pair (field.pair (field.pair (field.pair (field.pair (field.pair
-    (field.pair (field.pair (field.pair field))))))))).map
-      (fun value : RowGamma => (value.xC0, value.xC1, value.xC2, value.xC4, value.yC0, value.yC2,
-        value.yC4, value.yC5, value.zC0, value.zC1))
-      (fun ⟨xC0, xC1, xC2, xC4, yC0, yC2, yC4, yC5, zC0, zC1⟩ =>
-        ⟨xC0, xC1, xC2, xC4, yC0, yC2, yC4, yC5, zC0, zC1⟩)
+      (List.ofFn fun index : Fin 3 => lsbs 256 (rowField value index.val).val).flatten := by
+  rw [show rowGamma = (field.pair (field.pair field)).map
+      (fun value : RowGamma => (value.gX, value.gY, value.gZ))
+      (fun ⟨gX, gY, gZ⟩ => ⟨gX, gY, gZ⟩)
       (fun _ => rfl) from rfl, encodeOf_map]
-  rw [encodeOf_pair, encodeOf_pair, encodeOf_pair, encodeOf_pair, encodeOf_pair, encodeOf_pair,
-    encodeOf_pair, encodeOf_pair, encodeOf_pair]
+  rw [encodeOf_pair, encodeOf_pair]
   simp only [byteBits_append, field_bits]
   simp [List.ofFn_succ, rowField]
 
@@ -99,7 +95,7 @@ theorem wire_bits (value : Public) :
     byteBits (encoding.encode value) =
       lsbs 256 value.curve.1.val ++ lsbs 256 value.curve.2.1.val ++ lsbs 256 value.curve.2.2.val ++
       (List.ofFn fun digit : Fin digitCount =>
-          (List.ofFn fun index : Fin 10 =>
+          (List.ofFn fun index : Fin 3 =>
             lsbs 256 (rowField value.rows[digit.val] index.val).val).flatten).flatten ++
       (List.ofFn fun digit : Fin digitCount =>
           (List.ofFn fun index : Fin 12 =>

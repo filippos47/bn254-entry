@@ -512,8 +512,7 @@ def regroup : CoinsParts × (FixedIndex → Block) × MaskVectors ≃ Outer inpu
   toFun ω :=
     ((ω.1.1, fun d => ((ω.1.2.1 d).rho, (ω.1.2.1 d).tau), ω.1.2.2.2.2.2.2.2.1,
         ω.1.2.2.2.2.2.2.2.2, (splitAlong (hiddenIdx input) (hiddenIdx_injective input) ω.2.1).2),
-      (fun d => ((maskSiteEquiv (maskCoordEquiv ω.2.2)).1 d,
-          ((ω.1.2.1 d).x, (ω.1.2.1 d).y, (ω.1.2.1 d).z)),
+      (fun d => (maskSiteEquiv (maskCoordEquiv ω.2.2)).1 d,
         ((maskSiteEquiv (maskCoordEquiv ω.2.2)).2, ω.1.2.2.2.1,
           ⟨ω.1.2.2.2.2.1.value, ω.1.2.2.2.2.1.nonzero⟩,
           ω.1.2.2.2.2.2.1, ω.1.2.2.2.2.2.2.1),
@@ -521,14 +520,13 @@ def regroup : CoinsParts × (FixedIndex → Block) × MaskVectors ≃ Outer inpu
           fun d => (ω.1.2.2.1 d, (ω.2.1 (hiddenIdx input (.inr (d, false))),
             ω.2.1 (hiddenIdx input (.inr (d, true))))))))
   invFun p :=
-    ((p.1.1, fun d => ⟨(p.1.2.1 d).1, (p.1.2.1 d).2, (p.2.1 d).2.1, (p.2.1 d).2.2.1,
-          (p.2.1 d).2.2.2⟩,
+    ((p.1.1, fun d => ⟨(p.1.2.1 d).1, (p.1.2.1 d).2⟩,
         fun d => (p.2.2.2.2 d).1, p.2.2.1.2.1, ⟨p.2.2.1.2.2.1.1, p.2.2.1.2.2.1.2⟩,
         p.2.2.1.2.2.2.1, p.2.2.1.2.2.2.2, p.1.2.2.1, p.1.2.2.2.1),
       (splitAlong (hiddenIdx input) (hiddenIdx_injective input)).symm
         (Sum.elim (fun q => p.2.2.2.1 q.1 q.2)
           (fun q => if q.2 then (p.2.2.2.2 q.1).2.2 else (p.2.2.2.2 q.1).2.1), p.1.2.2.2.2),
-      maskCoordEquiv.symm (maskSiteEquiv.symm (fun d => (p.2.1 d).1, p.2.2.1.1)))
+      maskCoordEquiv.symm (maskSiteEquiv.symm (p.2.1, p.2.2.1.1)))
   left_inv ω := by
     obtain ⟨⟨offsets, pR, pad, t, mask, r1, r2, Z, Δ⟩, v, m⟩ := ω
     have hidden : (Sum.elim
@@ -553,7 +551,7 @@ def regroup : CoinsParts × (FixedIndex → Block) × MaskVectors ≃ Outer inpu
   right_inv p := by
     obtain ⟨⟨offsets, rho, Z, Δ, rest⟩, digits, ⟨cm, t, mask, r1, r2⟩, fold, gadget⟩ := p
     have masks : maskSiteEquiv (maskCoordEquiv (maskCoordEquiv.symm
-        (maskSiteEquiv.symm (fun d => (digits d).1, cm)))) = (fun d => (digits d).1, cm) := by
+        (maskSiteEquiv.symm (digits, cm)))) = (digits, cm) := by
       rw [Equiv.apply_symm_apply, Equiv.apply_symm_apply]
     refine Prod.ext (Prod.ext rfl (Prod.ext rfl (Prod.ext rfl (Prod.ext rfl ?_))))
       (Prod.ext (funext fun d => ?_) (Prod.ext (Prod.ext ?_ rfl) (Prod.ext
@@ -561,7 +559,7 @@ def regroup : CoinsParts × (FixedIndex → Block) × MaskVectors ≃ Outer inpu
     · show ((splitAlong (hiddenIdx input) (hiddenIdx_injective input))
         ((splitAlong (hiddenIdx input) (hiddenIdx_injective input)).symm (_, rest))).2 = rest
       rw [Equiv.apply_symm_apply]
-    · exact Prod.ext (congrFun (congrArg Prod.fst masks) d) rfl
+    · exact congrFun (congrArg Prod.fst masks) d
     · exact congrArg Prod.snd masks
     · exact splitAlong_symm_image (hiddenIdx input) (hiddenIdx_injective input) _ _ (.inl (ℓ, s))
     · exact Prod.ext rfl (Prod.ext

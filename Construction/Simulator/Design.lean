@@ -22,7 +22,7 @@ whose fuel is the larger (valid) arm.
 | next | valid arm (replay, opening, emit labels), then `halt` |
 | last | reject `halt` |
 
-**Where the charge goes** (`totalCost = 46,837,161,227 ≈ 2 ^ 35.45`): stage 1's `34,297`
+**Where the charge goes** (`totalCost = 46,336,505,162 ≈ 2 ^ 35.43`): stage 1's `33,660`
 bounded-rejection field cells (`≈ 2.69 · 10 ^ 10` in code and fuel), the replay's digit
 extraction of every switch mask vector (`1,588` vectors per lane, `≈ 1.90 · 10 ^ 10`), and the
 opening's preimage sampler (`≈ 5.4 · 10 ^ 8`).
@@ -166,12 +166,12 @@ def totalCost : Nat := size + 1 + firstFuel + secondFuel
 /-! The closed formulas are unfolded (never rewritten by their equation lemmas) and evaluated
 by `norm_num`; every term is a sum or product of numerals below `2 ^ 36`. -/
 
-theorem stage1Size_eq : stage1Size = 15709913657 := by
+theorem stage1Size_eq : stage1Size = 15418167020 := by
   unfold stage1Size serializeCount fieldCellCount curveCellCount rowCellCount scaleCellCount
     exceptionByteCount hotBlockCount keyBlockCount
   norm_num
 
-theorem stage1Cost_eq : stage1Cost = 11249070094 := by
+theorem stage1Cost_eq : stage1Cost = 11040165944 := by
   unfold stage1Cost serializeCount fieldCellCount curveCellCount rowCellCount scaleCellCount
     exceptionByteCount hotBlockCount keyBlockCount
   norm_num
@@ -186,45 +186,45 @@ theorem replayCost_eq : replayCost = 9510713377 := by
     Replay.switchCost BigInt.digitsOfCost BigInt.digitStepCost
   norm_num
 
-theorem openingSize_eq : openingSize = 449262537 := by
+theorem openingSize_eq : openingSize = 449259898 := by
   unfold openingSize Opening.programSize BigInt.preimageSamplerSize BigInt.tAttemptSize
     BigInt.useKeptCost BigInt.macPassesCost BigInt.macPassCost BigInt.samplerLimbs
     BigInt.samplerDigits BigInt.samplerAttempts BigInt.hiWidth
   norm_num
 
-theorem openingCost_eq : openingCost = 398640360 := by
+theorem openingCost_eq : openingCost = 398637721 := by
   unfold openingCost Opening.programCost BigInt.preimageSamplerCost BigInt.tAttemptCost
     BigInt.useKeptCost BigInt.macPassesCost BigInt.macPassCost BigInt.samplerLimbs
     BigInt.samplerDigits BigInt.samplerAttempts BigInt.hiWidth
   norm_num
 
-theorem validSize_eq : validSize = 9968405554 := by
+theorem validSize_eq : validSize = 9968402915 := by
   unfold validSize labelCount
   rw [replaySize_eq, openingSize_eq]
 
-theorem validCost_eq : validCost = 9909549825 := by
+theorem validCost_eq : validCost = 9909547186 := by
   unfold validCost labelCount
   rw [replayCost_eq, openingCost_eq]
 
-theorem size_eq : size = 25678530594 := by
+theorem size_eq : size = 25386781318 := by
   unfold size rejectAt validHalt validBase invalidHalt invalidBase branchAt stage2Base stage1Halt
     stage1Base
   rw [stage1Size_eq, validSize_eq]
   unfold prefixSize invalidSize labelCount
   norm_num
 
-theorem firstFuel_eq : firstFuel = 11249070097 := by
+theorem firstFuel_eq : firstFuel = 11040165947 := by
   unfold firstFuel
   rw [stage1Cost_eq]
 
-theorem secondFuel_eq : secondFuel = 9909560535 := by
+theorem secondFuel_eq : secondFuel = 9909557896 := by
   unfold secondFuel
   rw [validCost_eq]
   unfold prefixCost labelCount
   norm_num
 
 /-- **The exact charge** of the machine. -/
-theorem totalCost_eq : totalCost = 46837161227 := by
+theorem totalCost_eq : totalCost = 46336505162 := by
   unfold totalCost
   rw [size_eq, firstFuel_eq, secondFuel_eq]
 

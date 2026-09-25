@@ -16,7 +16,7 @@ solve divides by `x²`.
 `collectorEquiv γ u v : F_p³ ≃ HomogeneousValue` is the solve: its forward map writes the collector
 triple into `v` and evaluates the three rows, its inverse is the closed form `collectorSolve`
 (note §1.3, E3), for `x ≠ 0`. `collectorSolve` reads `v` only at the four non-collector elements,
-so for every fixed value of the four free elements and the ten published constants the
+so for every fixed value of the four free elements and the three published constants the
 collector triple and the row triple determine each other (`collectorsOf_eq_solve`).
 
 ### (b) The digit-point law
@@ -98,9 +98,9 @@ def rowLinear (input : AffineInput) (values : Biquadratic.Values) : HomogeneousV
 
 /-- The row triple's constant part: the published constants on the input's monomials. -/
 def rowConstant (gamma : RowGamma) (input : AffineInput) : HomogeneousValue where
-  x := gamma.xC0 + gamma.xC1 * input.x + gamma.xC2 * input.y + gamma.xC4 * input.x ^ 2
-  y := gamma.yC0 + gamma.yC2 * input.y + gamma.yC4 * input.x ^ 2 + gamma.yC5 * input.y ^ 2
-  z := gamma.zC0 + gamma.zC1 * input.x
+  x := gamma.gX
+  y := gamma.gY * input.x ^ 2
+  z := gamma.gZ
 
 /-- **The rows are affine in the delivered values, with `γ` fixed.** -/
 theorem evaluateGamma_eq_affine (gamma : RowGamma) (input : AffineInput)
@@ -110,7 +110,7 @@ theorem evaluateGamma_eq_affine (gamma : RowGamma) (input : AffineInput)
          (rowConstant gamma input).y + (rowLinear input values).y,
          (rowConstant gamma input).z + (rowLinear input values).z⟩ := by
   simp only [evaluateGamma, Biquadratic.evaluateX, Biquadratic.evaluateY, Biquadratic.evaluateZ,
-    xGammaOf, yGammaOf, zGammaOf, rowConstant, rowLinear]
+    rowConstant, rowLinear]
   congr 1 <;> ring
 
 /-- Write a collector triple into a digit's element family. -/
@@ -137,12 +137,10 @@ divides by the `Y` collector's coefficient `x²`, as the inverse `(x · x)⁻¹`
 `Opening.finishScaled`; the inverse of `0` is `0`, and on the curve `x ≠ 0`). -/
 def collectorSolve (gamma : RowGamma) (input : AffineInput)
     (values : Biquadratic.Values) (target : HomogeneousValue) : BaseField × BaseField × BaseField :=
-  (target.x - (gamma.xC0 + gamma.xC1 * input.x + gamma.xC2 * input.y + gamma.xC4 * input.x ^ 2
-      + values (.inl .rowX_x7) * input.x + values (.inr .rowX_y10)),
-   (target.y - (gamma.yC0 + gamma.yC2 * input.y + gamma.yC4 * input.x ^ 2
-      + gamma.yC5 * input.y ^ 2 + values (.inr .rowY_y8) * input.y + values (.inr .rowY_y10)))
-      * (input.x * input.x)⁻¹,
-   target.z - (gamma.zC0 + gamma.zC1 * input.x))
+  (target.x - (gamma.gX + values (.inl .rowX_x7) * input.x + values (.inr .rowX_y10)),
+   (target.y - (gamma.gY * input.x ^ 2 + values (.inr .rowY_y8) * input.y
+      + values (.inr .rowY_y10))) * (input.x * input.x)⁻¹,
+   target.z - gamma.gZ)
 
 /-- **The collector triple and the row triple determine each other**, for every fixed value of the
 four free elements and the published constants, when `x ≠ 0`. -/
@@ -155,7 +153,7 @@ def collectorEquiv [FieldCertificate] (gamma : RowGamma) (input : AffineInput)
     obtain ⟨cx, cy, cz⟩ := triple
     have square : input.x * input.x ≠ 0 := mul_ne_zero xNe xNe
     simp only [collectorSolve, evaluateGamma, Biquadratic.evaluateX, Biquadratic.evaluateY,
-      Biquadratic.evaluateZ, xGammaOf, yGammaOf, zGammaOf, setCollectors]
+      Biquadratic.evaluateZ, setCollectors]
     simp only [reduceCtorEq, if_false, if_true, Sum.inl.injEq]
     refine Prod.ext ?_ (Prod.ext ?_ ?_) <;> simp
     field_simp
@@ -163,7 +161,7 @@ def collectorEquiv [FieldCertificate] (gamma : RowGamma) (input : AffineInput)
     obtain ⟨tx, ty, tz⟩ := target
     have square : input.x * input.x ≠ 0 := mul_ne_zero xNe xNe
     simp only [collectorSolve, evaluateGamma, Biquadratic.evaluateX, Biquadratic.evaluateY,
-      Biquadratic.evaluateZ, xGammaOf, yGammaOf, zGammaOf, setCollectors]
+      Biquadratic.evaluateZ, setCollectors]
     simp only [reduceCtorEq, if_false, if_true, Sum.inl.injEq]
     congr 1
     · ring

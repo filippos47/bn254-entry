@@ -2,7 +2,7 @@
 Stage 1 of the Plan B simulator: sample the complete public value with every scale mask
 uniform, keep it in RAM, and emit its canonical `Wire.encoding` bytes.
 
-* `34,297` field cells (curve, rows, the `52 · 642` scale joins), each by constant-time bounded
+* `33,660` field cells (curve, rows, the `52 · 642` scale joins), each by constant-time bounded
   rejection over 254 coins with `attempts = 256` tries, aborting on exhaustion;
 * `1,092` exception bytes, `808` fold-join blocks and the `1016`-block Lamport key, each from fair
   coins (the key is retained for stage 2, which selects one label per input bit);

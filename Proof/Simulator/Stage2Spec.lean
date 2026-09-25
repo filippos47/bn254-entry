@@ -64,9 +64,8 @@ structure OpeningPre (source : Stage1Source) (input : AffineInput) (target : Poi
   /-- `tag₀`, `Q.x`, `Q.y` of the output `Q = f_k(u)`. -/
   outputCells : (memory.ram (word reqTag0), memory.ram (word reqQX), memory.ram (word reqQY)) =
     outputWords target
-  /-- The row constants of every digit, in wire (cell) order (`rowField`: `xC0, xC1, xC2, xC4,
-  yC0, yC2, yC4, yC5, zC0, zC1`). -/
-  rowCells : ∀ (digit : Fin digitCount) (slot : Nat), slot < 10 →
+  /-- The row constants of every digit, in wire (cell) order (`rowField`: `gX, gY, gZ`). -/
+  rowCells : ∀ (digit : Fin digitCount) (slot : Nat), slot < 3 →
     memory.ram (word (Opening.rowCell digit.val slot)) = fieldWord (rowField (source.rows.get digit) slot)
   /-- The `pointX` lane's (designated-free) values, slots `0 .. 363`. -/
   accXCells : ∀ element : Fin pointElementCountX,
