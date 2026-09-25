@@ -147,7 +147,7 @@ variable [FieldCertificate] [GroupCertificate] (scalar : NonZeroScalar)
 answers and its limbs. -/
 def tablePub (coins : Coins) (pads : Programs.Pads) (v : FixedIndex → Block) (T : Tape) : Public :=
   Programs.assemble (FieldMacToECMac.outputKeys construction scalar.value coins.offsets)
-    coins.pointRandomness coins.bridgeKey coins.curveMask coins.curveR1 coins.curveR2
+    coins.pointRandomness coins.bridgeKey coins.curveMask
     (Programs.laneTables (tableOracle (fixedTable v T)) (tableHash (fixedTable v T)) .curveX
       (coins.inputDelta .x) (Pipeline.bitKeyOf coins.inputMacKey .x))
     (Programs.laneTables (tableOracle (fixedTable v T)) (tableHash (fixedTable v T)) .curveY
@@ -611,12 +611,12 @@ theorem pointYJoins_fixed (dy : Block) (ky : Fin coordinateBitCount → Block ×
   simp only [masks_pointY]
 
 theorem curveXJoins_fixed (dx : Block) (kx : Fin coordinateBitCount → Block × Block)
-    (r1 r2 : BaseField) (slopes : CurveMembership.Values)
-    (hs : slopes = curveSlopes (maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).2 r1 r2)
+    (mask : BaseField) (slopes : CurveMembership.Values)
+    (hs : slopes = curveSlopes (maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).2 mask)
     (chunk : Fin chunkCount) (slot : Fin curveElementCountX) :
     (Programs.laneTables (tableOracle (fixedTable v T)) (tableHash (fixedTable v T)) .curveX dx
         kx).scaleJoins (Pipeline.curveXAssemble slopes) chunk slot =
-      curveJoins (maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).2 r1 r2
+      curveJoins (maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).2 mask
         (.inl (curveXSlots.symm slot))
         chunk := by
   obtain ⟨e, rfl⟩ := curveXSlots.surjective slot
@@ -626,18 +626,18 @@ theorem curveXJoins_fixed (dx : Block) (kx : Fin coordinateBitCount → Block ×
     Pipeline.curveXAssemble_slot slopes e
   show _ = (∑ j : Fin (2 ^ chunkWidth chunk),
       (maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).2 (.inl e) ⟨chunk, j⟩) +
-    curveSlopes (maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).2 r1 r2 (.inl e) *
+    curveSlopes (maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).2 mask (.inl e) *
       weight chunk
   rw [slope, hs]
   simp only [masks_curveX]
 
 theorem curveYJoins_fixed (dy : Block) (ky : Fin coordinateBitCount → Block × Block)
-    (r1 r2 : BaseField) (slopes : CurveMembership.Values)
-    (hs : slopes = curveSlopes (maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).2 r1 r2)
+    (mask : BaseField) (slopes : CurveMembership.Values)
+    (hs : slopes = curveSlopes (maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).2 mask)
     (chunk : Fin chunkCount) (slot : Fin curveElementCountY) :
     (Programs.laneTables (tableOracle (fixedTable v T)) (tableHash (fixedTable v T)) .curveY dy
         ky).scaleJoins (Pipeline.curveYAssemble slopes) chunk slot =
-      curveJoins (maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).2 r1 r2
+      curveJoins (maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).2 mask
         (.inr (curveYSlots.symm slot))
         chunk := by
   obtain ⟨e, rfl⟩ := curveYSlots.surjective slot
@@ -647,7 +647,7 @@ theorem curveYJoins_fixed (dy : Block) (ky : Fin coordinateBitCount → Block ×
     Pipeline.curveYAssemble_slot slopes e
   show _ = (∑ j : Fin (2 ^ chunkWidth chunk),
       (maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).2 (.inr e) ⟨chunk, j⟩) +
-    curveSlopes (maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).2 r1 r2 (.inr e) *
+    curveSlopes (maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).2 mask (.inr e) *
       weight chunk
   rw [slope, hs]
   simp only [masks_curveY]
@@ -775,19 +775,19 @@ theorem cellsSource_scale (cells : PublicCells) (key : InputMacKey) :
       Vector.ofFn fun chunk => pack (cellsJoins cells chunk) := rfl
 
 theorem assemble_exception (keys : OutputKeys) (pR : Randomness) (t : BaseField) (mask : NonZeroBase)
-    (r1 r2 : BaseField) (cx : Programs.LaneTables curveElementCountX)
+    (cx : Programs.LaneTables curveElementCountX)
     (cy : Programs.LaneTables curveElementCountY) (px : Programs.LaneTables pointElementCountX)
     (py : Programs.LaneTables pointElementCountY) (g : Vector Exception.Entry outputMacCount) :
-    (Programs.assemble keys pR t mask r1 r2 cx cy px py g).exception = g := rfl
+    (Programs.assemble keys pR t mask cx cy px py g).exception = g := rfl
 
 theorem assemble_hot (keys : OutputKeys) (pR : Randomness) (t : BaseField) (mask : NonZeroBase)
-    (r1 r2 : BaseField) (cx : Programs.LaneTables curveElementCountX)
+    (cx : Programs.LaneTables curveElementCountX)
     (cy : Programs.LaneTables curveElementCountY) (px : Programs.LaneTables pointElementCountX)
     (py : Programs.LaneTables pointElementCountY) (g : Vector Exception.Entry outputMacCount) :
-    (Programs.assemble keys pR t mask r1 r2 cx cy px py g).curveXHot = cx.hotJoins ∧
-    (Programs.assemble keys pR t mask r1 r2 cx cy px py g).curveYHot = cy.hotJoins ∧
-    (Programs.assemble keys pR t mask r1 r2 cx cy px py g).pointXHot = px.hotJoins ∧
-    (Programs.assemble keys pR t mask r1 r2 cx cy px py g).pointYHot = py.hotJoins :=
+    (Programs.assemble keys pR t mask cx cy px py g).curveXHot = cx.hotJoins ∧
+    (Programs.assemble keys pR t mask cx cy px py g).curveYHot = cy.hotJoins ∧
+    (Programs.assemble keys pR t mask cx cy px py g).pointXHot = px.hotJoins ∧
+    (Programs.assemble keys pR t mask cx cy px py g).pointYHot = py.hotJoins :=
   ⟨rfl, rfl, rfl, rfl⟩
 
 /-- **The garbler's published value on a table is the source of F4's published cells.** -/
@@ -813,7 +813,7 @@ theorem tablePub_cells (coins : Coins) (v : FixedIndex → Block) (T : Tape) (ke
           ((coins.pointRandomness.get d).x,
           (coins.pointRandomness.get d).y, (coins.pointRandomness.get d).z)),
         ((maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).2, coins.bridgeKey,
-          ⟨coins.curveMask.value, coins.curveMask.nonzero⟩, coins.curveR1, coins.curveR2),
+          ⟨coins.curveMask.value, coins.curveMask.nonzero⟩),
         (fun ℓ s => v (hiddenIdx input (.inl (ℓ, s))),
           fun d => (coins.exceptionPad.get d,
             ((v ∘ indexSwap (coinKeys scalar (coinsSplit coins))) (hiddenIdx input (.inr (d, false))),
@@ -833,7 +833,7 @@ theorem tablePub_cells (coins : Coins) (v : FixedIndex → Block) (T : Tape) (ke
   have curveK := curveValues_fixed v T (coins.inputDelta .x) (coins.inputDelta .y)
     (Pipeline.bitKeyOf coins.inputMacKey .x) (Pipeline.bitKeyOf coins.inputMacKey .y)
   apply public_ext
-  · change CurveMembership.garble _ _ _ _ _ = CurveMembership.garble _ _ _ _ _
+  · change CurveMembership.garble _ _ _ = CurveMembership.garble _ _ _
     rw [curveK]
   · change Vector.ofFn _ = Vector.ofFn _
     refine congrArg Vector.ofFn (funext fun d => ?_)
@@ -855,13 +855,13 @@ theorem tablePub_cells (coins : Coins) (v : FixedIndex → Block) (T : Tape) (ke
     refine ofFn_congr_digit _ _ fun d => ?_
     rw [garbleEntryM_table]
     exact entryOf_gadgetEntry2 input keys v d _ _
-  · rw [(assemble_hot _ _ _ _ _ _ _ _ _ _ _).1, (cellsSource_hot _ _).1, laneHotJoins_fixed]
+  · rw [(assemble_hot _ _ _ _ _ _ _ _ _).1, (cellsSource_hot _ _).1, laneHotJoins_fixed]
     exact congrArg Vector.ofFn (funext fun s => foldJoin_split input (v ∘ indexSwap keys) .curveX s _)
-  · rw [(assemble_hot _ _ _ _ _ _ _ _ _ _ _).2.1, (cellsSource_hot _ _).2.1, laneHotJoins_fixed]
+  · rw [(assemble_hot _ _ _ _ _ _ _ _ _).2.1, (cellsSource_hot _ _).2.1, laneHotJoins_fixed]
     exact congrArg Vector.ofFn (funext fun s => foldJoin_split input (v ∘ indexSwap keys) .curveY s _)
-  · rw [(assemble_hot _ _ _ _ _ _ _ _ _ _ _).2.2.1, (cellsSource_hot _ _).2.2.1, laneHotJoins_fixed]
+  · rw [(assemble_hot _ _ _ _ _ _ _ _ _).2.2.1, (cellsSource_hot _ _).2.2.1, laneHotJoins_fixed]
     exact congrArg Vector.ofFn (funext fun s => foldJoin_split input (v ∘ indexSwap keys) .pointX s _)
-  · rw [(assemble_hot _ _ _ _ _ _ _ _ _ _ _).2.2.2, (cellsSource_hot _ _).2.2.2, laneHotJoins_fixed]
+  · rw [(assemble_hot _ _ _ _ _ _ _ _ _).2.2.2, (cellsSource_hot _ _).2.2.2, laneHotJoins_fixed]
     exact congrArg Vector.ofFn (funext fun s => foldJoin_split input (v ∘ indexSwap keys) .pointY s _)
   · have pointSlopes : ∀ d : Fin digitCount, Biquadratic.slopes (coins.pointRandomness.get d).x
         (coins.pointRandomness.get d).y (coins.pointRandomness.get d).z
@@ -871,13 +871,13 @@ theorem tablePub_cells (coins : Coins) (v : FixedIndex → Block) (T : Tape) (ke
       intro d
       rw [digitK]
       rfl
-    have curveSlopesEq : CurveMembership.slopes coins.curveR1 coins.curveR2
+    have curveSlopesEq : CurveMembership.slopes coins.curveMask.value
         (Pipeline.curveValues
           (Programs.laneTables O H .curveX (coins.inputDelta .x)
             (Pipeline.bitKeyOf coins.inputMacKey .x)).offsets
           (Programs.laneTables O H .curveY (coins.inputDelta .y)
             (Pipeline.bitKeyOf coins.inputMacKey .y)).offsets) =
-        curveSlopes m.2 coins.curveR1 coins.curveR2 := by
+        curveSlopes m.2 coins.curveMask.value := by
       rw [curveK]
       rfl
     change Vector.ofFn _ = Vector.ofFn _
@@ -885,9 +885,9 @@ theorem tablePub_cells (coins : Coins) (v : FixedIndex → Block) (T : Tape) (ke
     show Pipeline.assembleWord _ _ _ _ = Pipeline.assembleWord _ _ _ _
     exact congr (congr (congr (congrArg Pipeline.assembleWord
       (funext fun slot => pointXJoins_fixed v T _ _ _ _ pointSlopes chunk slot))
-      (funext fun slot => curveXJoins_fixed v T _ _ _ _ _ curveSlopesEq chunk slot))
+      (funext fun slot => curveXJoins_fixed v T _ _ _ _ curveSlopesEq chunk slot))
       (funext fun slot => pointYJoins_fixed v T _ _ _ _ pointSlopes chunk slot))
-      (funext fun slot => curveYJoins_fixed v T _ _ _ _ _ curveSlopesEq chunk slot)
+      (funext fun slot => curveYJoins_fixed v T _ _ _ _ curveSlopesEq chunk slot)
 
 end Context
 

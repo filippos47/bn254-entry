@@ -69,12 +69,12 @@ def curveElementCountY : Nat := 2
 /-- The total number of IT-GS elements `S`. -/
 def elementCount : Nat := 642
 
-/-- The width in bits of one chunk's published `scale-hot` join word: the `642 * 254 = 163,068`
-value bits and four zero bits, so that the word fills whole bytes. -/
-def chunkJoinBits : Nat := 163072
+/-- The width in bits of one chunk's published `scale-hot` join word: the `642` join values as one
+base-`p` number, below `p ^ 642 < 2 ^ 162810`, rounded up to whole bytes. -/
+def chunkJoinBits : Nat := 162816
 
 /-- The width in bytes of one chunk's published `scale-hot` join word. -/
-def chunkJoinBytes : Nat := 20384
+def chunkJoinBytes : Nat := 20352
 
 /-- The number of bits of one coordinate. -/
 def coordinateBits : Nat := 254

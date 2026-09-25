@@ -6,7 +6,7 @@ multiplication `f_k(u) = k·u`, checked in Lean against the challenge library
 
 | metric | value | rule |
 |---|---|---|
-| `ciphertextBytes` | **1,103,204** `= 96 + 29,120 + 1,092 + 4·(254 − 52)·16 + 52·20,384` | ranked, lower is better |
+| `ciphertextBytes` | **1,100,521** `= 28,879 + 410 + 4·(254 − 52)·16 + 52·20,352` | ranked, lower is better |
 | `garbleQueries` | **1,123,253** `≤ 1,759,967` | acceptance gate |
 | `evaluateQueries` | **1,042,077** `≤ 1,055,879` | acceptance gate |
 
@@ -18,7 +18,9 @@ simulator machine. `#print axioms Submission.solution` reports exactly `propext`
 
 ## Changes from the previous entries
 
-Phases 3 to 5b are xinshu's entry (`xinshudong/bn254-entry`); this entry starts from phase 5b.
+Phases 3 to 5b are xinshu's entry (`xinshudong/bn254-entry`). The sign-row version is Lazar's
+entry (`Lazar955/bn254-planb`, commit `a79310d`), which starts from phase 5b. This entry is a fork
+of Lazar's entry and changes only the packing and the curve check.
 The digit MACs, the `X` and `Z` rows, the four lanes, the fold and the EncPRF gate are the same
 in all five versions, and the gadget is the same in the first four. The metrics are
 `ciphertextBytes / garbleQueries / evaluateQueries`.
@@ -29,13 +31,16 @@ in all five versions, and the gadget is the same in the first four. The metrics 
 | phase 4 | 1,719,202 / 885,169 / 831,105 | the batched hash-vector sampler (§1.5): a switch's whole lane mask vector from `k` hash answers; ragged-first chunks `[2, 4 × 63]` |
 | phase 5a | 1,534,306 / 794,089 / 745,785 | Lazar's four-element `Y` row: 8 encodings per digit, `733` elements per chunk word instead of `824` |
 | phase 5b | 1,348,634 / 1,077,993 / 1,035,473 | mixed chunk widths `[2, 5 × 32, 4 × 23]`: `56` chunk words instead of `64` |
-| sign row (this entry) | **1,103,204 / 1,123,253 / 1,042,077** | the sign row replaces the `Y` row (§1.7): 7 encodings per digit, `642` elements per chunk word instead of `733`; a second exceptional case in a 12-byte gadget (§1.8); chunk widths `[2, 5 × 48, 4 × 3]`: `52` chunk words (§1.2, §3) |
+| sign row (Lazar) | 1,103,204 / 1,123,253 / 1,042,077 | the sign row replaces the `Y` row (§1.7): 7 encodings per digit, `642` elements per chunk word instead of `733`; a second exceptional case in a 12-byte gadget (§1.8); chunk widths `[2, 5 × 48, 4 × 3]`: `52` chunk words (§1.2, §3) |
+| packing (this entry) | **1,100,521 / 1,123,253 / 1,042,077** | one curve-check constant instead of three (§1.6); the curve and row constants as one base-`p` number, each chunk word as one base-`p` number, the gadget as 3-bit codes in one word (§2) |
 
-**Credit.** This entry builds on xinshu's phase-5b entry. Its changes are the sign row and its
-randomiser `τ` (§1.7), the second exceptional case `T = 2K` with the 12-byte gadget and
-bit-indexed gadget permutations (§1.8), the garbler's gadget that asks each fixed-key index once
-(§1.8), the `C = 52` profile (§1.2), and the correctness, privacy and machine proofs for all of
-it. The rest is xinshu's: the chunked one-hot tables, the batched sampler, the mixed chunk widths,
+**Credit.** This entry is a fork of Lazar's sign-row entry, which builds on xinshu's phase-5b
+entry. This entry's own changes are the one-constant curve check (§1.6) and the packing of the
+constants, the chunk words and the gadget (§2), with their byte-count, wire and simulator proofs.
+Lazar's changes are the sign row and its randomiser `τ` (§1.7), the second exceptional case
+`T = 2K` with the twelve-slot gadget and bit-indexed gadget permutations (§1.8), the garbler's
+gadget that asks each fixed-key index once (§1.8), the `C = 52` profile (§1.2), and the
+correctness, privacy and machine proofs for all of it. The rest is xinshu's: the chunked one-hot tables, the batched sampler, the mixed chunk widths,
 the simulator machine and most of the privacy proof. The sign row keeps the `cubic` element of
 Lazar's four-element `Y` row (the "Y4" row of `Lazar955/argomac-lean`, adopted in phase 5a), with
 its `x²` collector scaling, the read-back of `r4` through `y² − 3`, and the proof that `3` is not a
@@ -54,7 +59,7 @@ the gadget (§1.8):
 - the EncPRF whitening.
 
 The `Y` slot of each digit carries a sign row instead, so a digit publishes 10 constants, and the
-doubling-exception gadget gains a second exceptional case, 12 bytes per digit.
+doubling-exception gadget gains a second exceptional case, 12 three-bit slots per digit.
 
 The entry replaces how the **642 affine encodings** (`a_e·x + b_e` or `a_e·y + b_e`) reach the
 evaluator. The original baseline sends one 254-row bit-adaptor table per encoding; Plan B sends
@@ -117,8 +122,8 @@ chunk index:
 ```
 
 The garbler **defines** the offset `b_e := O[e]`, so offsets cost no bytes. It derives the slopes
-`a_e` from them and publishes the joins last. A chunk word packs the four lanes' joins: `642`
-elements at 254 bits, then four zero bits, `163,072` bits or `20,384` bytes.
+`a_e` from them and publishes the joins last. A chunk word packs the four lanes' joins: the `642`
+elements as one base-`p` number `Σ v_i · p^i < p^642 < 2^162,810`, `20,352` bytes.
 
 ### 1.5 Rule S: the batched hash-vector sampler
 
@@ -151,7 +156,8 @@ hold on every tape.
 
 - **System A** is keyed on the raw Lamport labels. It delivers the curve check, which publishes
   `t + mask·(x³ + 3 − y²)`. On the curve this equals the bridge key `t`; off the curve it is
-  uniform.
+  uniform. The mask is the slope of `x3` (read with `x²`) and its negative the slope of `y4`
+  (read with `y`), so the check publishes one constant, `c0 = t + 3·mask − K[y6] − K[x7]`.
 - **System B** is keyed on labels whitened by EncPRF pads under the keys `H(bridgeInput t)`. It
   delivers the 637 point-row encodings. An evaluator that cannot produce `t` holds only garbage
   labels for system B.
@@ -213,9 +219,9 @@ digit's endomorphism (so `T = φ(P)`), a row `(X, S, Z)` decodes as follows
 The last line is Fermat with `p ≡ 3 (mod 4)`: `(x³ + 3)^((p+1)/4)` is a square root of `y_R²`,
 and `S^((p−1)/2) = ±1` is the character of `y_R` (`JacobianMixed.signRoot`).
 
-The exception gadget releases the digit in both exceptional cases. Its entry has 12 bytes per
-digit: kind 1 at slot `exceptionIndex`, kind 2 at slot `6 + exceptionIndex`
-(`Exception.slotOf`). Each written slot holds the digit's code, masked by the low byte of a
+The exception gadget releases the digit in both exceptional cases. Its entry has 12 three-bit
+slots per digit: kind 1 at slot `exceptionIndex`, kind 2 at slot `6 + exceptionIndex`
+(`Exception.slotOf`). Each written slot holds the digit's code, masked by the low 3 bits of a
 digest of the labels of the exceptional input of its kind, the input whose image is `K` or `2K`
 (`Exception.exceptionalInput`, `tripleInput`). The evaluator computes one digest per digit, at its
 own input (508 queries, as before), and that digest unlocks both kinds. The gadget permutations
@@ -230,12 +236,11 @@ most once, which the privacy proof needs (`FixedOnce`).
 
 | field | contents | bytes |
 |---|---|---|
-| `curve` | 3 constants | 96 |
-| `rows` | 91 × 10 constants × 32 B | 29,120 |
-| `exception` | 91 × 12 B (two kinds × 6 slots) | 1,092 |
+| `curve`, `rows` | 1 + 91 × 10 constants, one base-`p` number (`p^911 < 2^231,027`) | 28,879 |
+| `exception` | 91 × 12 slots (two kinds × 6) of 3 bits, one word | 410 |
 | `curveXHot`, `curveYHot`, `pointXHot`, `pointYHot` | 4 lanes × 202 fold joins × 16 B | 12,928 |
-| `scale` | 52 chunk words × (642 elements × 254 bits + 4 zero bits), 20,384 B each | 1,059,968 |
-| **total** | | **1,103,204** |
+| `scale` | 52 chunk words, each 642 elements as one base-`p` number, 20,352 B each | 1,058,304 |
+| **total** | | **1,100,521** |
 
 Every field has a fixed width, so every public value encodes to the same length
 (`PlanB.Wire.ciphertextSize`, `Proof/CiphertextSize.lean`; the table is `Wire.byteArithmetic`).
@@ -303,9 +308,9 @@ Adv(R, M) · 2^100 ≤ T + 1,        T = M.steps = size + 1 + firstFuel + second
 **Stage 1** receives only `n` and the byte count, and makes **no oracle call**. It publishes a
 table in which every field is drawn uniformly in its source form:
 
-- the curve constants;
+- the curve constant;
 - the row constants;
-- the gadget bytes;
+- the gadget codes;
 - the fold joins;
 - the 52 × 642 scale joins, as canonical field elements packed exactly as the construction
   packs them.
@@ -410,13 +415,13 @@ For `q ≥ 2^100` the bound holds because `Adv ≤ 1`.
 
 ### 5.5 The machine
 
-The simulator machine `planBSimulator` costs `size + 1 + firstFuel + secondFuel = 46,837,161,227`
-(about `2^35.45`) against the allowance `2^60` (`Design.totalCost_eq`, `Design.totalCost_le`). Its
+The simulator machine `planBSimulator` costs `size + 1 + firstFuel + secondFuel = 48,384,145,715`
+(about `2^35.49`) against the allowance `2^60` (`Design.totalCost_eq`, `Design.totalCost_le`). Its
 machine law `machineLaw_planB : MachineLaw planBSimulator 2^-128` is proved
 (`Proof/Simulator/OpeningMachine.lean`).
 
-- Stage 1 is dominated by bounded-rejection sampling of 34,297 field cells and by serialising
-  the table.
+- Stage 1 is dominated by bounded-rejection sampling of 34,295 field cells and by serialising
+  the table (the base-`p` words with a big-integer Horner encoder).
 - Stage 2 is dominated by the replay (994,979 lazy queries, with the base-`p` digit extraction of
   every replayed mask vector) and the 362 programs. Its opening draws 91 lift pairs `(λ, t)` and
   writes the two-scale lifts of §5.2.
@@ -486,7 +491,7 @@ adaptivePrivacy := Phase3.Glue.planB_oracleAdaptivePrivacy_of
 | `H_joint.hidden = planB_hidden` | `G0U → G1U`, identical until a hidden entry is touched, `L1 = 3q/2^128 + 2q/(p−1)` | **proved** |
 | `H_joint.publicFirst = planB_publicFirst` | `G1U → HW`: `stageOneHitError q₁ + exceptionalError + maskSwapError + coincidenceError`; from the F4 `jointLaw` core, `designedLaws` and `designedBounds` | **proved** |
 | `H_abort = AbortBound.of_keyAveraged rfl rfl Lazy.keyAveragedFailBound` | `H → I^U`, per abort site, `1/(2^128 − q₁)` per stage-1 entry | **proved** |
-| `H_machine = MachineBound.of_law machineLaw_planB` | `I → M`, `MachineLaw planBSimulator 2^-128`; the cost field is `planBSimulator.within` (`46,837,161,227 ≤ 2^60`) | **proved** |
+| `H_machine = MachineBound.of_law machineLaw_planB` | `I → M`, `MachineLaw planBSimulator 2^-128`; the cost field is `planBSimulator.within` (`48,384,145,715 ≤ 2^60`) | **proved** |
 
 ## 8. Build and verify
 

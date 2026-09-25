@@ -131,6 +131,32 @@ theorem noOracle_bounded (width : Nat) (test use : Prog) (count : Nat)
 theorem noOracle_emitWord (address width : Nat) : (emitWord address width).NoOracle :=
   ⟨⟨rfl, rfl⟩, noOracle_rep _ _ fun _ _ => ⟨rfl, rfl, rfl⟩⟩
 
+theorem noOracle_setup : BigInt.setup.NoOracle := by
+  unfold BigInt.setup
+  simp [Prog.seqList, Prog.NoOracle, Op.isOracle, cst]
+
+theorem noOracle_macPasses (base count digits yBase : Nat) :
+    (BigInt.macPasses base count digits yBase).NoOracle := by
+  unfold BigInt.macPasses
+  simp only [Prog.seqList, Prog.NoOracle]
+  refine ⟨rfl, noOracle_rep _ _ fun _ _ => ?_, trivial⟩
+  unfold BigInt.macPass
+  simp only [Prog.seqList, Prog.NoOracle]
+  refine ⟨⟨rfl, rfl⟩, noOracle_rep _ _ fun _ _ => ?_, trivial⟩
+  unfold BigInt.macLimb BigInt.macPre BigInt.macPost BigInt.mulHi
+  simp [Prog.seqList, Prog.NoOracle, Op.isOracle, ar, loadAt, storeAt, cst]
+
+theorem noOracle_clearLimbs : Stage1.clearLimbs.NoOracle :=
+  ⟨rfl, noOracle_rep _ _ fun _ _ => ⟨rfl, rfl⟩⟩
+
+theorem noOracle_serializeChunk (chunk : Nat) : (Stage1.serializeChunk chunk).NoOracle :=
+  ⟨noOracle_setup, noOracle_macPasses _ _ _ _, noOracle_emitWord _ _,
+    noOracle_rep _ _ fun _ _ => noOracle_emitWord _ _, noOracle_clearLimbs⟩
+
+theorem noOracle_serializeFields : Stage1.serializeFields.NoOracle :=
+  ⟨noOracle_setup, noOracle_macPasses _ _ _ _, noOracle_emitWord _ _,
+    noOracle_rep _ _ fun _ _ => noOracle_emitWord _ _, noOracle_clearLimbs⟩
+
 /-- **Stage 1 has no oracle instruction.** -/
 theorem stage1_noOracle : Stage1.program.NoOracle := by
   refine ⟨noOracle_rep _ _ fun _ _ => ?_, noOracle_rep _ _ fun _ _ => ?_,
@@ -139,11 +165,10 @@ theorem stage1_noOracle : Stage1.program.NoOracle := by
   · exact ⟨noOracle_sampleWord _, ⟨rfl, rfl⟩, noOracle_zeroRegs _⟩
   · exact ⟨noOracle_sampleWord _, ⟨rfl, rfl⟩, noOracle_zeroRegs _⟩
   · exact ⟨noOracle_sampleWord _, ⟨rfl, rfl⟩, noOracle_zeroRegs _⟩
-  · exact ⟨noOracle_rep _ _ fun _ _ =>
-        ⟨rfl, rfl, noOracle_emitWord _ _, noOracle_rep _ _ fun _ _ => noOracle_emitWord _ _⟩,
+  · exact ⟨noOracle_rep _ _ fun _ _ => noOracle_serializeChunk _,
       noOracle_rep _ _ fun _ _ => noOracle_emitWord _ _,
-      noOracle_rep _ _ fun _ _ => noOracle_emitWord _ _,
-      noOracle_rep _ _ fun _ _ => noOracle_emitWord _ _⟩
+      ⟨noOracle_emitWord _ _, noOracle_rep _ _ fun _ _ => noOracle_emitWord _ _⟩,
+      noOracle_serializeFields⟩
 
 theorem noOracle_parseWord (address : Nat) : (Request.parseWord address).NoOracle :=
   ⟨rfl, noOracle_rep _ _ (fun _ _ => ⟨trivial, rfl, rfl, rfl⟩), rfl, rfl⟩

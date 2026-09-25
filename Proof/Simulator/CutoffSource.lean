@@ -1,7 +1,7 @@
 /-
 **The machine's stage-1 source law against the uniform source.**
 
-The machine's draws are `34,297` field cells (bounded rejection), `1,092` bytes, `808` fold-join
+The machine's draws are `34,295` field cells (bounded rejection), `1,092` three-bit codes, `808` fold-join
 blocks and the `1016`-block key (fair coins). `sourceOfDraws` reads them as a `Stage1Source`, and
 this reading is a bijection from the exact draws (`drawsEquiv`), so exact draws give the uniform
 source (`idealSource_eq`). The field cells are the only cut-off draws: `source_close`.
@@ -20,7 +20,7 @@ section Source
 variable [FieldCertificate]
 
 /-- The exact draws: field elements, bytes, blocks, key blocks. -/
-abbrev Draws := (Fin fieldCellCount → BaseField) × (Fin exceptionByteCount → Fin (2 ^ 8)) ×
+abbrev Draws := (Fin fieldCellCount → BaseField) × (Fin exceptionByteCount → Fin (2 ^ 3)) ×
   (Fin hotBlockCount → Fin (2 ^ 128)) × (Fin keyBlockCount → Fin (2 ^ 128))
 
 /-- The source of exact draws. -/
@@ -41,31 +41,29 @@ def rowField (row : RowGamma) : Nat → BaseField
   | 8 => row.zC0
   | _ => row.zC1
 
-theorem digit_lt (index : Nat) (above : 3 ≤ index) (below : index < 913) :
-    (index - 3) / 10 < digitCount := by
+theorem digit_lt (index : Nat) (above : 1 ≤ index) (below : index < 911) :
+    (index - 1) / 10 < digitCount := by
   unfold digitCount
   omega
 
 theorem chunk_lt (index : Nat) (below : index < fieldCellCount) :
-    (index - 913) / 642 < chunkCount := by
+    (index - 911) / 642 < chunkCount := by
   unfold chunkCount
   rw [fieldCellCount_eq] at below
   omega
 
-theorem slot_lt (index : Nat) : (index - 913) % 642 < elementCount := by
+theorem slot_lt (index : Nat) : (index - 911) % 642 < elementCount := by
   unfold elementCount
   omega
 
 /-- The field cells of a source, in the machine's order. -/
 def cellsOf (source : Stage1Source) (index : Fin fieldCellCount) : BaseField :=
-  if small : index.val < 3 then
-    (if index.val = 0 then source.curve.1 else if index.val = 1 then source.curve.2.1
-      else source.curve.2.2)
-  else if below : index.val < 913 then
-    rowField (source.rows.get ⟨(index.val - 3) / 10, digit_lt index.val (by omega) below⟩)
-      ((index.val - 3) % 10)
-  else source.joins ⟨(index.val - 913) / 642, chunk_lt index.val index.isLt⟩
-    ⟨(index.val - 913) % 642, slot_lt index.val⟩
+  if small : index.val < 1 then source.curve
+  else if below : index.val < 911 then
+    rowField (source.rows.get ⟨(index.val - 1) / 10, digit_lt index.val (by omega) below⟩)
+      ((index.val - 1) % 10)
+  else source.joins ⟨(index.val - 911) / 642, chunk_lt index.val index.isLt⟩
+    ⟨(index.val - 911) % 642, slot_lt index.val⟩
 
 theorem byteDigit_lt (index : Fin exceptionByteCount) : index.val / 12 < digitCount := by
   have := index.isLt
@@ -74,7 +72,7 @@ theorem byteDigit_lt (index : Fin exceptionByteCount) : index.val / 12 < digitCo
   omega
 
 /-- The bytes of a source. -/
-def bytesOf (source : Stage1Source) (index : Fin exceptionByteCount) : Fin (2 ^ 8) :=
+def bytesOf (source : Stage1Source) (index : Fin exceptionByteCount) : Fin (2 ^ 3) :=
   ((source.exception.get ⟨index.val / 12, byteDigit_lt index⟩).get
     ⟨index.val % 12, Nat.mod_lt _ (by norm_num)⟩).toFin
 
@@ -127,45 +125,35 @@ theorem total_apply {count : Nat} {α : Type} (zero : α) (family : Fin count �
 
 /-! ### The cells of a source, by position -/
 
-theorem cell_lt (index : Nat) (below : index < 34297) : index < fieldCellCount := by
+theorem cell_lt (index : Nat) (below : index < 34295) : index < fieldCellCount := by
   rw [fieldCellCount_eq]
   exact below
 
 theorem cellsOf_curve0 (source : Stage1Source) :
-    total 0 (cellsOf source) 0 = source.curve.1 := by
+    total 0 (cellsOf source) 0 = source.curve := by
   rw [total_apply _ _ _ (cell_lt 0 (by omega))]
-  simp [cellsOf]
-
-theorem cellsOf_curve1 (source : Stage1Source) :
-    total 0 (cellsOf source) 1 = source.curve.2.1 := by
-  rw [total_apply _ _ _ (cell_lt 1 (by omega))]
-  simp [cellsOf]
-
-theorem cellsOf_curve2 (source : Stage1Source) :
-    total 0 (cellsOf source) 2 = source.curve.2.2 := by
-  rw [total_apply _ _ _ (cell_lt 2 (by omega))]
   simp [cellsOf]
 
 theorem cellsOf_row (source : Stage1Source) (digit : Fin digitCount) (field : Nat)
     (small : field < 10) :
-    total 0 (cellsOf source) (3 + 10 * digit.val + field) =
+    total 0 (cellsOf source) (1 + 10 * digit.val + field) =
       rowField (source.rows.get digit) field := by
   have digitSmall : digit.val < 91 := digit.isLt
   rw [total_apply _ _ _ (cell_lt _ (by omega))]
   unfold cellsOf
   rw [dif_neg (by simp only; omega), dif_pos (by simp only; omega)]
-  simp only [show (3 + 10 * digit.val + field - 3) / 10 = digit.val by omega,
-    show (3 + 10 * digit.val + field - 3) % 10 = field by omega, Fin.eta]
+  simp only [show (1 + 10 * digit.val + field - 1) / 10 = digit.val by omega,
+    show (1 + 10 * digit.val + field - 1) % 10 = field by omega, Fin.eta]
 
 theorem cellsOf_join (source : Stage1Source) (chunk : Fin chunkCount) (slot : Fin elementCount) :
-    total 0 (cellsOf source) (913 + 642 * chunk.val + slot.val) = source.joins chunk slot := by
+    total 0 (cellsOf source) (911 + 642 * chunk.val + slot.val) = source.joins chunk slot := by
   have chunkSmall : chunk.val < 52 := chunk.isLt
   have slotSmall : slot.val < 642 := slot.isLt
   rw [total_apply _ _ _ (cell_lt _ (by omega))]
   unfold cellsOf
   rw [dif_neg (by simp only; omega), dif_neg (by simp only; omega)]
-  have first : (913 + 642 * chunk.val + slot.val - 913) / 642 = chunk.val := by omega
-  have second : (913 + 642 * chunk.val + slot.val - 913) % 642 = slot.val := by omega
+  have first : (911 + 642 * chunk.val + slot.val - 911) / 642 = chunk.val := by omega
+  have second : (911 + 642 * chunk.val + slot.val - 911) % 642 = slot.val := by omega
   exact congrArg₂ source.joins (Fin.ext first) (Fin.ext second)
 
 /-! ### The bytes, blocks and key of a source, by position -/
@@ -301,8 +289,8 @@ theorem rowGamma_eq (row : RowGamma) :
 /-- **The reading is onto**: every source is the reading of its draws. -/
 theorem sourceOf_drawsOf (source : Stage1Source) : sourceOf (drawsOf source) = source := by
   apply stage1Source_ext
-  · show (total 0 (cellsOf source) 0, total 0 (cellsOf source) 1, total 0 (cellsOf source) 2) = _
-    rw [cellsOf_curve0, cellsOf_curve1, cellsOf_curve2]
+  · simp only [sourceOf, sourceOfDraws, drawsOf]
+    exact cellsOf_curve0 source
   · apply Vector.ext
     intro digit bound
     simp only [sourceOf, sourceOfDraws, drawsOf, Vector.getElem_ofFn]
@@ -364,36 +352,30 @@ theorem sourceOf_drawsOf (source : Stage1Source) : sourceOf (drawsOf source) = s
 
 theorem cellsOf_sourceOf (draws : Draws) (index : Fin fieldCellCount) :
     cellsOf (sourceOf draws) index = draws.1 index := by
-  have indexSmall : index.val < 34297 := lt_of_lt_of_eq index.isLt fieldCellCount_eq
+  have indexSmall : index.val < 34295 := lt_of_lt_of_eq index.isLt fieldCellCount_eq
   unfold cellsOf
-  by_cases small : index.val < 3
+  by_cases small : index.val < 1
   · rw [dif_pos small]
     simp only [sourceOf, sourceOfDraws]
-    by_cases zero : index.val = 0
-    · rw [if_pos zero, total_apply _ _ _ (cell_lt 0 (by omega))]
-      exact congrArg draws.1 (Fin.ext zero.symm)
-    · by_cases one : index.val = 1
-      · rw [if_neg zero, if_pos one, total_apply _ _ _ (cell_lt 1 (by omega))]
-        exact congrArg draws.1 (Fin.ext one.symm)
-      · rw [if_neg zero, if_neg one, total_apply _ _ _ (cell_lt 2 (by omega))]
-        exact congrArg draws.1 (Fin.ext (by simp only; omega))
+    rw [total_apply _ _ _ (cell_lt 0 (by omega))]
+    exact congrArg draws.1 (Fin.ext (by simp only; omega))
   · rw [dif_neg small]
-    by_cases below : index.val < 913
+    by_cases below : index.val < 911
     · rw [dif_pos below]
-      have remainder : (index.val - 3) % 10 < 10 := Nat.mod_lt _ (by norm_num)
-      have position : 3 + 10 * ((index.val - 3) / 10) + (index.val - 3) % 10 = index.val := by
+      have remainder : (index.val - 1) % 10 < 10 := Nat.mod_lt _ (by norm_num)
+      have position : 1 + 10 * ((index.val - 1) / 10) + (index.val - 1) % 10 = index.val := by
         omega
       have read : ∀ field, field < 10 →
-          rowField ((sourceOf draws).rows.get ⟨(index.val - 3) / 10,
+          rowField ((sourceOf draws).rows.get ⟨(index.val - 1) / 10,
             digit_lt index.val (by omega) below⟩) field =
-          total 0 draws.1 (3 + 10 * ((index.val - 3) / 10) + field) := by
+          total 0 draws.1 (1 + 10 * ((index.val - 1) / 10) + field) := by
         intro field fieldSmall
         simp only [sourceOf, sourceOfDraws, Vector.get_ofFn]
         interval_cases field <;> rfl
       rw [read _ remainder, total_apply _ _ _ (cell_lt _ (by omega))]
       exact congrArg draws.1 (Fin.ext position)
     · rw [dif_neg below]
-      have position : 913 + 642 * ((index.val - 913) / 642) + (index.val - 913) % 642 =
+      have position : 911 + 642 * ((index.val - 911) / 642) + (index.val - 911) % 642 =
           index.val := by omega
       simp only [sourceOf, sourceOfDraws]
       rw [total_apply _ _ _ (cell_lt _ (by omega))]
@@ -483,7 +465,7 @@ def drawsWith (cell : PMF (Option BaseField)) : PMF (Option ((Fin fieldCellCount
   (optionProduct fieldCellCount fun _ => cell).bind fun cells => match cells with
     | none => PMF.pure none
     | some cells =>
-      (optionProduct exceptionByteCount fun _ => (wordLaw 8).map some).bind fun bytes =>
+      (optionProduct exceptionByteCount fun _ => (wordLaw 3).map some).bind fun bytes =>
       (optionProduct hotBlockCount fun _ => (wordLaw 128).map some).bind fun hot =>
       (optionProduct keyBlockCount fun _ => (wordLaw 128).map some).map fun key =>
         match bytes, hot, key with
@@ -514,12 +496,12 @@ def drawsNat (draws : Draws) : (Fin fieldCellCount → BaseField) × (Fin except
 /-- **Exact draws are uniform.** -/
 theorem idealDraws_eq : drawsWith idealCell = (PMF.uniformOfFintype Draws).map
     fun draws => some (drawsNat draws) := by
-  have : Nonempty (Fin (2 ^ 8)) := ⟨⟨0, by norm_num⟩⟩
+  have : Nonempty (Fin (2 ^ 3)) := ⟨⟨0, by norm_num⟩⟩
   have : Nonempty (Fin (2 ^ 128)) := ⟨⟨0, by norm_num⟩⟩
   unfold drawsWith idealCell
   rw [optionProduct_uniform, wordProduct_eq, wordProduct_eq, wordProduct_eq]
   rw [← uniform_product (A := Fin fieldCellCount → BaseField),
-    ← uniform_product (A := Fin exceptionByteCount → Fin (2 ^ 8)),
+    ← uniform_product (A := Fin exceptionByteCount → Fin (2 ^ 3)),
     ← uniform_product (A := Fin hotBlockCount → Fin (2 ^ 128))]
   simp only [PMF.bind_map, PMF.map_bind, PMF.map_comp]
   rfl
@@ -528,7 +510,7 @@ theorem idealDraws_eq : drawsWith idealCell = (PMF.uniformOfFintype Draws).map
 theorem idealSource_eq : (drawsWith idealCell).map (Option.map fun draws =>
     sourceOfDraws (total 0 draws.1) (total 0 draws.2.1) (total 0 draws.2.2.1)
       (total 0 draws.2.2.2)) = (PMF.uniformOfFintype Stage1Source).map some := by
-  have : Nonempty (Fin (2 ^ 8)) := ⟨⟨0, by norm_num⟩⟩
+  have : Nonempty (Fin (2 ^ 3)) := ⟨⟨0, by norm_num⟩⟩
   have : Nonempty (Fin (2 ^ 128)) := ⟨⟨0, by norm_num⟩⟩
   rw [idealDraws_eq, PMF.map_comp, ← uniform_equiv drawsEquiv, PMF.map_comp]
   rfl
@@ -543,7 +525,7 @@ theorem source_close :
     (fun cells => match cells with
       | none => PMF.pure none
       | some cells =>
-        (optionProduct exceptionByteCount fun _ => (wordLaw 8).map some).bind fun bytes =>
+        (optionProduct exceptionByteCount fun _ => (wordLaw 3).map some).bind fun bytes =>
         (optionProduct hotBlockCount fun _ => (wordLaw 128).map some).bind fun hot =>
         (optionProduct keyBlockCount fun _ => (wordLaw 128).map some).map fun key =>
           match bytes, hot, key with
@@ -552,7 +534,7 @@ theorem source_close :
     (fun cells => match cells with
       | none => PMF.pure none
       | some cells =>
-        (optionProduct exceptionByteCount fun _ => (wordLaw 8).map some).bind fun bytes =>
+        (optionProduct exceptionByteCount fun _ => (wordLaw 3).map some).bind fun bytes =>
         (optionProduct hotBlockCount fun _ => (wordLaw 128).map some).bind fun hot =>
         (optionProduct keyBlockCount fun _ => (wordLaw 128).map some).map fun key =>
           match bytes, hot, key with

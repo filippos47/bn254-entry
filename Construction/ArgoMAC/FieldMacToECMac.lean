@@ -185,7 +185,7 @@ def gadgetDigest
 /-- `gadgetMask` is the one-time pad byte of the exception gadget slots of one digit at one
 input. It is a digest of the labels of that input, so it is not affine in the input. -/
 def gadgetMask (perms : GadgetPermutations) (output : Fin outputMacCount)
-    (input : AffineInput) (mac : InputMac) : BitVec 8 :=
+    (input : AffineInput) (mac : InputMac) : BitVec 3 :=
   Exception.lowByte (gadgetDigest (perms output .x) (coordinateBits input.x) mac.x ^^^
     gadgetDigest (perms output .y) (coordinateBits input.y) mac.y)
 

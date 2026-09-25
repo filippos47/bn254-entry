@@ -228,10 +228,7 @@ def initAcc : Prog :=
 /-- The bridge value `t` of `CurveMembership.evaluate`, moved to `bridgeInput t` (`t + 2 ^ 150`
 when `t < 2 ^ 150`), then the hash query; `k1`, `k2` are stored. -/
 def bridge : Prog :=
-  seqList [loadAt rA reqX, loadAt rB reqY, ar .fieldMul rC rA rA, ar .fieldMul rD rC rA,
-    ar .fieldMul rE rB rB, loadAt rInput fieldBase,
-    loadAt rAcc (fieldBase + 1), ar .fieldMul rAcc rAcc rD, ar .fieldAdd rInput rInput rAcc,
-    loadAt rAcc (fieldBase + 2), ar .fieldMul rAcc rAcc rE, ar .fieldAdd rInput rInput rAcc,
+  seqList [loadAt rA reqX, loadAt rB reqY, ar .fieldMul rC rA rA, loadAt rInput fieldBase,
     loadAt rAcc (accBase + 364), ar .fieldMul rAcc rAcc rC, ar .fieldAdd rInput rInput rAcc,
     loadAt rAcc (accBase + 640), ar .fieldMul rAcc rAcc rB, ar .fieldAdd rInput rInput rAcc,
     loadAt rAcc (accBase + 365), ar .fieldMul rAcc rAcc rA, ar .fieldAdd rInput rInput rAcc,
@@ -539,8 +536,8 @@ theorem cost_initAcc : initAcc.cost = 1 + 642 * 2 := by
   simp only [initAcc, Prog.cost_seq, cost_cst]
   rw [cost_rep _ _ _ fun _ _ => cost_storeAt _ _]
 
-theorem size_bridge : bridge.size = 44 := by unfold bridge; replay_size
-theorem cost_bridge : bridge.cost = 44 := by unfold bridge; replay_size
+theorem size_bridge : bridge.size = 34 := by unfold bridge; replay_size
+theorem cost_bridge : bridge.cost = 34 := by unfold bridge; replay_size
 
 theorem size_whiten : (whiten ordE).size = 4 + labelCount * 8 := by
   simp only [whiten, Prog.size_seq, size_loadAt]
@@ -557,12 +554,12 @@ theorem cost_whiten : (whiten ordE).cost = 4 + labelCount * 8 := by
 /-- The replay's code size: system A (`k = 4`, `3`; `n = 3`, `2`), the bridge, the pads, and
 system B (`k = 362`, `272`; `n = 364`, `273`). -/
 def programSize : Nat :=
-  (1 + 642 * 2) + laneSize 4 3 + laneSize 3 2 + 44 + (4 + 508 * 8) + (20 + laneSize 362 364) +
+  (1 + 642 * 2) + laneSize 4 3 + laneSize 3 2 + 34 + (4 + 508 * 8) + (20 + laneSize 362 364) +
     laneSize 272 273
 
 /-- The replay's cost. -/
 def programCost : Nat :=
-  (1 + 642 * 2) + laneCost 4 3 + laneCost 3 2 + 44 + (4 + 508 * 8) + (20 + laneCost 362 364) +
+  (1 + 642 * 2) + laneCost 4 3 + laneCost 3 2 + 34 + (4 + 508 * 8) + (20 + laneCost 362 364) +
     laneCost 272 273
 
 theorem size_program : (program ordF ordE).size = programSize := by

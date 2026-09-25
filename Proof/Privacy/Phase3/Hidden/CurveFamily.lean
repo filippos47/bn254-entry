@@ -5,14 +5,15 @@ Fix the input `u = (x, y)` and write `s = x³ + 3 − y²` (`curveGap`). For `c 
 `δ = (c − 1) · mask`:
 
 ```
-mask ↦ c · mask,   r1 ↦ r1 − δ,   r2 ↦ r2 + δ,   t ↦ t − δ · s,
+mask ↦ c · mask,   t ↦ t − δ · s,
 hash ↦ hash ∘ swap(bridgeInput t, bridgeInput (t − δ s))   (off the scale range),
 Y(curve lane, chunk k, the active switch α_k)[e] −= Δ(e) · 2^{off k}
 ```
 
 where `Δ = (δ, δx, δx², −δ, −δy)` on `(x3, x5, x7, y4, y6)` (`curveDelta`). Every published curve join
-`Σ_j Y + slope·2^{off k}` is kept (the slopes move by exactly `Δ`), the element offsets move by
-`−Δ(e) · coord`, the three curve constants are kept (`c0` absorbs `δ(3 − s − y² + x³) = 0`), the
+`Σ_j Y + slope·2^{off k}` is kept (the slopes move by exactly `Δ`: the mask is the `x3` slope and
+its negative the `y4` slope), the element offsets move by `−Δ(e) · coord`, the curve constant is
+kept (`c0` absorbs `δ(3 − s − y² + x³) = 0`), the
 point lanes, the rows and the gadget are untouched (`hash'(bridgeInput t') = hash(bridgeInput t)`):
 **the published value is kept** (`publishedOf_curve`), and so are the EncPRF entries (`encOf_curve`)
 and every garbler key (`restKeys_curve`). Only the hidden (active-switch) curve vectors move. The
@@ -214,20 +215,20 @@ theorem curveValues_shift (input : AffineInput) (δ : BaseField)
   rcases element with (_ | _ | _) | (_ | _) <;>
     simp only [Pipeline.curveValues, hx, hy, CurveMembership.coordValue] <;> rfl
 
-theorem slopes_shift (input : AffineInput) (δ r1 r2 : BaseField) (K : CurveMembership.Values) :
-    CurveMembership.slopes (r1 - δ) (r2 + δ)
+theorem slopes_shift (input : AffineInput) (δ mask : BaseField) (K : CurveMembership.Values) :
+    CurveMembership.slopes (mask + δ)
         (fun element => K element - curveDelta input δ element * CurveMembership.coordValue input element) =
-      fun element => CurveMembership.slopes r1 r2 K element + curveDelta input δ element := by
+      fun element => CurveMembership.slopes mask K element + curveDelta input δ element := by
   funext element
   rcases element with (_ | _ | _) | (_ | _) <;>
     simp only [CurveMembership.slopes, curveDelta, CurveMembership.coordValue] <;> ring
 
-theorem garble_shift_curve (input : AffineInput) (δ t mask r1 r2 : BaseField) (K : CurveMembership.Values) :
-    CurveMembership.garble (t - δ * curveGap input) (mask + δ) (r1 - δ) (r2 + δ)
+theorem garble_shift_curve (input : AffineInput) (δ t mask : BaseField) (K : CurveMembership.Values) :
+    CurveMembership.garble (t - δ * curveGap input) (mask + δ)
         (fun element => K element - curveDelta input δ element * CurveMembership.coordValue input element) =
-      CurveMembership.garble t mask r1 r2 K := by
-  simp only [CurveMembership.garble, curveDelta, CurveMembership.coordValue, curveGap, Prod.mk.injEq]
-  refine ⟨by ring, by ring, by ring⟩
+      CurveMembership.garble t mask K := by
+  simp only [CurveMembership.garble, curveDelta, CurveMembership.coordValue, curveGap]
+  ring
 
 theorem curveXAssemble_add (slopes delta : CurveMembership.Values) :
     Pipeline.curveXAssemble (fun element => slopes element + delta element) =
@@ -240,7 +241,7 @@ theorem curveYAssemble_add (slopes delta : CurveMembership.Values) :
 /-- **The assembly is kept by the curve family.** -/
 theorem assemble_curve (input : AffineInput) (δ : BaseField) (outputKeys : FieldMacToECMac.OutputKeys)
     (pointRandomness : FieldMacToECMac.Randomness) (t : BaseField) (mask mask' : NonZeroBase)
-    (maskEq : mask'.value = mask.value + δ) (r1 r2 : BaseField)
+    (maskEq : mask'.value = mask.value + δ)
     (cx cx' : Programs.LaneTables curveElementCountX) (cy cy' : Programs.LaneTables curveElementCountY)
     (px : Programs.LaneTables pointElementCountX) (py : Programs.LaneTables pointElementCountY)
     (gadget : Vector Exception.Entry FieldMacToECMac.outputMacCount)
@@ -251,13 +252,13 @@ theorem assemble_curve (input : AffineInput) (δ : BaseField) (outputKeys : Fiel
     (sy : ∀ slopes, cy'.scaleJoins (fun e => slopes e + Pipeline.curveYAssemble (curveDelta input δ) e) =
       cy.scaleJoins slopes)
     (jx : cx'.hotJoins = cx.hotJoins) (jy : cy'.hotJoins = cy.hotJoins) :
-    Programs.assemble outputKeys pointRandomness (t - δ * curveGap input) mask' (r1 - δ) (r2 + δ)
+    Programs.assemble outputKeys pointRandomness (t - δ * curveGap input) mask'
         cx' cy' px py gadget =
-      Programs.assemble outputKeys pointRandomness t mask r1 r2 cx cy px py gadget := by
+      Programs.assemble outputKeys pointRandomness t mask cx cy px py gadget := by
   unfold Programs.assemble
   dsimp only
-  rw [curveValues_shift input δ _ _ _ _ hx hy, slopes_shift, curveXAssemble_add, curveYAssemble_add, sx, sy,
-    jx, jy, maskEq, garble_shift_curve]
+  rw [curveValues_shift input δ _ _ _ _ hx hy, maskEq, slopes_shift, curveXAssemble_add,
+    curveYAssemble_add, sx, sy, jx, jy, garble_shift_curve]
 
 /-! ### The family on the rest -/
 
@@ -272,9 +273,7 @@ theorem nonZeroBase_ext {a b : NonZeroBase} (same : a.value = b.value) : a = b :
 def curveCoins (input : AffineInput) (c : BaseFieldˣ) (coins : Coins) : Coins :=
   { coins with
     bridgeKey := coins.bridgeKey - ((c : BaseField) - 1) * coins.curveMask.value * curveGap input
-    curveMask := ⟨(c : BaseField) * coins.curveMask.value, mul_ne_zero c.ne_zero coins.curveMask.nonzero⟩
-    curveR1 := coins.curveR1 - ((c : BaseField) - 1) * coins.curveMask.value
-    curveR2 := coins.curveR2 + ((c : BaseField) - 1) * coins.curveMask.value }
+    curveMask := ⟨(c : BaseField) * coins.curveMask.value, mul_ne_zero c.ne_zero coins.curveMask.nonzero⟩ }
 
 /-- **The curve family on the rest**: the coins, and the hash swapped at the old and new bridge
 inputs. -/
@@ -303,13 +302,8 @@ theorem curveCoins_curveCoins (input : AffineInput) (c : BaseFieldˣ) (coins : C
     intro a
     have : ((c⁻¹ : BaseFieldˣ) : BaseField) * (c : BaseField) * a = a := by rw [unit, one_mul]
     linear_combination this
-  refine ⟨?_, ?_, ?_⟩
-  · rw [expand]
-    ring
-  · rw [expand]
-    ring
-  · rw [expand]
-    ring
+  rw [expand]
+  ring
 
 theorem curveRest_curveRest (input : AffineInput) (c : BaseFieldˣ) (rest : RestTape TapeRest) :
     curveRest input c⁻¹ (curveRest input c rest) = rest := by
@@ -383,7 +377,7 @@ theorem publishedOf_curve (scalar : NonZeroScalar) (input : AffineInput) (c : Ba
     unfold curveStep
     ring
   exact assemble_curve input (curveStep c rest) _ _ rest.1.1.bridgeKey rest.1.1.curveMask
-    (curveRest input c rest).1.1.curveMask maskEq rest.1.1.curveR1 rest.1.1.curveR2 _ _ _ _ _ _ _
+    (curveRest input c rest).1.1.curveMask maskEq _ _ _ _ _ _ _
     (curveX_offsets input _ rest masks) (curveY_offsets input _ rest masks)
     (curveX_scaleJoins input _ rest masks) (curveY_scaleJoins input _ rest masks) rfl rfl
 

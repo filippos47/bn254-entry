@@ -5,7 +5,7 @@ output-aware Plan B simulator at PMF level**, in the form the library's
 kernels over the shared lazy oracle).
 
 **Stage 1** makes no oracle call. It draws a `Stage1Source` -- every published field in source
-form (the curve triple, the 91 row-constant records, the gadget bytes, the four fold-join vectors,
+form (the curve constant, the 91 row-constant records, the gadget bytes, the four fold-join vectors,
 and the `52 × 642` scale joins as *canonical* field elements) together with the Lamport key
 (508 label pairs) -- and publishes `publicValue` of it: the scale joins packed by the construction's
 own `pack`, never a uniform `BitVec` word (design note B, F7). With every switch mask vector swapped
@@ -71,8 +71,8 @@ noncomputable section
 
 /-- Every published field in source form, and the Lamport key. -/
 structure Stage1Source where
-  /-- The curve-membership constants. -/
-  curve : BaseField × BaseField × BaseField
+  /-- The curve-membership constant. -/
+  curve : BaseField
   /-- The ten row constants of each digit. -/
   rows : Vector RowGamma digitCount
   /-- The gadget bytes. -/
@@ -157,7 +157,7 @@ noncomputable instance nonZeroScalarFintype : Fintype NonZeroScalar := Fintype.o
 noncomputable instance nonZeroBaseFintype : Fintype NonZeroBase := Fintype.ofFinite _
 
 instance stage1SourceNonempty : Nonempty Stage1Source :=
-  ⟨{ curve := (0, 0, 0)
+  ⟨{ curve := 0
      rows := Vector.replicate _ ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0⟩
      exception := Vector.replicate _ (Vector.replicate _ 0)
      curveXHot := Vector.replicate _ 0
@@ -735,10 +735,10 @@ def idealHybrid : HybridGame := fun adversary parameter scalar =>
   planBIdealGame idealSamplers adversary parameter scalar ()
 
 /-- `M`: the library's ideal game with a closed machine, as a chain game. The byte count is the
-Plan B ciphertext size, `1,103,204` (`PlanB.Wire.ciphertextSize`). -/
+Plan B ciphertext size, `1,100,521` (`PlanB.Wire.ciphertextSize`). -/
 def machineHybrid (simulator : BoundedMachine.Simulator) : HybridGame :=
   fun adversary parameter scalar =>
-    LazySimulatorProtocol.idealGame Scheme.scheme Wire.encoding 1103204 simulator adversary
+    LazySimulatorProtocol.idealGame Scheme.scheme Wire.encoding 1100521 simulator adversary
       parameter scalar ()
 
 /-! ### The interface P2's machine must match -/

@@ -11,8 +11,8 @@ namespace Kriterion.ArgoMAC.Exception
 
 open BN254 Cryptography
 
-/-- `digitCode` assigns each digit its one-byte code. -/
-def digitCode : Digit → BitVec 8
+/-- `digitCode` assigns each digit its three-bit code. -/
+def digitCode : Digit → BitVec 3
   | .zero => 0
   | .one => 1
   | .negOne => 2
@@ -21,8 +21,8 @@ def digitCode : Digit → BitVec 8
   | .omegaSquared => 5
   | .negOmegaSquared => 6
 
-/-- `digitOfCode` decodes a one-byte code, mapping every unused code to `zero`. -/
-def digitOfCode (code : BitVec 8) : Digit :=
+/-- `digitOfCode` decodes a three-bit code, mapping the unused code `7` to `zero`. -/
+def digitOfCode (code : BitVec 3) : Digit :=
   match code.toNat with
   | 1 => .one
   | 2 => .negOne
@@ -54,9 +54,9 @@ def exceptionIndex (input : AffineInput) : Fin 6 :=
     have second := (signRank input.y).isLt
     omega⟩
 
-/-- `Entry` is the twelve-byte exception gadget table: six slots for the doubling case and six for
-the sign row's zero. -/
-abbrev Entry := Vector (BitVec 8) 12
+/-- `Entry` is the twelve-slot exception gadget table, three bits per slot: six slots for the
+doubling case and six for the sign row's zero. -/
+abbrev Entry := Vector (BitVec 3) 12
 
 /-- The gadget slot of an input in the half owned by one exceptional case: the doubling case
 (`triple = false`) owns slots `0 .. 5`, the sign row's zero (`triple = true`) slots `6 .. 11`. -/
@@ -73,8 +73,8 @@ theorem slotOf_ne (first second : AffineInput) : slotOf false first ≠ slotOf t
   simp [slotOf] at values
   omega
 
-/-- `lowByte` truncates a block to its low byte. -/
-def lowByte (block : Block) : BitVec 8 := BitVec.ofNat 8 block.toNat
+/-- `lowByte` truncates a block to its low three bits (the name is historical). -/
+def lowByte (block : Block) : BitVec 3 := BitVec.ofNat 3 block.toNat
 
 /-- The input whose digit transform lands exactly on the offset. -/
 def exceptionalInput (phi : BaseField) (offset : AffineInput) : AffineInput :=
@@ -106,15 +106,15 @@ theorem exceptionalInput_transform (phi : BaseField) (phiSix : phi ^ 6 = 1)
           _ = ky := by rw [phiSix, one_mul]
 
 /-- `writeEntry` stores a masked byte at one gadget slot. -/
-def writeEntry (pad : Entry) (index : Fin 12) (value : BitVec 8) : Entry :=
+def writeEntry (pad : Entry) (index : Fin 12) (value : BitVec 3) : Entry :=
   pad.set index value
 
 /-- `unlock` reads the slot selected by the case and the input, and removes the gadget mask. -/
-def unlock (mask : BitVec 8) (entry : Entry) (triple : Bool) (input : AffineInput) : Digit :=
+def unlock (mask : BitVec 3) (entry : Entry) (triple : Bool) (input : AffineInput) : Digit :=
   digitOfCode (entry.get (slotOf triple input) ^^^ mask)
 
 /-- Unlocking the slot written for an input recovers the digit stored there. -/
-theorem unlock_writeEntry (mask : BitVec 8) (pad : Entry) (triple : Bool) (input : AffineInput)
+theorem unlock_writeEntry (mask : BitVec 3) (pad : Entry) (triple : Bool) (input : AffineInput)
     (digit : Digit) :
     unlock mask (writeEntry pad (slotOf triple input) (mask ^^^ digitCode digit)) triple input =
       digit := by
@@ -123,8 +123,8 @@ theorem unlock_writeEntry (mask : BitVec 8) (pad : Entry) (triple : Bool) (input
     BitVec.xor_self, BitVec.xor_zero, digitOfCode_digitCode]
 
 /-- A write at another slot leaves an unlock unchanged. -/
-theorem unlock_writeEntry_ne (mask : BitVec 8) (pad : Entry) (triple : Bool)
-    (input : AffineInput) (index : Fin 12) (value : BitVec 8) (other : index ≠ slotOf triple input) :
+theorem unlock_writeEntry_ne (mask : BitVec 3) (pad : Entry) (triple : Bool)
+    (input : AffineInput) (index : Fin 12) (value : BitVec 3) (other : index ≠ slotOf triple input) :
     unlock mask (writeEntry pad index value) triple input = unlock mask pad triple input := by
   simp only [unlock, writeEntry, Vector.get_eq_getElem]
   rw [Vector.getElem_set_ne _ _ (fun same => other (Fin.ext same))]

@@ -22,10 +22,10 @@ whose fuel is the larger (valid) arm.
 | next | valid arm (replay, opening, emit labels), then `halt` |
 | last | reject `halt` |
 
-**Where the charge goes** (`totalCost = 46,837,161,227 ≈ 2 ^ 35.45`): stage 1's `34,297`
-bounded-rejection field cells (`≈ 2.69 · 10 ^ 10` in code and fuel), the replay's digit
-extraction of every switch mask vector (`1,588` vectors per lane, `≈ 1.90 · 10 ^ 10`), and the
-opening's preimage sampler (`≈ 5.4 · 10 ^ 8`).
+**Where the charge goes** (`totalCost = 48,384,145,715 ≈ 2 ^ 35.49`): stage 1's `34,295`
+bounded-rejection field cells and its big-integer serializer (`≈ 2.85 · 10 ^ 10` in code and
+fuel), the replay's digit extraction of every switch mask vector (`1,588` vectors per lane,
+`≈ 1.90 · 10 ^ 10`), and the opening's preimage sampler (`≈ 5.4 · 10 ^ 8`).
 -/
 
 import Construction.Simulator.Layout
@@ -106,18 +106,24 @@ theorem evaluator_queries : stage2Queries + stage2Programs + 508 + 46228 = 10420
 
 /-! ### Instruction counts -/
 
-/-- The serializer: `2 + 3 · width` per cell; each chunk word is two pushed zero bits, its last
-cell `256` bits wide, then its other `641` cells. -/
+/-- The serializer: `2 + 3 · width` per emitted word; each chunk word is built by the big-integer
+Horner encoder over the `903`-limb scratch, emitted as `636 · 256` bits, and its scratch cleared;
+the curve-and-rows word likewise, emitted as `902 · 256 + 120` bits. -/
 def serializeCount : Nat :=
-  52 * (2 + (2 + 3 * 256) + 641 * (2 + 3 * 254)) + hotBlockCount * (2 + 3 * 128) +
-    exceptionByteCount * (2 + 3 * 8) + (curveCellCount + rowCellCount) * (2 + 3 * 256)
+  52 * (4 + BigInt.macPassesCost serialLimbCount 642 + (2 + 3 * topLimbBits) +
+    (chunkLimbCount - 1) * (2 + 3 * 256) + (1 + serialLimbCount * 2)) +
+    hotBlockCount * (2 + 3 * 128) +
+    ((2 + 3 * 4) + exceptionByteCount * (2 + 3 * 3)) +
+    (4 + BigInt.macPassesCost serialLimbCount (curveCellCount + rowCellCount) +
+      (2 + 3 * fieldsTopLimbBits) + (fieldsLimbCount - 1) * (2 + 3 * 256) +
+      (1 + serialLimbCount * 2))
 
 /-- Stage 1: code slots and fuel. -/
 def stage1Size : Nat :=
-  fieldCellCount * 457231 + exceptionByteCount * 62 + hotBlockCount * 902 +
+  fieldCellCount * 457231 + exceptionByteCount * 27 + hotBlockCount * 902 +
     keyBlockCount * 902 + serializeCount + 16
 def stage1Cost : Nat :=
-  fieldCellCount * 327180 + exceptionByteCount * 46 + hotBlockCount * 646 +
+  fieldCellCount * 327180 + exceptionByteCount * 21 + hotBlockCount * 646 +
     keyBlockCount * 646 + serializeCount + 16
 
 /-- The stage-2 prefix (parse, select labels, tag sum). -/
@@ -166,22 +172,24 @@ def totalCost : Nat := size + 1 + firstFuel + secondFuel
 /-! The closed formulas are unfolded (never rewritten by their equation lemmas) and evaluated
 by `norm_num`; every term is a sum or product of numerals below `2 ^ 36`. -/
 
-theorem stage1Size_eq : stage1Size = 15709913657 := by
+theorem stage1Size_eq : stage1Size = 16483270400 := by
   unfold stage1Size serializeCount fieldCellCount curveCellCount rowCellCount scaleCellCount
-    exceptionByteCount hotBlockCount keyBlockCount
+    exceptionByteCount hotBlockCount keyBlockCount BigInt.macPassesCost BigInt.macPassCost
+    serialLimbCount chunkLimbCount topLimbBits fieldsLimbCount fieldsTopLimbBits
   norm_num
 
-theorem stage1Cost_eq : stage1Cost = 11249070094 := by
+theorem stage1Cost_eq : stage1Cost = 12022697859 := by
   unfold stage1Cost serializeCount fieldCellCount curveCellCount rowCellCount scaleCellCount
-    exceptionByteCount hotBlockCount keyBlockCount
+    exceptionByteCount hotBlockCount keyBlockCount BigInt.macPassesCost BigInt.macPassCost
+    serialLimbCount chunkLimbCount topLimbBits fieldsLimbCount fieldsTopLimbBits
   norm_num
 
-theorem replaySize_eq : replaySize = 9518946929 := by
+theorem replaySize_eq : replaySize = 9518946919 := by
   unfold replaySize Replay.programSize Replay.laneSize Replay.chunkSize Replay.foldSize
     Replay.switchSize BigInt.digitsOfCost BigInt.digitStepCost
   norm_num
 
-theorem replayCost_eq : replayCost = 9510713377 := by
+theorem replayCost_eq : replayCost = 9510713367 := by
   unfold replayCost Replay.programCost Replay.laneCost Replay.chunkCost Replay.foldCost
     Replay.switchCost BigInt.digitsOfCost BigInt.digitStepCost
   norm_num
@@ -198,33 +206,33 @@ theorem openingCost_eq : openingCost = 398640360 := by
     BigInt.samplerDigits BigInt.samplerAttempts BigInt.hiWidth
   norm_num
 
-theorem validSize_eq : validSize = 9968405554 := by
+theorem validSize_eq : validSize = 9968405544 := by
   unfold validSize labelCount
   rw [replaySize_eq, openingSize_eq]
 
-theorem validCost_eq : validCost = 9909549825 := by
+theorem validCost_eq : validCost = 9909549815 := by
   unfold validCost labelCount
   rw [replayCost_eq, openingCost_eq]
 
-theorem size_eq : size = 25678530594 := by
+theorem size_eq : size = 26451887327 := by
   unfold size rejectAt validHalt validBase invalidHalt invalidBase branchAt stage2Base stage1Halt
     stage1Base
   rw [stage1Size_eq, validSize_eq]
   unfold prefixSize invalidSize labelCount
   norm_num
 
-theorem firstFuel_eq : firstFuel = 11249070097 := by
+theorem firstFuel_eq : firstFuel = 12022697862 := by
   unfold firstFuel
   rw [stage1Cost_eq]
 
-theorem secondFuel_eq : secondFuel = 9909560535 := by
+theorem secondFuel_eq : secondFuel = 9909560525 := by
   unfold secondFuel
   rw [validCost_eq]
   unfold prefixCost labelCount
   norm_num
 
 /-- **The exact charge** of the machine. -/
-theorem totalCost_eq : totalCost = 46837161227 := by
+theorem totalCost_eq : totalCost = 48384145715 := by
   unfold totalCost
   rw [size_eq, firstFuel_eq, secondFuel_eq]
 

@@ -291,9 +291,9 @@ theorem reach_hashArg (parameter : â„•) (scalar : NonZeroScalar) (tape : Coins Ã
     reachHashArg tape.2 (Scheme.scheme.garble parameter scalar tape).1 (BitInput.ofAffine input)
       (tape.1.inputMacKey.encode (BitInput.ofAffine input)) = evalKey tape.1 input := by
   unfold reachHashArg
-  rw [garble_table, Pipeline.curveValues_garble _ _ _ _ _ _ _ _ _ _ _ _ (coins_correlated tape.1)
+  rw [garble_table, Pipeline.curveValues_garble _ _ _ _ _ _ _ _ _ _ (coins_correlated tape.1)
     (delivers tape.2.1 tape.2.2.2) input, BitInput.toAffineOfAffine]
-  exact CurveMembership.evaluateEncoded _ _ _ _ _ input
+  exact CurveMembership.evaluateEncoded _ _ _ input
 
 /-- On the curve the reach's curve value is the bridge key. -/
 theorem evalKey_eq (coins : Coins) (input : AffineInput) (valid : validate input = true) :

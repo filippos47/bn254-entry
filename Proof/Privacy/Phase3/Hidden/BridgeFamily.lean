@@ -247,29 +247,28 @@ theorem curveValues_bridge (δ : BaseField) (xs : Fin curveElementCountX → Bas
     CurveXElement.slot]
 
 theorem assemble_bridge (outputKeys : FieldMacToECMac.OutputKeys)
-    (pointRandomness : FieldMacToECMac.Randomness) (t δ : BaseField) (curveMask : NonZeroBase)
-    (curveR1 curveR2 : BaseField) (cx cx' : Programs.LaneTables curveElementCountX)
+    (pointRandomness : FieldMacToECMac.Randomness) (t δ : BaseField) (curveMask : NonZeroBase) (cx cx' : Programs.LaneTables curveElementCountX)
     (cy : Programs.LaneTables curveElementCountY) (px : Programs.LaneTables pointElementCountX)
     (py : Programs.LaneTables pointElementCountY)
     (gadget : Vector Exception.Entry FieldMacToECMac.outputMacCount)
     (offsets : cx'.offsets = fun e => cx.offsets e + (if e = x7Slot then δ else 0))
     (joins : ∀ slopes, cx'.scaleJoins slopes = cx.scaleJoins slopes) (hot : cx'.hotJoins = cx.hotJoins) :
-    Programs.assemble outputKeys pointRandomness (t + δ) curveMask curveR1 curveR2 cx' cy px py gadget =
-      Programs.assemble outputKeys pointRandomness t curveMask curveR1 curveR2 cx cy px py gadget := by
+    Programs.assemble outputKeys pointRandomness (t + δ) curveMask cx' cy px py gadget =
+      Programs.assemble outputKeys pointRandomness t curveMask cx cy px py gadget := by
   have slopes : ∀ K : CurveMembership.Values,
-      CurveMembership.slopes curveR1 curveR2
+      CurveMembership.slopes curveMask.value
           (fun element => K element + (if element = .inl .x7 then δ else 0)) =
-        CurveMembership.slopes curveR1 curveR2 K := by
+        CurveMembership.slopes curveMask.value K := by
     intro K
     funext element
     rcases element with (_ | _ | _) | (_ | _) <;> simp [CurveMembership.slopes]
   have garbled : ∀ K : CurveMembership.Values,
-      CurveMembership.garble (t + δ) curveMask.value curveR1 curveR2
+      CurveMembership.garble (t + δ) curveMask.value
           (fun element => K element + (if element = .inl .x7 then δ else 0)) =
-        CurveMembership.garble t curveMask.value curveR1 curveR2 K := by
+        CurveMembership.garble t curveMask.value K := by
     intro K
-    simp only [CurveMembership.garble, reduceCtorEq, if_false, if_true, add_zero, Prod.mk.injEq]
-    first | trivial | exact ⟨by ring, rfl, rfl⟩ | (refine ⟨?_, trivial⟩; ring)
+    simp only [CurveMembership.garble, reduceCtorEq, if_false, if_true, add_zero]
+    ring
   unfold Programs.assemble
   simp only [offsets, joins, hot, curveValues_bridge, slopes, garbled]
 
@@ -283,7 +282,7 @@ theorem publishedOf_bridge (scalar : NonZeroScalar) (δ : BaseField)
   rw [tablesOf_bridgeMasks δ rest masks .curveY (by decide),
     tablesOf_bridgeMasks δ rest masks .pointX (by decide),
     tablesOf_bridgeMasks δ rest masks .pointY (by decide), whiteningKeys_bridge]
-  exact assemble_bridge _ _ rest.1.1.bridgeKey δ _ _ _ (tablesOf rest masks .curveX)
+  exact assemble_bridge _ _ rest.1.1.bridgeKey δ _ (tablesOf rest masks .curveX)
     (tablesOf rest (bridgeMasks δ masks) .curveX) _ _ _ _
     (funext fun e => offsets_bridgeMasks δ masks e)
     (fun slopes => funext fun c => funext fun e => congrArg (· + _) (sum_bridgeMasks δ masks c e))

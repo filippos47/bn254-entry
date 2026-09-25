@@ -1,7 +1,7 @@
 /-
 **The replay, the bridge** (`agree_bridge`): the bridge value
-`t = c0 + c1 x³ + c2 y² + x3 x² + y4 y + x5 x + y6 + x7` (`CurveMembership.evaluate`) from the curve
-constants and the curve lanes' accumulators, moved out of the scale range (`rtree_moveOut`:
+`t = c0 + x3 x² + y4 y + x5 x + y6 + x7` (`CurveMembership.evaluate`) from the curve
+constant and the curve lanes' accumulators, moved out of the scale range (`rtree_moveOut`:
 `bridgeInput t`), one hash query, and the two keys stored at `tmpK1`, `tmpK2`.
 -/
 
@@ -52,11 +52,9 @@ theorem rtree_moveOut (t : BaseField) (rest : Prog) (memory : Memory)
   rw [moved]
 
 /-- **The bridge.** -/
-theorem agree_bridge (memory : Memory) (x y c0 c1 c2 x3 x5 x7 y4 y6 : BaseField)
+theorem agree_bridge (memory : Memory) (x y c0 x3 x5 x7 y4 y6 : BaseField)
     (xCell : memory.ram (word reqX) = fieldWord x) (yCell : memory.ram (word reqY) = fieldWord y)
     (c0Cell : memory.ram (word fieldBase) = fieldWord c0)
-    (c1Cell : memory.ram (word (fieldBase + 1)) = fieldWord c1)
-    (c2Cell : memory.ram (word (fieldBase + 2)) = fieldWord c2)
     (x3Cell : memory.ram (word (accBase + 364)) = fieldWord x3)
     (y4Cell : memory.ram (word (accBase + 640)) = fieldWord y4)
     (x5Cell : memory.ram (word (accBase + 365)) = fieldWord x5)
@@ -64,7 +62,7 @@ theorem agree_bridge (memory : Memory) (x y c0 c1 c2 x3 x5 x7 y4 y6 : BaseField)
     (x7Cell : memory.ram (word (accBase + 366)) = fieldWord x7) :
     Agree (BridgePost memory) (rtree Replay.bridge memory)
       (Programs.askHash (bridgeInput
-        (c0 + c1 * x ^ 3 + c2 * y ^ 2 + x3 * x ^ 2 + y4 * y + x5 * x + y6 + x7))) := by
+        (c0 + x3 * x ^ 2 + y4 * y + x5 * x + y6 + x7))) := by
   unfold Replay.bridge
   simp only [Prog.seqList]
   rw [rtree_loadAt_seq, xCell, rtree_loadAt_seq]
@@ -72,36 +70,19 @@ theorem agree_bridge (memory : Memory) (x y c0 c1 c2 x3 x5 x7 y4 y6 : BaseField)
   rw [rtree_ar_val _ _ _ _ _ _ (fieldWord x) (fieldWord x)
       (by simp (config := {decide := true}) only [setReg_registers, reduceIte])
       (by simp (config := {decide := true}) only [setReg_registers, reduceIte]), fieldMul_words,
-    rtree_ar_val _ _ _ _ _ _ (fieldWord (x * x)) (fieldWord x) (reg_same _ _ _)
-      (by simp (config := {decide := true}) only [setReg_registers, reduceIte]), fieldMul_words,
-    rtree_ar_val _ _ _ _ _ _ (fieldWord y) (fieldWord y)
-      (by simp (config := {decide := true}) only [setReg_registers, reduceIte])
-      (by simp (config := {decide := true}) only [setReg_registers, reduceIte]), fieldMul_words,
     rtree_loadAt_seq]
   simp only [setReg_ram, c0Cell]
   rw [rtree_loadAt_seq]
-  simp only [setReg_ram, c1Cell]
-  rw [rtree_ar_val _ _ _ _ _ _ (fieldWord c1) (fieldWord (x * x * x)) (reg_same _ _ _)
-      (by simp (config := {decide := true}) only [setReg_registers, reduceIte]), fieldMul_words,
-    rtree_ar_val _ _ _ _ _ _ (fieldWord c0) (fieldWord (c1 * (x * x * x)))
-      (by simp (config := {decide := true}) only [setReg_registers, reduceIte]) (reg_same _ _ _),
-    fieldAdd_words, rtree_loadAt_seq]
-  simp only [setReg_ram, c2Cell]
-  rw [rtree_ar_val _ _ _ _ _ _ (fieldWord c2) (fieldWord (y * y)) (reg_same _ _ _)
-      (by simp (config := {decide := true}) only [setReg_registers, reduceIte]), fieldMul_words,
-    rtree_ar_val _ _ _ _ _ _ (fieldWord (c0 + c1 * (x * x * x))) (fieldWord (c2 * (y * y)))
-      (by simp (config := {decide := true}) only [setReg_registers, reduceIte]) (reg_same _ _ _),
-    fieldAdd_words, rtree_loadAt_seq]
   simp only [setReg_ram, x3Cell]
   rw [rtree_ar_val _ _ _ _ _ _ (fieldWord x3) (fieldWord (x * x)) (reg_same _ _ _)
       (by simp (config := {decide := true}) only [setReg_registers, reduceIte]), fieldMul_words,
-    rtree_ar_val _ _ _ _ _ _ (fieldWord (c0 + c1 * (x * x * x) + c2 * (y * y))) (fieldWord (x3 * (x * x)))
+    rtree_ar_val _ _ _ _ _ _ (fieldWord c0) (fieldWord (x3 * (x * x)))
       (by simp (config := {decide := true}) only [setReg_registers, reduceIte]) (reg_same _ _ _),
     fieldAdd_words, rtree_loadAt_seq]
   simp only [setReg_ram, y4Cell]
   rw [rtree_ar_val _ _ _ _ _ _ (fieldWord y4) (fieldWord y) (reg_same _ _ _)
       (by simp (config := {decide := true}) only [setReg_registers, reduceIte]), fieldMul_words,
-    rtree_ar_val _ _ _ _ _ _ (fieldWord (c0 + c1 * (x * x * x) + c2 * (y * y) + x3 * (x * x)))
+    rtree_ar_val _ _ _ _ _ _ (fieldWord (c0 + x3 * (x * x)))
       (fieldWord (y4 * y))
       (by simp (config := {decide := true}) only [setReg_registers, reduceIte]) (reg_same _ _ _),
     fieldAdd_words, rtree_loadAt_seq]
@@ -109,23 +90,23 @@ theorem agree_bridge (memory : Memory) (x y c0 c1 c2 x3 x5 x7 y4 y6 : BaseField)
   rw [rtree_ar_val _ _ _ _ _ _ (fieldWord x5) (fieldWord x) (reg_same _ _ _)
       (by simp (config := {decide := true}) only [setReg_registers, reduceIte]), fieldMul_words,
     rtree_ar_val _ _ _ _ _ _
-      (fieldWord (c0 + c1 * (x * x * x) + c2 * (y * y) + x3 * (x * x) + y4 * y)) (fieldWord (x5 * x))
+      (fieldWord (c0 + x3 * (x * x) + y4 * y)) (fieldWord (x5 * x))
       (by simp (config := {decide := true}) only [setReg_registers, reduceIte]) (reg_same _ _ _),
     fieldAdd_words, rtree_loadAt_seq]
   simp only [setReg_ram, y6Cell]
   rw [rtree_ar_val _ _ _ _ _ _
-      (fieldWord (c0 + c1 * (x * x * x) + c2 * (y * y) + x3 * (x * x) + y4 * y + x5 * x))
+      (fieldWord (c0 + x3 * (x * x) + y4 * y + x5 * x))
       (fieldWord y6)
       (by simp (config := {decide := true}) only [setReg_registers, reduceIte]) (reg_same _ _ _),
     fieldAdd_words, rtree_loadAt_seq]
   simp only [setReg_ram, x7Cell]
   rw [rtree_ar_val _ _ _ _ _ _
-      (fieldWord (c0 + c1 * (x * x * x) + c2 * (y * y) + x3 * (x * x) + y4 * y + x5 * x + y6))
+      (fieldWord (c0 + x3 * (x * x) + y4 * y + x5 * x + y6))
       (fieldWord x7)
       (by simp (config := {decide := true}) only [setReg_registers, reduceIte]) (reg_same _ _ _),
     fieldAdd_words]
-  have same : c0 + c1 * (x * x * x) + c2 * (y * y) + x3 * (x * x) + y4 * y + x5 * x + y6 + x7 =
-      c0 + c1 * x ^ 3 + c2 * y ^ 2 + x3 * x ^ 2 + y4 * y + x5 * x + y6 + x7 := by ring
+  have same : c0 + x3 * (x * x) + y4 * y + x5 * x + y6 + x7 =
+      c0 + x3 * x ^ 2 + y4 * y + x5 * x + y6 + x7 := by ring
   rw [same, rtree_moveOut _ _ _ (reg_same _ _ _)]
   refine Agree.query 4 rIndex rInput rFirst rSecond _ _
     (by rw [reg_same, query_hash, fieldWord_cast]) _ _

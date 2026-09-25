@@ -103,8 +103,7 @@ variable [FieldCertificate] [GroupCertificate]
 theorem garble_table (parameter : ℕ) (scalar : NonZeroScalar) (tape : Coins × Oracle) :
     (Scheme.scheme.garble parameter scalar tape).1 =
       Pipeline.garble (FieldMacToECMac.outputKeys construction scalar.value tape.1.offsets)
-        tape.1.pointRandomness tape.1.exceptionPad tape.1.bridgeKey tape.1.curveMask tape.1.curveR1
-        tape.1.curveR2 tape.2.1 tape.2.2.1 tape.2.2.2 tape.1.inputDelta tape.1.inputMacKey := by
+        tape.1.pointRandomness tape.1.exceptionPad tape.1.bridgeKey tape.1.curveMask tape.2.1 tape.2.2.1 tape.2.2.2 tape.1.inputDelta tape.1.inputMacKey := by
   obtain ⟨coins, oracle⟩ := tape
   rw [← garble_eval parameter scalar coins oracle, Programs.eval_garbleM]
 
@@ -160,9 +159,9 @@ theorem onCurve_bridge (parameter : ℕ) (scalar : NonZeroScalar) (tape : Coins 
           (Pipeline.curveYValues tape.2.1 tape.2.2.2 (Scheme.scheme.garble parameter scalar tape).1
             (BitInput.ofAffine input) (tape.1.inputMacKey.encode (BitInput.ofAffine input)))) =
       tape.1.bridgeKey := by
-  rw [garble_table, Pipeline.curveValues_garble _ _ _ _ _ _ _ _ _ _ _ _ (coins_correlated tape.1)
+  rw [garble_table, Pipeline.curveValues_garble _ _ _ _ _ _ _ _ _ _ (coins_correlated tape.1)
     (delivers tape.2.1 tape.2.2.2) input, BitInput.toAffineOfAffine]
-  exact CurveMembership.evaluateEncodedOnCurve _ _ _ _ _ input ((validate_eq_true_iff input).mp valid)
+  exact CurveMembership.evaluateEncodedOnCurve _ _ _ input ((validate_eq_true_iff input).mp valid)
 
 /-! ### The designed entries are asked -/
 

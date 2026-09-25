@@ -18,17 +18,17 @@ def sampleGamma (digit : Nat) : RowGamma :=
     yC3 := (digit + 7 : Nat), yC4 := (digit + 8 : Nat), yC5 := (digit + 9 : Nat),
     zC0 := (digit + 10 : Nat), zC1 := (digit + 11 : Nat) }
 
-/-- Six gadget bytes. -/
+/-- Twelve gadget codes. -/
 def sampleEntry (digit : Nat) : Exception.Entry :=
-  Vector.ofFn fun position : Fin 6 => BitVec.ofNat 8 (digit + position.val)
+  Vector.ofFn fun position : Fin 12 => BitVec.ofNat 3 (digit + position.val)
 
-/-- One chunk's join word, packed by the real `pack` from 733 distinct field values. -/
+/-- One chunk's join word, packed by the real `pack` from 642 distinct field values. -/
 def sampleWord (chunk : Nat) : BitVec chunkJoinBits :=
   pack fun element => ((element.val * 7 + chunk * 13 + 1 : Nat) : BN254.BaseField)
 
 /-- A fully populated public value. -/
 def samplePublic : Public :=
-  { curve := ((11 : Nat), (22 : Nat), (33 : Nat))
+  { curve := (11 : Nat)
     rows := Vector.ofFn fun digit : Fin digitCount => sampleGamma digit.val
     exception := Vector.ofFn fun digit : Fin digitCount => sampleEntry digit.val
     curveXHot := Vector.ofFn fun step : Fin foldStepCount =>
@@ -41,5 +41,5 @@ def samplePublic : Public :=
       BitVec.ofNat 128 (step.val * 6543217 + 4)
     scale := Vector.ofFn fun chunk : Fin chunkCount => sampleWord chunk.val }
 
--- Prints `1348634`.
+-- Prints `1100521`.
 #eval (Wire.encoding.encode samplePublic).length

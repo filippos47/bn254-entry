@@ -443,7 +443,7 @@ theorem bounded_gadgetDigestM (output : Fin FieldMacToECMac.outputMacCount)
 
 /-- The gadget mask byte of one digit at one input, over the input's 508 selected labels. -/
 def gadgetMaskM (output : Fin FieldMacToECMac.outputMacCount) (input : AffineInput)
-    (mac : InputMac) : M (BitVec 8) :=
+    (mac : InputMac) : M (BitVec 3) :=
   gadgetDigestM output .x (Kriterion.ArgoMAC.coordinateBits input.x) mac.x >>= fun first =>
     gadgetDigestM output .y (Kriterion.ArgoMAC.coordinateBits input.y) mac.y >>= fun second =>
       pure (Exception.lowByte (first ^^^ second))
@@ -481,7 +481,7 @@ def pairsDigest (pairs : Vector (Block × Block) coordinateBitCount) (bits : Coo
 
 /-- An input's mask byte, read from both coordinates' hashes. -/
 def pairsMask (xPairs yPairs : Vector (Block × Block) coordinateBitCount) (input : AffineInput) :
-    BitVec 8 :=
+    BitVec 3 :=
   Exception.lowByte (pairsDigest xPairs (Kriterion.ArgoMAC.coordinateBits input.x) ^^^
     pairsDigest yPairs (Kriterion.ArgoMAC.coordinateBits input.y))
 
@@ -598,19 +598,19 @@ theorem bounded_gadgetM (keys : FieldMacToECMac.OutputKeys) (inputKey : InputMac
 real tables this is `Pipeline.garble` (`assemble_laneTables`). -/
 def assemble (outputKeys : FieldMacToECMac.OutputKeys)
     (pointRandomness : FieldMacToECMac.Randomness) (bridgeKey : BaseField)
-    (curveMask : NonZeroBase) (curveR1 curveR2 : BaseField)
+    (curveMask : NonZeroBase)
     (curveX : LaneTables curveElementCountX) (curveY : LaneTables curveElementCountY)
     (pointX : LaneTables pointElementCountX) (pointY : LaneTables pointElementCountY)
     (gadget : Vector Exception.Entry FieldMacToECMac.outputMacCount) : Public :=
   let curveK := Pipeline.curveValues curveX.offsets curveY.offsets
-  let curveSlopes := CurveMembership.slopes curveR1 curveR2 curveK
+  let curveSlopes := CurveMembership.slopes curveMask.value curveK
   let digitK : FieldMacToECMac.DigitValues :=
     fun digit => Pipeline.digitValues pointX.offsets pointY.offsets digit
   let pointSlopes : Fin digitCount → Biquadratic.Values := fun digit =>
     Biquadratic.slopes (pointRandomness.get digit).x (pointRandomness.get digit).y
       (pointRandomness.get digit).z (digitK digit)
   let rows := FieldMacToECMac.rowsForOutputKeys outputKeys pointRandomness
-  { curve := CurveMembership.garble bridgeKey curveMask.value curveR1 curveR2 curveK
+  { curve := CurveMembership.garble bridgeKey curveMask.value curveK
     rows := Vector.ofFn fun index =>
       FieldMacToECMac.garbleRow (rows.get index) (pointRandomness.get index) (digitK index)
     exception := gadget
@@ -627,9 +627,9 @@ def assemble (outputKeys : FieldMacToECMac.OutputKeys)
 /-- **On the real tables, the assembly is the Plan B garbler.** -/
 theorem assemble_real (outputKeys : FieldMacToECMac.OutputKeys)
     (pointRandomness : FieldMacToECMac.Randomness) (exceptionPad : FieldMacToECMac.ExceptionPad)
-    (bridgeKey : BaseField) (curveMask : NonZeroBase) (curveR1 curveR2 : BaseField)
+    (bridgeKey : BaseField) (curveMask : NonZeroBase)
     (oracle : Oracle) (delta : PlanB.Coord → Block) (key : InputMacKey) :
-    assemble outputKeys pointRandomness bridgeKey curveMask curveR1 curveR2
+    assemble outputKeys pointRandomness bridgeKey curveMask
         (laneTables oracle.1 oracle.2.2 .curveX (delta .x) (Pipeline.bitKeyOf key .x))
         (laneTables oracle.1 oracle.2.2 .curveY (delta .y) (Pipeline.bitKeyOf key .y))
         (laneTables oracle.1 oracle.2.2 .pointX (delta .x)
@@ -640,7 +640,7 @@ theorem assemble_real (outputKeys : FieldMacToECMac.OutputKeys)
           (Pipeline.gadgetPermutations oracle.1) output (outputKeys.get output)
           (EncPRF.transformKey oracle.2.1 (EncPRF.whiteningKeys oracle.2.2 bridgeKey) key)
           (exceptionPad.get output)) =
-      Pipeline.garble outputKeys pointRandomness exceptionPad bridgeKey curveMask curveR1 curveR2
+      Pipeline.garble outputKeys pointRandomness exceptionPad bridgeKey curveMask
         oracle.1 oracle.2.1 oracle.2.2 delta key := rfl
 
 /-- **The garbling program**: the bridge-key hash (at `bridgeInput t`, the input
@@ -657,14 +657,12 @@ def garbleM (scalar : NonZeroScalar) (coins : Coins) : M (Public × InputMacKey)
       laneM .pointY (coins.inputDelta .y)
           (Pipeline.bitKeyOf (whitenKeyOf pads key) .y) >>= fun pointY =>
       gadgetM outputKeys (transformKeyOf pads key) coins.exceptionPad >>= fun gadget =>
-        pure (assemble outputKeys coins.pointRandomness coins.bridgeKey coins.curveMask
-          coins.curveR1 coins.curveR2 curveX curveY pointX pointY gadget, key)
+        pure (assemble outputKeys coins.pointRandomness coins.bridgeKey coins.curveMask curveX curveY pointX pointY gadget, key)
 
 theorem eval_garbleM (scalar : NonZeroScalar) (coins : Coins) (oracle : Oracle) :
     (garbleM scalar coins).eval (publicAnswer oracle) =
       (Pipeline.garble (FieldMacToECMac.outputKeys construction scalar.value coins.offsets)
-        coins.pointRandomness coins.exceptionPad coins.bridgeKey coins.curveMask coins.curveR1
-        coins.curveR2 oracle.1 oracle.2.1 oracle.2.2 coins.inputDelta coins.inputMacKey,
+        coins.pointRandomness coins.exceptionPad coins.bridgeKey coins.curveMask oracle.1 oracle.2.1 oracle.2.2 coins.inputDelta coins.inputMacKey,
         coins.inputMacKey) := by
   simp only [garbleM, FreeQuery.eval_bind, FreeQuery.eval_pure, eval_askHash, eval_padsM,
     eval_laneM oracle .curveX, eval_laneM oracle .curveY, eval_laneM oracle .pointX,
@@ -950,7 +948,7 @@ theorem transformMacOf_real (encOracle : PermutationOracle EncPRF.PermutationInd
 /-- The 91 gadget masks at the evaluator's own labels: one digest per digit, which unlocks both of
 the digit's exceptional slots. -/
 def masksM (input : AffineInput) (mac : InputMac) :
-    M (Vector (BitVec 8) FieldMacToECMac.outputMacCount) :=
+    M (Vector (BitVec 3) FieldMacToECMac.outputMacCount) :=
   FreeQuery.vector FieldMacToECMac.outputMacCount fun index =>
     gadgetMaskM index input mac >>= fun mask => pure mask
 
@@ -967,7 +965,7 @@ theorem bounded_masksM (input : AffineInput) (mac : InputMac) :
 
 /-- The digits one exceptional case unlocks, from the masks. -/
 def unlockDigits (table : FieldMacToECMac.Table) (input : AffineInput)
-    (masks : Vector (BitVec 8) FieldMacToECMac.outputMacCount) (triple : Bool) :
+    (masks : Vector (BitVec 3) FieldMacToECMac.outputMacCount) (triple : Bool) :
     Vector Digit FieldMacToECMac.outputMacCount :=
   Vector.ofFn fun index => Exception.unlock (masks.get index) (table.2.get index) triple input
 

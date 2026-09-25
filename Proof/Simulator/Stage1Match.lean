@@ -60,7 +60,7 @@ theorem publicValue_exception (source : Stage1Source) :
 
 theorem drawSource_row (draw : Stage1Draw) (digit : Fin digitCount) (field : Nat)
     (small : field < 10) :
-    rowField (drawSource draw).rows[digit.val] field = total 0 draw.1 (3 + 10 * digit.val + field) := by
+    rowField (drawSource draw).rows[digit.val] field = total 0 draw.1 (1 + 10 * digit.val + field) := by
   simp only [drawSource, sourceOfDraws, Vector.getElem_ofFn]
   interval_cases field <;> rfl
 
@@ -74,8 +74,8 @@ theorem stored_field (memory : Memory) (draw : Stage1Draw) (index : Nat) (bound 
 
 theorem stored_byte (memory : Memory) (draw : Stage1Draw) (index : Nat)
     (bound : index < exceptionByteCount) :
-    bitRun ((storedMemory memory draw).ram (word (exceptionBase + index))) 0 8 =
-      lsbs 8 (BitVec.ofNat 8 (total 0 draw.2.1 index)).toNat := by
+    bitRun ((storedMemory memory draw).ram (word (exceptionBase + index))) 0 3 =
+      lsbs 3 (BitVec.ofNat 3 (total 0 draw.2.1 index)).toNat := by
   rw [show exceptionBase + index =
       exceptionBase + (⟨index, bound⟩ : Fin exceptionByteCount).val from rfl,
     ram_byte, bitRun_ofNat _ _ (by norm_num), total_apply _ _ _ bound, BitVec.toNat_ofNat,
@@ -91,57 +91,79 @@ theorem stored_hot (memory : Memory) (draw : Stage1Draw) (index : Nat)
 
 /-! ### The four segments -/
 
-/-- **Curve and rows.** -/
-theorem serial_fields (memory : Memory) (draw : Stage1Draw) :
-    (List.ofFn fun index : Fin (curveCellCount + rowCellCount) =>
-        bitRun ((storedMemory memory draw).ram (word (fieldBase + index.val))) 0 256).flatten =
-      (lsbs 256 (drawSource draw).publicValue.curve.1.val ++
-        (lsbs 256 (drawSource draw).publicValue.curve.2.1.val ++
-          lsbs 256 (drawSource draw).publicValue.curve.2.2.val)) ++
-      (List.ofFn fun digit : Fin digitCount =>
-        (List.ofFn fun index : Fin 10 =>
-          lsbs 256 (rowField (drawSource draw).publicValue.rows[digit.val] index.val).val).flatten).flatten := by
-  have cellCount := fieldCellCount_eq
-  rw [flatten_ofFn_add]
-  refine congrArg₂ (· ++ ·) ?_ ?_
-  · show (List.ofFn fun index : Fin 3 =>
-        bitRun ((storedMemory memory draw).ram (word (fieldBase + index.val))) 0 256).flatten = _
-    simp only [List.ofFn_succ, List.ofFn_zero, List.flatten_cons, List.flatten_nil, List.append_nil,
-      Fin.val_zero, Fin.val_succ]
-    rw [show fieldBase + 0 = fieldBase + 0 from rfl, stored_field memory draw 0 (by omega) 256 le_rfl,
-      stored_field memory draw (0 + 1) (by omega) 256 le_rfl,
-      stored_field memory draw (0 + 1 + 1) (by omega) 256 le_rfl]
+/-- The drawn source's cell `index` of the curve-and-rows word is its drawn field cell. -/
+theorem fieldsCell_drawSource (draw : Stage1Draw) (index : Fin Wire.fieldCellsCount) :
+    Wire.fieldsCell ((drawSource draw).publicValue.curve, (drawSource draw).publicValue.rows)
+        index = total 0 draw.1 index.val := by
+  have small := index.isLt
+  unfold Wire.fieldCellsCount at small
+  by_cases zero : index.val = 0
+  · unfold Wire.fieldsCell
+    rw [if_pos zero, zero]
     rfl
-  · show (List.ofFn fun index : Fin (digitCount * 10) =>
-        bitRun ((storedMemory memory draw).ram (word (fieldBase + (3 + index.val)))) 0 256).flatten = _
-    rw [flatten_ofFn_mul]
-    refine congrArg List.flatten (congrArg List.ofFn (funext fun digit => ?_))
-    refine congrArg List.flatten (congrArg List.ofFn (funext fun index => ?_))
-    have digitSmall : digit.val < 91 := digit.isLt
-    have indexSmall := index.isLt
-    simp only [Fin.val_mk]
-    rw [stored_field memory draw _ (by omega) 256 le_rfl, publicValue_rows,
-      drawSource_row draw digit index.val indexSmall,
-      show 3 + (digit.val * 10 + index.val) = 3 + 10 * digit.val + index.val by ring]
+  unfold Wire.fieldsCell
+  rw [if_neg zero]
+  have digitSmall : (index.val - 1) / 10 < digitCount := by unfold digitCount; omega
+  have fieldSmall : (index.val - 1) % 10 < 10 := Nat.mod_lt _ (by decide)
+  have row := drawSource_row draw ⟨(index.val - 1) / 10, digitSmall⟩ ((index.val - 1) % 10)
+    fieldSmall
+  have cellEq : ∀ (row : RowGamma) (field : Nat), RowGamma.cell row field = rowField row field := by
+    intro row field
+    match field with
+    | 0 => rfl
+    | 1 => rfl
+    | 2 => rfl
+    | 3 => rfl
+    | 4 => rfl
+    | 5 => rfl
+    | 6 => rfl
+    | 7 => rfl
+    | 8 => rfl
+    | _ + 9 => rfl
+  have position : 1 + 10 * ((index.val - 1) / 10) + (index.val - 1) % 10 = index.val := by omega
+  rw [position] at row
+  rw [cellEq, publicValue_rows]
+  exact row
+
+/-- The limb scratch lies below every stored region, so stage 1's draws leave it as it was. -/
+theorem storedMemory_limb (memory : Memory) (draw : Stage1Draw) (index : Nat)
+    (bound : index < serialLimbCount) :
+    (storedMemory memory draw).ram (word (serialLimbBase + index)) =
+      memory.ram (word (serialLimbBase + index)) := by
+  obtain ⟨fieldByte, byteHot, hotKey, top⟩ := regions
+  have below : serialLimbBase + index < fieldBase := by
+    unfold serialLimbCount at bound; unfold serialLimbBase fieldBase; omega
+  unfold storedMemory
+  rw [words_ram_off keyBase keyBlockCount top _ _ _ (by omega),
+    words_ram_off hotBase hotBlockCount (by omega) _ _ _ (by omega),
+    words_ram_off exceptionBase exceptionByteCount (by omega) _ _ _ (by omega)]
+  exact foldStore_ram_off (cellStep fieldBase) (fun index => word (fieldBase + index))
+    (fun value : BaseField => BitVec.ofNat 256 value.val) (cellStep_ram fieldBase) fieldCellCount
+    memory draw.1 _ (region_away _ fieldBase fieldCellCount below (by omega))
 
 /-- **The gadget bytes.** -/
-theorem serial_bytes (memory : Memory) (draw : Stage1Draw) :
+theorem serial_bytes (memory : Memory) (draw : Stage1Draw)
+    (zero : memory.ram (word serialLimbBase) = 0) :
     (List.ofFn fun index : Fin exceptionByteCount =>
-        bitRun ((storedMemory memory draw).ram (word (exceptionBase + index.val))) 0 8).flatten =
-      (List.ofFn fun digit : Fin digitCount =>
-        (List.ofFn fun index : Fin 12 =>
-          lsbs 8 (drawSource draw).publicValue.exception[digit.val][index.val].toNat).flatten).flatten := by
-  show (List.ofFn fun index : Fin (digitCount * 12) =>
-      bitRun ((storedMemory memory draw).ram (word (exceptionBase + index.val))) 0 8).flatten = _
-  rw [flatten_ofFn_mul]
-  refine congrArg List.flatten (congrArg List.ofFn (funext fun digit => ?_))
-  refine congrArg List.flatten (congrArg List.ofFn (funext fun index => ?_))
-  have digitSmall : digit.val < 91 := digit.isLt
-  have indexSmall := index.isLt
-  simp only [Fin.val_mk]
-  rw [stored_byte memory draw _ (by unfold exceptionByteCount; omega), publicValue_exception]
-  simp only [drawSource, sourceOfDraws, Vector.getElem_ofFn]
-  rw [show digit.val * 12 + index.val = 12 * digit.val + index.val by ring]
+        bitRun ((storedMemory memory draw).ram (word (exceptionBase + index.val))) 0 3).flatten ++
+      bitRun ((storedMemory memory draw).ram (word serialLimbBase)) 0 4 =
+      (List.ofFn fun index : Fin Wire.gadgetCellsCount =>
+        lsbs 3 (Wire.gadgetCell (drawSource draw).publicValue.exception index).toNat).flatten ++
+        [false, false, false, false] := by
+  refine congrArg₂ (· ++ ·) ?_ ?_
+  · show (List.ofFn fun index : Fin 1092 =>
+        bitRun ((storedMemory memory draw).ram (word (exceptionBase + index.val))) 0 3).flatten =
+      (List.ofFn fun index : Fin 1092 =>
+        lsbs 3 (Wire.gadgetCell (drawSource draw).publicValue.exception index).toNat).flatten
+    refine congrArg List.flatten (congrArg List.ofFn (funext fun index => ?_))
+    have indexSmall := index.isLt
+    rw [stored_byte memory draw _ (by unfold exceptionByteCount; omega), publicValue_exception]
+    unfold Wire.gadgetCell
+    simp only [drawSource, sourceOfDraws, Vector.get_eq_getElem, Vector.getElem_ofFn]
+    rw [show 12 * (index.val / 12) + index.val % 12 = index.val by omega]
+  · rw [show serialLimbBase = serialLimbBase + 0 from rfl, storedMemory_limb memory draw 0
+      (by decide), Nat.add_zero, zero]
+    decide
 
 /-- **The fold joins.** -/
 theorem serial_hot (memory : Memory) (draw : Stage1Draw) :
@@ -187,9 +209,41 @@ theorem publicValue_scale (source : Stage1Source) (chunk : Fin chunkCount) :
     source.publicValue.scale[chunk.val] = pack (source.joins chunk) := by
   simp [Stage1Source.publicValue]
 
-/-- **The chunk words.** A chunk's first `641` cells are `254` bits each and its last cell is
-`256` bits: a canonical cell is below `2 ^ 254`, so its two top bits are two of the word's four
-zero padding bits, and the serializer pushes the other two. -/
+/-- A stored field cell, as a number. -/
+theorem stored_field_toNat (memory : Memory) (draw : Stage1Draw) (index : Nat)
+    (bound : index < fieldCellCount) :
+    ((storedMemory memory draw).ram (word (fieldBase + index))).toNat =
+      (total 0 draw.1 index).val := by
+  rw [show fieldBase + index = fieldBase + (⟨index, bound⟩ : Fin fieldCellCount).val from rfl,
+    ram_field, total_apply _ _ _ bound, BitVec.toNat_ofNat, Nat.mod_eq_of_lt]
+  exact lt_of_lt_of_le (val_lt_slot _)
+    (Nat.pow_le_pow_right (by norm_num) (by unfold coordinateBits; norm_num))
+
+/-- **Curve and rows.** The curve-and-rows word is the base-`p` number of the `911` stored
+cells, emitted limb by limb (`fieldsLimbBits`); the wire's word is the same number. -/
+theorem serial_fields (memory : Memory) (draw : Stage1Draw) :
+    fieldsLimbBits (fieldsWordValue (storedMemory memory draw).ram) =
+      lsbs (8 * Wire.fieldsBytes) (packBaseCells Wire.fieldCellsCount
+        (Wire.fieldsCell ((drawSource draw).publicValue.curve,
+          (drawSource draw).publicValue.rows))) := by
+  rw [lsbs_fieldsLimbBits]
+  refine congrArg fieldsLimbBits ?_
+  unfold fieldsWordValue BigInt.encNat packBaseCells
+  rw [← Fin.sum_univ_eq_sum_range
+    (fun e => ((storedMemory memory draw).ram (word (fieldBase + e))).toNat * pNat ^ e)
+    (curveCellCount + rowCellCount)]
+  show (∑ e : Fin Wire.fieldCellsCount,
+      ((storedMemory memory draw).ram (word (fieldBase + e.val))).toNat * pNat ^ e.val) = _
+  refine Finset.sum_congr rfl fun slot _ => ?_
+  have small := slot.isLt
+  unfold Wire.fieldCellsCount at small
+  rw [stored_field_toNat memory draw slot.val (by rw [fieldCellCount_eq]; omega),
+    fieldsCell_drawSource draw slot]
+  rfl
+
+/-- **The chunk words.** Each chunk word is the base-`p` number of its `642` cells, emitted limb
+by limb (`chunkWordBits`); the wire's word is the same number (`pack_toNat`,
+`lsbs_chunkLimbBits`). -/
 theorem serial_scale (memory : Memory) (draw : Stage1Draw) :
     (List.ofFn fun chunk : Fin 52 => chunkWordBits (storedMemory memory draw).ram chunk.val).flatten =
       (List.ofFn fun chunk : Fin chunkCount =>
@@ -197,41 +251,29 @@ theorem serial_scale (memory : Memory) (draw : Stage1Draw) :
   show (List.ofFn fun chunk : Fin chunkCount =>
       chunkWordBits (storedMemory memory draw).ram chunk.val).flatten = _
   refine congrArg List.flatten (congrArg List.ofFn (funext fun chunk => ?_))
-  rw [publicValue_scale, pack_bits]
+  rw [publicValue_scale, pack_toNat, lsbs_chunkLimbBits, chunkWordBits]
+  refine congrArg chunkLimbBits ?_
   have chunkSmall : chunk.val < 52 := chunk.isLt
-  have cell : ∀ (slot : Nat) (slotSmall : slot < 642) (width : Nat), width ≤ 256 →
-      bitRun ((storedMemory memory draw).ram (word (scaleCellBase + 642 * chunk.val + slot))) 0
-          width = lsbs width ((drawSource draw).joins chunk ⟨slot, slotSmall⟩).val := by
-    intro slot slotSmall width wide
-    rw [show scaleCellBase + 642 * chunk.val + slot = fieldBase + (913 + 642 * chunk.val + slot) by
-        unfold scaleCellBase curveCellCount rowCellCount; ring,
-      stored_field memory draw _ (by unfold fieldCellCount curveCellCount rowCellCount scaleCellCount; omega)
-        width wide]
-    rfl
-  show chunkWordBits _ chunk.val = (List.ofFn fun slot : Fin (641 + 1) =>
-      lsbs coordinateBits ((drawSource draw).joins chunk slot).val).flatten ++
-        [false, false, false, false]
-  rw [List.ofFn_succ', List.concat_eq_append, List.flatten_append, List.flatten_cons,
-    List.flatten_nil, List.append_nil, List.append_assoc]
-  unfold chunkWordBits
-  refine congrArg₂ (· ++ ·) ?_ ?_
-  · refine congrArg List.flatten (congrArg List.ofFn (funext fun index => ?_))
-    have indexSmall : index.val < 642 := by omega
-    rw [cell index.val indexSmall 254 (by norm_num)]
-    rfl
-  · have below : ((drawSource draw).joins chunk ⟨641, by decide⟩).val < 2 ^ 254 := val_lt_slot _
-    have padding : lsbs 2 0 = [false, false] := by decide
-    rw [cell 641 (by norm_num) 256 le_rfl, show (256 : Nat) = 254 + 2 from rfl, lsbs_add,
-      Nat.div_eq_of_lt below, padding, List.append_assoc]
-    rfl
+  unfold chunkWordValue BigInt.encNat packWord
+  rw [← Fin.sum_univ_eq_sum_range
+    (fun e => ((storedMemory memory draw).ram (word (scaleCellBase + 642 * chunk.val + e))).toNat *
+      pNat ^ e) 642]
+  refine Finset.sum_congr rfl fun slot _ => ?_
+  have slotSmall : slot.val < 642 := slot.isLt
+  rw [show scaleCellBase + 642 * chunk.val + slot.val = fieldBase + (911 + 642 * chunk.val + slot.val) by
+      unfold scaleCellBase curveCellCount rowCellCount; ring,
+    stored_field_toNat memory draw _
+      (by unfold fieldCellCount curveCellCount rowCellCount scaleCellCount; omega)]
+  rfl
 
 /-- **The serialized RAM is the wire.** -/
-theorem serial_wire (memory : Memory) (draw : Stage1Draw) :
+theorem serial_wire (memory : Memory) (draw : Stage1Draw)
+    (zero : memory.ram (word serialLimbBase) = 0) :
     serialBits (storedMemory memory draw).ram =
       byteBits (Wire.encoding.encode (drawSource draw).publicValue) := by
   rw [Wire.wire_bits]
   unfold serialBits
-  rw [serial_fields, serial_bytes, serial_hot, serial_scale]
+  rw [serial_fields, serial_bytes memory draw zero, serial_hot, serial_scale]
   simp only [List.append_assoc]
 
 end Match

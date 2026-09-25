@@ -326,7 +326,6 @@ theorem garbler_gadgetM (T : TapeShift) (scalar : NonZeroScalar) (tape : Coins �
 
 theorem assemble_congr (outputKeys : FieldMacToECMac.OutputKeys)
     (pointRandomness : FieldMacToECMac.Randomness) (bridgeKey : BaseField) (curveMask : NonZeroBase)
-    (curveR1 curveR2 : BaseField)
     (cx cx' : Programs.LaneTables curveElementCountX) (cy cy' : Programs.LaneTables curveElementCountY)
     (px px' : Programs.LaneTables pointElementCountX) (py py' : Programs.LaneTables pointElementCountY)
     (gadget : Vector Exception.Entry FieldMacToECMac.outputMacCount)
@@ -334,8 +333,8 @@ theorem assemble_congr (outputKeys : FieldMacToECMac.OutputKeys)
     (mcy : cy'.masks = cy.masks) (jcy : ∀ c, (cy'.hot c).2 = (cy.hot c).2)
     (mpx : px'.masks = px.masks) (jpx : ∀ c, (px'.hot c).2 = (px.hot c).2)
     (mpy : py'.masks = py.masks) (jpy : ∀ c, (py'.hot c).2 = (py.hot c).2) :
-    Programs.assemble outputKeys pointRandomness bridgeKey curveMask curveR1 curveR2 cx' cy' px' py' gadget =
-      Programs.assemble outputKeys pointRandomness bridgeKey curveMask curveR1 curveR2 cx cy px py gadget := by
+    Programs.assemble outputKeys pointRandomness bridgeKey curveMask cx' cy' px' py' gadget =
+      Programs.assemble outputKeys pointRandomness bridgeKey curveMask cx cy px py gadget := by
   unfold Programs.assemble Programs.LaneTables.offsets Programs.LaneTables.hotJoins
     Programs.LaneTables.scaleJoins
   simp only [mcx, jcx, mcy, jcy, mpx, jpx, mpy, jpy]
@@ -401,7 +400,7 @@ theorem garbler_sim (T : TapeShift) (valid : T.Valid) (scalar : NonZeroScalar) (
   refine Sim.bind (garbler_gadgetM T scalar tape _ pads' rfl padsShift) fun gadget gadget' gadgetRel =>
     Sim.pure' ?_
   rw [gadgetRel]
-  exact assemble_congr _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ cxRel.2.1 cxRel.2.2 cyRel.2.1 cyRel.2.2
+  exact assemble_congr _ _ _ _ _ _ _ _ _ _ _ _ _ cxRel.2.1 cxRel.2.2 cyRel.2.1 cyRel.2.2
     pxRel.2.1 pxRel.2.2 pyRel.2.1 pyRel.2.2
 
 end

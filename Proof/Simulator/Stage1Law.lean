@@ -24,11 +24,34 @@ section Program
 
 variable [FieldCertificate]
 
+/-- **The stored memory is ready for the serializer**: a zero limb scratch and canonical cells. -/
+theorem storedMemory_ready (memory : Memory) (draw : Stage1Draw)
+    (zero : ∀ index, index < serialLimbCount → memory.ram (word (serialLimbBase + index)) = 0) :
+    SerialReady (storedMemory memory draw).ram := by
+  refine ⟨fun index bound => by rw [storedMemory_limb memory draw index bound, zero index bound],
+    fun index bound => ?_, fun index bound => ?_⟩
+  rotate_left
+  · rw [stored_field_toNat memory draw index (by
+      unfold fieldCellCount curveCellCount rowCellCount scaleCellCount
+      unfold curveCellCount rowCellCount at bound
+      omega)]
+    exact ZMod.val_lt _
+  have cells : 911 + index < fieldCellCount := by
+    unfold scaleCellCount at bound
+    unfold fieldCellCount curveCellCount rowCellCount scaleCellCount
+    omega
+  rw [show scaleCellBase + index = fieldBase + (911 + index) by
+      unfold scaleCellBase curveCellCount rowCellCount; ring,
+    stored_field_toNat memory draw _ cells]
+  exact ZMod.val_lt _
+
 /-- **The serializer and the register clear.** -/
-theorem memSem_finish (memory : Memory) (draw : Stage1Draw) :
+theorem memSem_finish (memory : Memory) (draw : Stage1Draw)
+    (zero : ∀ index, index < serialLimbCount → memory.ram (word (serialLimbBase + index)) = 0) :
     (Prog.seq Stage1.serialize (zeroRegs allRegisters)).memSem (storedMemory memory draw) =
       PMF.pure (some (stage1Final memory draw)) := by
-  obtain ⟨after, run, emits⟩ := memSem_serialize (storedMemory memory draw)
+  obtain ⟨after, run, emits⟩ :=
+    memSem_serialize (storedMemory memory draw) (storedMemory_ready memory draw zero)
   rw [memSem_seq, run, PMF.pure_bind]
   simp only [kleisli]
   rw [memSem_zeroRegs]
@@ -46,7 +69,9 @@ theorem memSem_finish (memory : Memory) (draw : Stage1Draw) :
   · rw [(clearRegs_other _ _).1, stage1Final_ram, emits.1]
 
 /-- The serializer and the register clear, on the stored memory spelled out. -/
-theorem memSem_finish' (memory : Memory) (cells : Fin fieldCellCount → BaseField)
+theorem memSem_finish' (memory : Memory)
+    (zero : ∀ index, index < serialLimbCount → memory.ram (word (serialLimbBase + index)) = 0)
+    (cells : Fin fieldCellCount → BaseField)
     (bytes : Fin exceptionByteCount → Nat) (hot : Fin hotBlockCount → Nat)
     (key : Fin keyBlockCount → Nat) :
     (Prog.seq Stage1.serialize (zeroRegs allRegisters)).memSem
@@ -54,14 +79,15 @@ theorem memSem_finish' (memory : Memory) (cells : Fin fieldCellCount → BaseFie
         (foldStore (wordStep exceptionBase) exceptionByteCount
           (foldStore (cellStep fieldBase) fieldCellCount memory cells) bytes) hot) key) =
       PMF.pure (some (stage1Final memory (cells, bytes, hot, key))) := by
-  have finish := memSem_finish memory (cells, bytes, hot, key)
+  have finish := memSem_finish memory (cells, bytes, hot, key) zero
   unfold storedMemory at finish
   exact finish
 
 /-- **The stage-1 program's law.** -/
-theorem stage1_program_law (memory : Memory) :
+theorem stage1_program_law (memory : Memory)
+    (zero : ∀ index, index < serialLimbCount → memory.ram (word (serialLimbBase + index)) = 0) :
     Stage1.program.memSem memory = stage1Draws.map (Option.map (stage1Final memory)) := by
-  have bytesLaw := wordProduct_eq exceptionByteCount 8
+  have bytesLaw := wordProduct_eq exceptionByteCount 3
   have hotLaw := wordProduct_eq hotBlockCount 128
   have keyLaw := wordProduct_eq keyBlockCount 128
   unfold Stage1.program stage1Draws
@@ -75,8 +101,8 @@ theorem stage1_program_law (memory : Memory) :
   | some cells =>
       simp only [Function.comp_apply, Option.map_some, kleisli]
       rw [memSem_seq, show Stage1.bytes = Prog.rep exceptionByteCount
-          (fun index => Stage1.wordCell 8 (exceptionBase + index)) from rfl,
-        memSem_words 8 exceptionBase exceptionByteCount (by norm_num), bytesLaw, PMF.map_comp,
+          (fun index => Stage1.wordCell 3 (exceptionBase + index)) from rfl,
+        memSem_words 3 exceptionBase exceptionByteCount (by norm_num), bytesLaw, PMF.map_comp,
         PMF.bind_map, PMF.bind_map, PMF.map_bind]
       congr 1
       funext bytes
@@ -95,7 +121,7 @@ theorem stage1_program_law (memory : Memory) :
       congr 1
       funext key
       simp only [Function.comp_apply, Option.map_some, kleisli]
-      exact memSem_finish' memory cells (fun index => (bytes index).val)
+      exact memSem_finish' memory zero cells (fun index => (bytes index).val)
         (fun index => (hot index).val) (fun index => (key index).val)
 
 end Program
@@ -107,10 +133,11 @@ section Kernel
 variable [FieldCertificate]
 
 /-- **The protocol's parse of the final response stack.** -/
-theorem publicValue_final (memory : Memory) (empty : memory.bits 3 = []) (draw : Stage1Draw) :
-    SimulatorProtocol.publicValue Wire.encoding 1103204 ((stage1Final memory draw).bits 3) =
+theorem publicValue_final (memory : Memory) (empty : memory.bits 3 = [])
+    (zero : memory.ram (word serialLimbBase) = 0) (draw : Stage1Draw) :
+    SimulatorProtocol.publicValue Wire.encoding 1100521 ((stage1Final memory draw).bits 3) =
       some (drawSource draw).publicValue := by
-  rw [stage1Final_bits, Function.update_self, empty, List.append_nil, serial_wire]
+  rw [stage1Final_bits, Function.update_self, empty, List.append_nil, serial_wire memory draw zero]
   exact publicValue_encode _ _ _ (Wire.garble_length _)
 
 theorem atPc_memory (machine : Simulator) (pc : Nat) (memory : Memory) :
@@ -122,12 +149,12 @@ theorem optionT_mk_pure_some {α : Type} (value : α) :
 /-- The initial stage-1 memory of the protocol. -/
 def stage1Memory (parameter : Nat) : Memory :=
   { bits := fun stack => if stack = 0 then
-      [false, false] ++ SimulatorProtocol.natural parameter ++ SimulatorProtocol.natural 1103204
+      [false, false] ++ SimulatorProtocol.natural parameter ++ SimulatorProtocol.natural 1100521
     else [] }
 
 /-- The request after the two tag bits. -/
 def stage1Rest (parameter : Nat) : List Bool :=
-  SimulatorProtocol.natural parameter ++ SimulatorProtocol.natural 1103204
+  SimulatorProtocol.natural parameter ++ SimulatorProtocol.natural 1100521
 
 theorem stage1Memory_request (parameter : Nat) :
     (stage1Memory parameter).bits 0 = false :: false :: stage1Rest parameter := by
@@ -143,7 +170,7 @@ theorem planB_stage1_run (parameter : Nat) :
         (Fintype.ofFinite _) (Classical.decEq _) (Classical.decEq _) planBSimulator
         planBSimulator.firstFuel ⟨0, { bits := fun stack =>
           if stack = 0 then ([false, false] ++ SimulatorProtocol.natural parameter ++
-            SimulatorProtocol.natural 1103204) else [] }⟩ LazyOracle.empty =
+            SimulatorProtocol.natural 1100521) else [] }⟩ LazyOracle.empty =
       stage1Draws.map (Option.map fun draw =>
         (atPc planBSimulator Design.stage1Halt
           (stage1Final (Top.afterTag (stage1Memory parameter) (stage1Rest parameter)) draw),
@@ -155,7 +182,7 @@ theorem planB_stage1_run (parameter : Nat) :
     (stage1Memory parameter) (stage1Rest parameter) (stage1Memory_request parameter)
     LazyOracle.empty
   refine run.trans ?_
-  rw [stage1_program_law, PMF.map_comp]
+  rw [stage1_program_law _ (fun _ _ => rfl), PMF.map_comp]
   congr 1
   funext drawn
   cases drawn <;> rfl
@@ -173,7 +200,7 @@ theorem stage1Law : Stage1Law := by
   rw [planB_stage1_run, optionT_mk_map, bind_assoc]
   simp only [pure_bind, atPc_memory,
     publicValue_final (Top.afterTag (stage1Memory parameter) (stage1Rest parameter))
-      (stage1Start_stack3 parameter), optionT_mk_pure_some]
+      (stage1Start_stack3 parameter) rfl, optionT_mk_pure_some]
   rw [← optionT_mk_map, OptionT.run_mk, PMF.map_comp,
     show boundedSamplers.source = sourceLaw from rfl, sourceLaw, PMF.map_comp]
   congr 1

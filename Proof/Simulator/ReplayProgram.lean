@@ -130,16 +130,11 @@ theorem agree_replay (source : Stage1Source) (input : AffineInput) (labels : Lam
   -- the bridge and its hash
   rw [rtree_seq, bridge_value, interceptT_clean _ _ (clean_askHash _ _
     (not_isDesignated_bridgeInput _ _))]
-  have bridgeAgree := (agree_bridge m3 input.x input.y source.curve.1 source.curve.2.1
-    source.curve.2.2 (r1.1 ⟨0, by decide⟩) (r1.1 ⟨1, by decide⟩) (r1.1 ⟨2, by decide⟩)
+  have bridgeAgree := (agree_bridge m3 input.x input.y source.curve (r1.1 ⟨0, by decide⟩) (r1.1 ⟨1, by decide⟩) (r1.1 ⟨2, by decide⟩)
     (r2.1 ⟨0, by decide⟩) (r2.1 ⟨1, by decide⟩)
     (by rw [frame3 _ (offReplay_of_lt reqX_small), start.reqXCell])
     (by rw [frame3 _ (offReplay_of_lt reqY_small), start.reqYCell])
     (by rw [frame3 (word fieldBase) (offReplay_of_lt (by unfold fieldBase; norm_num)), start.curve0])
-    (by rw [frame3 (word (fieldBase + 1)) (offReplay_of_lt (by unfold fieldBase; norm_num)),
-      start.curve1])
-    (by rw [frame3 (word (fieldBase + 2)) (offReplay_of_lt (by unfold fieldBase; norm_num)),
-      start.curve2])
     (curveXCells ⟨0, by decide⟩) (curveYCells ⟨0, by decide⟩) (curveXCells ⟨1, by decide⟩)
     (curveYCells ⟨1, by decide⟩) (curveXCells ⟨2, by decide⟩)).map
     (Post' := fun (value : (Block × Block) × DesignatedRecord) after =>

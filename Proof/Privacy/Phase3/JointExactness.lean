@@ -19,11 +19,11 @@ context, as the note says.
 The **G1U coins** (`JointCoins`) are what is uniform after `G0 → G0U` (`MaskSwap`) and the
 hidden-entry deletion of `G0U → G1U`: every scale mask of every lane (both point lanes of every
 digit, both curve lanes, all 52 chunks, all `2 ^ b_c` switches), the seven row randomisers per
-digit, the curve coins `(t, mask, r1, r2)`, the hidden fold material of every (lane, chunk), and
+digit, the curve coins `(t, mask)`, the hidden fold material of every (lane, chunk), and
 the gadget pad and hidden digest part of every digit.
 
 The claimed object is the **published cells** (`PublicCells`: every digit's joins on both lanes
-and its ten row constants, the curve joins and three constants, every fold join, every gadget
+and its ten row constants, the curve joins and its one constant, every fold join, every gadget
 entry) **together with the visible masks** (`VisibleCells`: every inactive scale mask the
 evaluator queries, minus the three designated collector masks per digit).
 
@@ -769,7 +769,7 @@ def digitEquiv : DigitCoins ≃ (DigitJoins × RowGamma) × DigitVisible shape w
 
 end Digit
 
-/-! ## The curve check: both curve lanes, the three constants, the bridge key -/
+/-! ## The curve check: both curve lanes, the one constant, the bridge key -/
 
 /-- `F_p^*`, without the field certificate (the same type as `Opening.NonZeroField`). -/
 abbrev NonZeroBaseField := {value : BaseField // value ≠ 0}
@@ -777,8 +777,8 @@ abbrev NonZeroBaseField := {value : BaseField // value ≠ 0}
 /-- The curve check's scale masks: five elements (three on `curveX`, two on `curveY`). -/
 abbrev CurveMasks := CurveMembership.Element → ChunkSwitch → BaseField
 
-/-- The curve coins: its masks, the bridge key `t`, the mask `∈ F_p^*` and `r1, r2`. -/
-abbrev CurveCoins := CurveMasks × BaseField × NonZeroBaseField × BaseField × BaseField
+/-- The curve coins: its masks, the bridge key `t` and the mask `Δ ∈ F_p^*`. -/
+abbrev CurveCoins := CurveMasks × BaseField × NonZeroBaseField
 
 /-- The curve joins, both lanes, every chunk. -/
 abbrev CurveJoins := CurveMembership.Element → Fin chunkCount → BaseField
@@ -796,17 +796,17 @@ variable [FieldCertificate] (shape : JointShape)
 def curveOffsets (masks : CurveMasks) : CurveMembership.Values := fun element => offsetOf (masks element)
 
 /-- The five slopes (`Pipeline.curveSlopes`). -/
-def curveSlopes (masks : CurveMasks) (r1 r2 : BaseField) : CurveMembership.Values :=
-  CurveMembership.slopes r1 r2 (curveOffsets masks)
+def curveSlopes (masks : CurveMasks) (mask : BaseField) : CurveMembership.Values :=
+  CurveMembership.slopes mask (curveOffsets masks)
 
 /-- **The curve joins** (`Pipeline.curveXGarbled`/`curveYGarbled`, per element). -/
-def curveJoins (masks : CurveMasks) (r1 r2 : BaseField) : CurveJoins :=
-  fun element c => joinOf (masks element) (curveSlopes masks r1 r2 element) c
+def curveJoins (masks : CurveMasks) (mask : BaseField) : CurveJoins :=
+  fun element c => joinOf (masks element) (curveSlopes masks mask element) c
 
-/-- **The three published constants** (`CurveMembership.garble`). -/
-def curveTable (masks : CurveMasks) (bridgeKey : BaseField) (mask : NonZeroBaseField)
-    (r1 r2 : BaseField) : CurveMembership.Table :=
-  CurveMembership.garble bridgeKey mask.1 r1 r2 (curveOffsets masks)
+/-- **The published constant** (`CurveMembership.garble`). -/
+def curveTable (masks : CurveMasks) (bridgeKey : BaseField) (mask : NonZeroBaseField) :
+    CurveMembership.Table :=
+  CurveMembership.garble bridgeKey mask.1 (curveOffsets masks)
 
 /-- The curve lanes' visible masks. -/
 def curveVisible (masks : CurveMasks) : CurveVisible shape := fun element cs => masks element cs.1
@@ -823,69 +823,66 @@ def curveDelivered (joins : CurveJoins) (visible : CurveVisible shape) : CurveMe
 /-- The coordinate a curve element is chunked against, as `σ(α)`. -/
 def curveSigma (element : CurveMembership.Element) : BaseField := sigmaOf (shape.curveAlpha element)
 
-/-- The offsets solved from the public and visible cells and the mask: the chains
-`x3 → x5 → x7` and `y4 → y6`. -/
-def curveSolvedOffsets (joins : CurveJoins) (table : CurveMembership.Table)
-    (visible : CurveVisible shape) (mask : NonZeroBaseField) : CurveMembership.Values
-  | .inl .x3 => curveDelivered shape joins visible (.inl .x3)
-      + (table.2.1 - mask.1) * curveSigma shape (.inl .x3)
+/-- The offsets solved from the visible cells and the mask: the chains `x3 → x5 → x7` and
+`y4 → y6`. -/
+def curveSolvedOffsets (joins : CurveJoins) (visible : CurveVisible shape)
+    (mask : NonZeroBaseField) : CurveMembership.Values
+  | .inl .x3 => curveDelivered shape joins visible (.inl .x3) - mask.1 * curveSigma shape (.inl .x3)
   | .inl .x5 => curveDelivered shape joins visible (.inl .x5)
-      + (curveDelivered shape joins visible (.inl .x3)
-        + (table.2.1 - mask.1) * curveSigma shape (.inl .x3)) * curveSigma shape (.inl .x5)
+      + (curveDelivered shape joins visible (.inl .x3) - mask.1 * curveSigma shape (.inl .x3))
+        * curveSigma shape (.inl .x5)
   | .inl .x7 => curveDelivered shape joins visible (.inl .x7)
       + (curveDelivered shape joins visible (.inl .x5)
-        + (curveDelivered shape joins visible (.inl .x3)
-          + (table.2.1 - mask.1) * curveSigma shape (.inl .x3)) * curveSigma shape (.inl .x5))
+        + (curveDelivered shape joins visible (.inl .x3) - mask.1 * curveSigma shape (.inl .x3))
+          * curveSigma shape (.inl .x5))
         * curveSigma shape (.inl .x7)
-  | .inr .y4 => curveDelivered shape joins visible (.inr .y4)
-      + (table.2.2 + mask.1) * curveSigma shape (.inr .y4)
+  | .inr .y4 => curveDelivered shape joins visible (.inr .y4) + mask.1 * curveSigma shape (.inr .y4)
   | .inr .y6 => curveDelivered shape joins visible (.inr .y6)
-      + (curveDelivered shape joins visible (.inr .y4)
-        + (table.2.2 + mask.1) * curveSigma shape (.inr .y4)) * curveSigma shape (.inr .y6)
+      + (curveDelivered shape joins visible (.inr .y4) + mask.1 * curveSigma shape (.inr .y4))
+        * curveSigma shape (.inr .y6)
 
 /-- The curve slopes at the solved offsets. -/
-def curveSolvedSlopes (joins : CurveJoins) (table : CurveMembership.Table)
-    (visible : CurveVisible shape) (mask : NonZeroBaseField) : CurveMembership.Values :=
-  CurveMembership.slopes (table.2.1 - mask.1) (table.2.2 + mask.1)
-    (curveSolvedOffsets shape joins table visible mask)
+def curveSolvedSlopes (joins : CurveJoins) (visible : CurveVisible shape)
+    (mask : NonZeroBaseField) : CurveMembership.Values :=
+  CurveMembership.slopes mask.1 (curveSolvedOffsets shape joins visible mask)
 
 /-- The curve masks rebuilt from the public and visible cells and the mask. -/
-def curveMasksOf (joins : CurveJoins) (table : CurveMembership.Table)
-    (visible : CurveVisible shape) (mask : NonZeroBaseField) : CurveMasks := fun element =>
+def curveMasksOf (joins : CurveJoins) (visible : CurveVisible shape) (mask : NonZeroBaseField) :
+    CurveMasks := fun element =>
   withHidden (shape.curveAlpha element) (extendCurve shape visible element)
     (hiddenOf (shape.curveAlpha element) (joins element)
-      (curveSolvedSlopes shape joins table visible mask element) (extendCurve shape visible element))
+      (curveSolvedSlopes shape joins visible mask element) (extendCurve shape visible element))
 
 /-- The bridge key rebuilt from the public cells, the solved offsets and the mask. -/
 def curveSolvedKey (joins : CurveJoins) (table : CurveMembership.Table)
     (visible : CurveVisible shape) (mask : NonZeroBaseField) : BaseField :=
-  table.1 - 3 * mask.1 + curveSolvedOffsets shape joins table visible mask (.inr .y6)
-    + curveSolvedOffsets shape joins table visible mask (.inl .x7)
+  table - 3 * mask.1 + curveSolvedOffsets shape joins visible mask (.inr .y6)
+    + curveSolvedOffsets shape joins visible mask (.inl .x7)
 
-theorem curveMasksOf_visible (joins : CurveJoins) (table : CurveMembership.Table)
-    (visible : CurveVisible shape) (mask : NonZeroBaseField) (element : CurveMembership.Element)
+theorem curveMasksOf_visible (joins : CurveJoins) (visible : CurveVisible shape)
+    (mask : NonZeroBaseField) (element : CurveMembership.Element)
     (cs : ChunkSwitch) (h : ¬ Active (shape.curveAlpha element) cs) :
-    curveMasksOf shape joins table visible mask element cs = visible element ⟨cs, h⟩ := by
+    curveMasksOf shape joins visible mask element cs = visible element ⟨cs, h⟩ := by
   simp only [curveMasksOf]
   rw [withHidden_inactive _ _ _ h, extendCurve, dif_pos h]
 
-theorem offsetOf_curveMasksOf (joins : CurveJoins) (table : CurveMembership.Table)
-    (visible : CurveVisible shape) (mask : NonZeroBaseField) (element : CurveMembership.Element) :
-    offsetOf (curveMasksOf shape joins table visible mask element)
-      = curveSolvedOffsets shape joins table visible mask element := by
+theorem offsetOf_curveMasksOf (joins : CurveJoins) (visible : CurveVisible shape)
+    (mask : NonZeroBaseField) (element : CurveMembership.Element) :
+    offsetOf (curveMasksOf shape joins visible mask element)
+      = curveSolvedOffsets shape joins visible mask element := by
   have delivered := deliveredOf_joinOf (shape.curveAlpha element)
-    (curveMasksOf shape joins table visible mask element)
-    (curveSolvedSlopes shape joins table visible mask element)
-  rw [show joinOf (curveMasksOf shape joins table visible mask element)
-      (curveSolvedSlopes shape joins table visible mask element) = joins element from
+    (curveMasksOf shape joins visible mask element)
+    (curveSolvedSlopes shape joins visible mask element)
+  rw [show joinOf (curveMasksOf shape joins visible mask element)
+      (curveSolvedSlopes shape joins visible mask element) = joins element from
     joinOf_withHidden_hiddenOf _ _ _ _] at delivered
   have inactiveSame : ∀ cs, ¬ Active (shape.curveAlpha element) cs →
-      curveMasksOf shape joins table visible mask element cs = extendCurve shape visible element cs :=
+      curveMasksOf shape joins visible mask element cs = extendCurve shape visible element cs :=
     fun cs inactive => withHidden_inactive _ _ _ inactive
   rw [deliveredOf_congr _ _ inactiveSame] at delivered
-  have offset : offsetOf (curveMasksOf shape joins table visible mask element)
+  have offset : offsetOf (curveMasksOf shape joins visible mask element)
       = curveDelivered shape joins visible element
-        - curveSolvedSlopes shape joins table visible mask element
+        - curveSolvedSlopes shape joins visible mask element
           * sigmaOf (shape.curveAlpha element) := by
     rw [curveDelivered, delivered]; ring
   rw [offset]
@@ -894,57 +891,48 @@ theorem offsetOf_curveMasksOf (joins : CurveJoins) (table : CurveMembership.Tabl
 
 /-- At the published cells of a mask family, the evaluator's curve values are the offsets plus the
 slopes times the coordinates. -/
-theorem curveDelivered_forward (masks : CurveMasks) (r1 r2 : BaseField)
+theorem curveDelivered_forward (masks : CurveMasks) (mask : BaseField)
     (element : CurveMembership.Element) :
-    curveDelivered shape (curveJoins masks r1 r2) (curveVisible shape masks) element
-      = curveOffsets masks element + curveSlopes masks r1 r2 element * curveSigma shape element := by
+    curveDelivered shape (curveJoins masks mask) (curveVisible shape masks) element
+      = curveOffsets masks element + curveSlopes masks mask element * curveSigma shape element := by
   have delivered := deliveredOf_joinOf (shape.curveAlpha element) (masks element)
-    (curveSlopes masks r1 r2 element)
+    (curveSlopes masks mask element)
   rw [curveDelivered, curveSigma, curveOffsets, ← delivered]
   refine deliveredOf_congr _ _ fun cs inactive => ?_
   rw [extendCurve, dif_pos inactive]
   rfl
 
 /-- The solved curve offsets are the true ones. -/
-theorem curveSolvedOffsets_forward (masks : CurveMasks) (bridgeKey : BaseField)
-    (mask : NonZeroBaseField) (r1 r2 : BaseField) :
-    curveSolvedOffsets shape (curveJoins masks r1 r2) (curveTable masks bridgeKey mask r1 r2)
-      (curveVisible shape masks) mask = curveOffsets masks := by
-  have values := curveDelivered_forward shape masks r1 r2
+theorem curveSolvedOffsets_forward (masks : CurveMasks) (mask : NonZeroBaseField) :
+    curveSolvedOffsets shape (curveJoins masks mask.1) (curveVisible shape masks) mask
+      = curveOffsets masks := by
+  have values := curveDelivered_forward shape masks mask.1
   funext element
   rcases element with (_ | _ | _) | (_ | _) <;>
-    simp only [curveSolvedOffsets, values, curveTable, CurveMembership.garble, curveSlopes,
-      CurveMembership.slopes] <;> ring
+    simp only [curveSolvedOffsets, values, curveSlopes, CurveMembership.slopes] <;> ring
 
-/-- **The curve bijection**: the curve masks, bridge key, mask and `r1, r2` against the curve
-joins, the three constants, the visible masks and the mask (the fibre coordinate of the
-`(p − 1)`-to-one map of note §1.5, C2). -/
+/-- **The curve bijection**: the curve masks, bridge key and mask against the curve joins, the one
+constant, the visible masks and the mask (the fibre coordinate of the `(p − 1)`-to-one map of note
+§1.5, C2). -/
 def curveEquiv : CurveCoins ≃ ((CurveJoins × CurveMembership.Table) × CurveVisible shape) × NonZeroBaseField where
-  toFun coins := (((curveJoins coins.1 coins.2.2.2.1 coins.2.2.2.2,
-      curveTable coins.1 coins.2.1 coins.2.2.1 coins.2.2.2.1 coins.2.2.2.2),
-    curveVisible shape coins.1), coins.2.2.1)
-  invFun out := (curveMasksOf shape out.1.1.1 out.1.1.2 out.1.2 out.2,
-    curveSolvedKey shape out.1.1.1 out.1.1.2 out.1.2 out.2, out.2,
-    out.1.1.2.2.1 - out.2.1, out.1.1.2.2.2 + out.2.1)
+  toFun coins := (((curveJoins coins.1 coins.2.2.1, curveTable coins.1 coins.2.1 coins.2.2),
+    curveVisible shape coins.1), coins.2.2)
+  invFun out := (curveMasksOf shape out.1.1.1 out.1.2 out.2,
+    curveSolvedKey shape out.1.1.1 out.1.1.2 out.1.2 out.2, out.2)
   left_inv coins := by
-    obtain ⟨masks, bridgeKey, mask, r1, r2⟩ := coins
-    have offsets := curveSolvedOffsets_forward shape masks bridgeKey mask r1 r2
-    have r1Back : (curveTable masks bridgeKey mask r1 r2).2.1 - mask.1 = r1 := by
-      simp only [curveTable, CurveMembership.garble]; ring
-    have r2Back : (curveTable masks bridgeKey mask r1 r2).2.2 + mask.1 = r2 := by
-      simp only [curveTable, CurveMembership.garble]; ring
-    have slopes : curveSolvedSlopes shape (curveJoins masks r1 r2)
-        (curveTable masks bridgeKey mask r1 r2) (curveVisible shape masks) mask
-        = curveSlopes masks r1 r2 := by
-      rw [curveSolvedSlopes, offsets, r1Back, r2Back]
+    obtain ⟨masks, bridgeKey, mask⟩ := coins
+    have offsets := curveSolvedOffsets_forward shape masks mask
+    have slopes : curveSolvedSlopes shape (curveJoins masks mask.1) (curveVisible shape masks) mask
+        = curveSlopes masks mask.1 := by
+      rw [curveSolvedSlopes, offsets]
       rfl
-    refine Prod.ext ?_ (Prod.ext ?_ (Prod.ext rfl (Prod.ext r1Back r2Back)))
+    refine Prod.ext ?_ (Prod.ext ?_ rfl)
     · funext element
       show withHidden (shape.curveAlpha element)
           (extendCurve shape (curveVisible shape masks) element)
-          (hiddenOf (shape.curveAlpha element) (curveJoins masks r1 r2 element)
-            (curveSolvedSlopes shape (curveJoins masks r1 r2)
-              (curveTable masks bridgeKey mask r1 r2) (curveVisible shape masks) mask element)
+          (hiddenOf (shape.curveAlpha element) (curveJoins masks mask.1 element)
+            (curveSolvedSlopes shape (curveJoins masks mask.1) (curveVisible shape masks) mask
+              element)
             (extendCurve shape (curveVisible shape masks) element)) = masks element
       have agree : ∀ cs, ¬ Active (shape.curveAlpha element) cs →
           extendCurve shape (curveVisible shape masks) element cs = masks element cs := by
@@ -959,55 +947,51 @@ def curveEquiv : CurveCoins ≃ ((CurveJoins × CurveMembership.Table) × CurveV
         · simp only [withHidden, if_pos active]
         · rw [withHidden_inactive _ _ _ active, withHidden_inactive _ _ _ active, agree cs active]
       rw [sameFill, hiddenOf_congr _ _ _ agree, slopes]
-      exact withHidden_joinOf _ (masks element) (curveSlopes masks r1 r2 element)
-    · show curveSolvedKey shape (curveJoins masks r1 r2) (curveTable masks bridgeKey mask r1 r2)
+      exact withHidden_joinOf _ (masks element) (curveSlopes masks mask.1 element)
+    · show curveSolvedKey shape (curveJoins masks mask.1) (curveTable masks bridgeKey mask)
         (curveVisible shape masks) mask = bridgeKey
       rw [curveSolvedKey, offsets]
       simp only [curveTable, CurveMembership.garble, curveOffsets]
       ring
   right_inv out := by
     obtain ⟨⟨⟨joins, table⟩, visible⟩, mask⟩ := out
-    have offsets : curveOffsets (curveMasksOf shape joins table visible mask)
-        = curveSolvedOffsets shape joins table visible mask :=
-      funext fun element => offsetOf_curveMasksOf shape joins table visible mask element
-    have slopes : curveSlopes (curveMasksOf shape joins table visible mask)
-        (table.2.1 - mask.1) (table.2.2 + mask.1)
-        = curveSolvedSlopes shape joins table visible mask := by
+    have offsets : curveOffsets (curveMasksOf shape joins visible mask)
+        = curveSolvedOffsets shape joins visible mask :=
+      funext fun element => offsetOf_curveMasksOf shape joins visible mask element
+    have slopes : curveSlopes (curveMasksOf shape joins visible mask) mask.1
+        = curveSolvedSlopes shape joins visible mask := by
       rw [curveSlopes, offsets]
       rfl
     refine Prod.ext (Prod.ext (Prod.ext ?_ ?_) ?_) rfl
     · funext element c
-      show joinOf (curveMasksOf shape joins table visible mask element)
-          (curveSlopes (curveMasksOf shape joins table visible mask)
-            (table.2.1 - mask.1) (table.2.2 + mask.1) element) c = joins element c
+      show joinOf (curveMasksOf shape joins visible mask element)
+          (curveSlopes (curveMasksOf shape joins visible mask) mask.1 element) c = joins element c
       rw [slopes]
       exact congrFun (joinOf_withHidden_hiddenOf _ _ _ _) c
     · show CurveMembership.garble (curveSolvedKey shape joins table visible mask) mask.1
-          (table.2.1 - mask.1) (table.2.2 + mask.1)
-          (curveOffsets (curveMasksOf shape joins table visible mask)) = table
+          (curveOffsets (curveMasksOf shape joins visible mask)) = table
       rw [offsets]
-      obtain ⟨c0, c1, c2⟩ := table
       simp only [CurveMembership.garble, curveSolvedKey]
-      refine Prod.ext ?_ (Prod.ext ?_ ?_) <;> simp only <;> ring
+      ring
     · funext element cs
-      exact curveMasksOf_visible shape joins table visible mask element cs.1 cs.2
+      exact curveMasksOf_visible shape joins visible mask element cs.1 cs.2
 
 /-- **The bridge key is the evaluator's curve value** on the public and visible cells, for a
 valid input (note §1.6: there is no "true `t`" to hit). -/
 theorem bridgeKey_eq_eval (onCurve : OnCurve shape.input) (masks : CurveMasks)
-    (bridgeKey : BaseField) (mask : NonZeroBaseField) (r1 r2 : BaseField) :
-    CurveMembership.evaluate (curveTable masks bridgeKey mask r1 r2) shape.input
-        (curveDelivered shape (curveJoins masks r1 r2) (curveVisible shape masks))
+    (bridgeKey : BaseField) (mask : NonZeroBaseField) :
+    CurveMembership.evaluate (curveTable masks bridgeKey mask) shape.input
+        (curveDelivered shape (curveJoins masks mask.1) (curveVisible shape masks))
       = bridgeKey := by
-  have values : curveDelivered shape (curveJoins masks r1 r2) (curveVisible shape masks)
-      = CurveMembership.delivered r1 r2 (curveOffsets masks) shape.input := by
+  have values : curveDelivered shape (curveJoins masks mask.1) (curveVisible shape masks)
+      = CurveMembership.delivered mask.1 (curveOffsets masks) shape.input := by
     funext element
     rw [curveDelivered_forward, CurveMembership.delivered, curveSigma]
     rcases element with (_ | _ | _) | (_ | _) <;>
       simp only [JointShape.curveAlpha, JointShape.sigmaOf_alphaX, JointShape.sigmaOf_alphaY,
         CurveMembership.coordValue, curveSlopes] <;> ring
   rw [values]
-  exact CurveMembership.evaluateEncodedOnCurve bridgeKey mask.1 r1 r2 (curveOffsets masks)
+  exact CurveMembership.evaluateEncodedOnCurve bridgeKey mask.1 (curveOffsets masks)
     shape.input onCurve
 
 end Curve
@@ -1024,8 +1008,8 @@ def foldEquiv (visibleFold : Lane → Fin foldStepCount → Block) : FoldCells �
   Equiv.piCongrRight fun lane => Equiv.piCongrRight fun c =>
     Kriterion.ArgoMAC.Security.PGS.xorEquiv (visibleFold lane c)
 
-/-- Writing a byte and reading the old one back is its own inverse. -/
-def entrySwap (slot : Fin 12) : (Exception.Entry × BitVec 8) ≃ (Exception.Entry × BitVec 8) where
+/-- Writing a code and reading the old one back is its own inverse. -/
+def entrySwap (slot : Fin 12) : (Exception.Entry × BitVec 3) ≃ (Exception.Entry × BitVec 3) where
   toFun pair := (Exception.writeEntry pair.1 slot pair.2, pair.1.get slot)
   invFun pair := (Exception.writeEntry pair.1 slot pair.2, pair.1.get slot)
   left_inv pair := by
@@ -1038,16 +1022,16 @@ def entrySwap (slot : Fin 12) : (Exception.Entry × BitVec 8) ≃ (Exception.Ent
       Vector.set_getElem_self, Vector.getElem_set_self]
 
 /-- **One written gadget slot**: the pad, with the slot (if any) overwritten by the digest's low
-byte XOR the digit code. The digest is the evaluator-visible part XOR the hidden part. -/
-def gadgetEntry (slot : Option (Fin 12)) (code : BitVec 8) (visibleDigest : Block)
+three bits XOR the digit code. The digest is the evaluator-visible part XOR the hidden part. -/
+def gadgetEntry (slot : Option (Fin 12)) (code : BitVec 3) (visibleDigest : Block)
     (pad : Exception.Entry) (hidden : Block) : Exception.Entry :=
   match slot with
   | none => pad
   | some index => Exception.writeEntry pad index (Exception.lowByte (hidden ^^^ visibleDigest) ^^^ code)
 
-/-- **The one-slot gadget bijection**, against the entry and a residual byte and 120 bits. -/
-def gadgetEquiv (slot : Option (Fin 12)) (code : BitVec 8) (visibleDigest : Block) :
-    (Exception.Entry × Block) ≃ (Exception.Entry × (BitVec 8 × BitVec 120)) :=
+/-- **The one-slot gadget bijection**, against the entry and a residual three-bit code and 125 bits. -/
+def gadgetEquiv (slot : Option (Fin 12)) (code : BitVec 3) (visibleDigest : Block) :
+    (Exception.Entry × Block) ≃ (Exception.Entry × (BitVec 3 × BitVec 125)) :=
   match slot with
   | none => Equiv.prodCongr (Equiv.refl _) Kriterion.ArgoMAC.Security.PGS.blockLowByteEquiv
   | some index =>
@@ -1071,7 +1055,7 @@ def gadgetEquiv (slot : Option (Fin 12)) (code : BitVec 8) (visibleDigest : Bloc
           Vector.getElem_set_self, BitVec.xor_assoc, BitVec.xor_self, BitVec.xor_zero,
           Equiv.apply_symm_apply, Vector.set_getElem_self] }
 
-theorem gadgetEquiv_fst (slot : Option (Fin 12)) (code : BitVec 8) (visibleDigest : Block)
+theorem gadgetEquiv_fst (slot : Option (Fin 12)) (code : BitVec 3) (visibleDigest : Block)
     (pair : Exception.Entry × Block) :
     (gadgetEquiv slot code visibleDigest pair).1 = gadgetEntry slot code visibleDigest pair.1 pair.2 := by
   cases slot <;> rfl
@@ -1103,9 +1087,9 @@ def mixEquiv (mix : GadgetMix) : (Block × Block) ≃ (Block × Block) where
 
 /-- **The published gadget entry** of a digit (`FieldMacToECMac.garbleEntry`): the pad, with the
 doubling slot and then the sign-zero slot (if the digit is non-zero) overwritten by their digests'
-low bytes XOR the digit code. Each digest is its evaluator-visible part XOR its hidden part, the
+low three bits XOR the digit code. Each digest is its evaluator-visible part XOR its hidden part, the
 two hidden parts being the mixed coins. -/
-def gadgetEntry2 (slots : Option (Fin 12 × Fin 12)) (mix : GadgetMix) (code : BitVec 8)
+def gadgetEntry2 (slots : Option (Fin 12 × Fin 12)) (mix : GadgetMix) (code : BitVec 3)
     (visibleDigests : Block × Block) (pad : Exception.Entry) (hidden : Block × Block) :
     Exception.Entry :=
   gadgetEntry (slots.map Prod.snd) code visibleDigests.2
@@ -1113,11 +1097,11 @@ def gadgetEntry2 (slots : Option (Fin 12 × Fin 12)) (mix : GadgetMix) (code : B
     (mixCoins mix hidden).2
 
 /-- **The gadget bijection** of one digit: the mix, then the doubling slot, then the sign-zero
-slot, against the entry and two residual bytes and 120-bit remainders. -/
-def gadgetEquiv2 (slots : Option (Fin 12 × Fin 12)) (mix : GadgetMix) (code : BitVec 8)
+slot, against the entry and two residual codes and 125-bit remainders. -/
+def gadgetEquiv2 (slots : Option (Fin 12 × Fin 12)) (mix : GadgetMix) (code : BitVec 3)
     (visibleDigests : Block × Block) :
     (Exception.Entry × (Block × Block)) ≃
-      (Exception.Entry × ((BitVec 8 × BitVec 120) × (BitVec 8 × BitVec 120))) :=
+      (Exception.Entry × ((BitVec 3 × BitVec 125) × (BitVec 3 × BitVec 125))) :=
   ((Equiv.refl Exception.Entry).prodCongr (mixEquiv mix)).trans
     ((Equiv.prodAssoc _ _ _).symm.trans
       (((gadgetEquiv (slots.map Prod.fst) code visibleDigests.1).prodCongr (Equiv.refl Block)).trans
@@ -1125,11 +1109,11 @@ def gadgetEquiv2 (slots : Option (Fin 12 × Fin 12)) (mix : GadgetMix) (code : B
           (((Equiv.refl Exception.Entry).prodCongr (Equiv.prodComm _ _)).trans
             ((Equiv.prodAssoc _ _ _).symm.trans
               (((gadgetEquiv (slots.map Prod.snd) code visibleDigests.2).prodCongr
-                  (Equiv.refl (BitVec 8 × BitVec 120))).trans
+                  (Equiv.refl (BitVec 3 × BitVec 125))).trans
                 ((Equiv.prodAssoc _ _ _).trans
                   ((Equiv.refl Exception.Entry).prodCongr (Equiv.prodComm _ _)))))))))
 
-theorem gadgetEquiv2_fst (slots : Option (Fin 12 × Fin 12)) (mix : GadgetMix) (code : BitVec 8)
+theorem gadgetEquiv2_fst (slots : Option (Fin 12 × Fin 12)) (mix : GadgetMix) (code : BitVec 3)
     (visibleDigests : Block × Block) (pair : Exception.Entry × (Block × Block)) :
     (gadgetEquiv2 slots mix code visibleDigests pair).1 =
       gadgetEntry2 slots mix code visibleDigests pair.1 pair.2 := by
@@ -1159,7 +1143,7 @@ structure JointContext where
   /-- How each digit's two digests share their hidden coins. -/
   gadgetMix : Fin digitCount → GadgetMix
   /-- Each digit's code (`Exception.digitCode`). -/
-  gadgetCode : Fin digitCount → BitVec 8
+  gadgetCode : Fin digitCount → BitVec 3
 
 /-- The gadget coins: each digit's pad and the hidden parts of its two digests. -/
 abbrev GadgetCoins := Fin digitCount → Exception.Entry × (Block × Block)
@@ -1174,10 +1158,10 @@ abbrev PublicCells := (Fin digitCount → DigitJoins × RowGamma) ×
 /-- **The visible masks**, all components. -/
 abbrev VisibleCells (shape : JointShape) := (Fin digitCount → DigitVisible shape) × CurveVisible shape
 
-/-- What the bijection sets aside: the curve mask and, per digit, two pad bytes and 120 digest bits
+/-- What the bijection sets aside: the curve mask and, per digit, two pad codes and 125 digest bits
 each. -/
 abbrev Residual := NonZeroBaseField ×
-  (Fin digitCount → (BitVec 8 × BitVec 120) × (BitVec 8 × BitVec 120))
+  (Fin digitCount → (BitVec 3 × BitVec 125) × (BitVec 3 × BitVec 125))
 
 instance : Nonempty NonZeroBaseField := ⟨⟨1, by decide⟩⟩
 instance : Nonempty Exception.Entry := ⟨Vector.replicate 12 0⟩
@@ -1194,8 +1178,7 @@ formulas. -/
 def publicOf (coins : JointCoins) : PublicCells :=
   (fun digit => (digitJoins (coins.1 digit).1 (coins.1 digit).2,
       digitGamma (context.rows digit) (context.rho digit) (coins.1 digit).1 (coins.1 digit).2),
-   (curveJoins coins.2.1.1 coins.2.1.2.2.2.1 coins.2.1.2.2.2.2,
-      curveTable coins.2.1.1 coins.2.1.2.1 coins.2.1.2.2.1 coins.2.1.2.2.2.1 coins.2.1.2.2.2.2),
+   (curveJoins coins.2.1.1 coins.2.1.2.2.1, curveTable coins.2.1.1 coins.2.1.2.1 coins.2.1.2.2),
    fun lane c => coins.2.2.1 lane c ^^^ context.foldVisible (bridgeKeyOf coins) lane c,
    fun digit => gadgetEntry2 (context.gadgetSlot digit) (context.gadgetMix digit)
       (context.gadgetCode digit) (context.gadgetVisible (bridgeKeyOf coins) digit)
@@ -1214,7 +1197,7 @@ def digitsEquiv : (Fin digitCount → DigitCoins) ≃
 /-- The 91 gadget entries at once, given the bridge key. -/
 def gadgetsEquiv (bridgeKey : BaseField) :
     GadgetCoins ≃ (Fin digitCount → Exception.Entry) ×
-      (Fin digitCount → (BitVec 8 × BitVec 120) × (BitVec 8 × BitVec 120)) :=
+      (Fin digitCount → (BitVec 3 × BitVec 125) × (BitVec 3 × BitVec 125)) :=
   (Equiv.piCongrRight fun digit => gadgetEquiv2 (context.gadgetSlot digit)
       (context.gadgetMix digit) (context.gadgetCode digit)
       (context.gadgetVisible bridgeKey digit)).trans
@@ -1224,7 +1207,7 @@ def gadgetsEquiv (bridgeKey : BaseField) :
 def restEquiv : CurveCoins × (FoldCells × GadgetCoins) ≃
     (((CurveJoins × CurveMembership.Table) × CurveVisible shape) × NonZeroBaseField) ×
       (FoldCells × ((Fin digitCount → Exception.Entry) ×
-        (Fin digitCount → (BitVec 8 × BitVec 120) × (BitVec 8 × BitVec 120)))) :=
+        (Fin digitCount → (BitVec 3 × BitVec 125) × (BitVec 3 × BitVec 125)))) :=
   Equiv.prodShear (curveEquiv shape) fun curve =>
     (foldEquiv (context.foldVisible curve.2.1)).prodCongr (gadgetsEquiv context curve.2.1)
 
@@ -1410,7 +1393,7 @@ theorem jointLaw (onCurve : OnCurve shape.input) :
       = (fun cells => (cells, simulatorDesignated shape context cells, simulatorKey shape cells))
         ∘ (fun coins => (publicOf context coins, visibleOf shape coins)) := by
     funext coins
-    obtain ⟨digits, ⟨masks, bridgeKey, mask, r1, r2⟩, folds, gadgets⟩ := coins
+    obtain ⟨digits, ⟨masks, bridgeKey, mask⟩, folds, gadgets⟩ := coins
     refine Prod.ext rfl (Prod.ext ?_ ?_)
     · funext digit element
       show (if IsCollector element then (digits digit).1 element shape.designated else 0)
@@ -1420,7 +1403,7 @@ theorem jointLaw (onCurve : OnCurve shape.input) :
         exact designated_eq_solve shape (context.rows digit) (context.rho digit) (digits digit).1
           (digits digit).2 element collector onCurve
       · rw [if_neg collector, if_neg collector]
-    · exact (bridgeKey_eq_eval shape onCurve masks bridgeKey mask r1 r2).symm
+    · exact (bridgeKey_eq_eval shape onCurve masks bridgeKey mask).symm
   rw [factor, ← PMF.map_comp, jointExactness]
 
 /-- The same, for **any** law of the context (the true rows, `ρ`, the deferred labels): the

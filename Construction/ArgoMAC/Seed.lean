@@ -393,8 +393,6 @@ def randomness (seed : BitVec 256) : Garbling.Randomness := {
     Vector.ofFn fun slot => Exception.lowByte (block seed (200_000 + row.val * 12 + slot.val))
   bridgeKey := field seed 1
   curveMask := nonZeroBase (field seed 2)
-  curveR1 := field seed 3
-  curveR2 := field seed 4
   fixedKeyOracle := ⟨fun index => shift (block seed (2_000_000 + fixedKeyCode index))⟩
   inputZero := fun coord position => block seed (zeroLabelBase coord + position.val)
   inputDelta := fun coord => block seed (600 + coordCode coord)

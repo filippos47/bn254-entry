@@ -85,7 +85,7 @@ theorem machine_stage1 [FieldCertificate] (parameter : Nat) :
   rw [planB_stage1_run, optionT_mk_map, bind_assoc]
   simp only [pure_bind, atPc_memory,
     publicValue_final (Top.afterTag (stage1Memory parameter) (stage1Rest parameter))
-      (stage1Start_stack3 parameter), optionT_mk_pure_some]
+      (stage1Start_stack3 parameter) rfl, optionT_mk_pure_some]
   rw [← optionT_mk_map, OptionT.run_mk]
   rfl
 
@@ -143,7 +143,7 @@ end Cells
 
 theorem drawSource_row_get (draw : Stage1Draw) (digit : Fin digitCount) (field : Nat)
     (small : field < 10) :
-    rowField ((drawSource draw).rows.get digit) field = total 0 draw.1 (3 + 10 * digit.val + field) := by
+    rowField ((drawSource draw).rows.get digit) field = total 0 draw.1 (1 + 10 * digit.val + field) := by
   simp only [drawSource, sourceOfDraws, Vector.get_ofFn]
   interval_cases field <;> rfl
 
@@ -258,7 +258,7 @@ theorem prefix_replayStart (parameter : Nat) (draw : Stage1Draw)
   have fieldCell : ∀ index, index < fieldCellCount →
       middle.ram (word (fieldBase + index)) = fieldWord (total 0 draw.1 index) := by
     intro index bound
-    have : index < 34297 := bound
+    have : index < 34295 := bound
     rw [parsed _ (by unfold fieldBase; omega), parsed_outside _ _ _ _ _ _ _ _ (by unfold fieldBase; omega)]
     exact retained_field parameter draw index bound
   have hotCell : ∀ index, index < hotBlockCount →
@@ -268,7 +268,7 @@ theorem prefix_replayStart (parameter : Nat) (draw : Stage1Draw)
     rw [parsed _ (by unfold hotBase; omega), parsed_outside _ _ _ _ _ _ _ _ (by unfold hotBase; omega)]
     exact retained_hot parameter draw hotSmall index bound
   refine
-    { reqXCell := ?_, reqYCell := ?_, curve0 := ?_, curve1 := ?_, curve2 := ?_,
+    { reqXCell := ?_, reqYCell := ?_, curve0 := ?_,
       labelCells := fun i bound => (labels i bound).trans (retained_label parameter draw keySmall input i bound),
       hotX := fun s => ?_, hotY := fun s => ?_, hotPX := fun s => ?_, hotPY := fun s => ?_,
       scaleCells := fun c slot => ?_ }
@@ -277,8 +277,6 @@ theorem prefix_replayStart (parameter : Nat) (draw : Stage1Draw)
   · rw [parsed reqY (by unfold reqY requestBase; norm_num), parsedRam_y]
     rfl
   · exact fieldCell 0 (by decide)
-  · exact fieldCell 1 (by decide)
-  · exact fieldCell 2 (by decide)
   · have := s.isLt
     unfold foldStepCount at this
     rw [Nat.add_assoc, hotCell _ (by unfold hotBlockCount foldStepCount; omega), (hot_source draw s).1]
@@ -300,7 +298,7 @@ theorem prefix_replayStart (parameter : Nat) (draw : Stage1Draw)
     unfold chunkCount at chunkBound
     unfold elementCount at slotBound
     rw [show scaleCellBase + elementCount * c.val + slot.val =
-        fieldBase + (913 + 642 * c.val + slot.val) by
+        fieldBase + (911 + 642 * c.val + slot.val) by
         unfold scaleCellBase curveCellCount rowCellCount elementCount; omega,
       fieldCell _ (by unfold fieldCellCount curveCellCount rowCellCount scaleCellCount; omega)]
     rfl
@@ -328,7 +326,7 @@ theorem prefix_rows (parameter : Nat) (draw : Stage1Draw) (input : AffineInput) 
       fieldWord (rowField ((drawSource draw).rows.get digit) slot) := by
   have := digit.isLt
   unfold digitCount at this
-  rw [show Opening.rowCell digit.val slot = fieldBase + (3 + 10 * digit.val + slot) by
+  rw [show Opening.rowCell digit.val slot = fieldBase + (1 + 10 * digit.val + slot) by
       unfold Opening.rowCell curveCellCount; omega,
     parsed _ (by unfold fieldBase; omega), parsed_outside _ _ _ _ _ _ _ _ (by unfold fieldBase; omega),
     retained_field parameter draw _ (by unfold fieldCellCount curveCellCount rowCellCount scaleCellCount; omega),

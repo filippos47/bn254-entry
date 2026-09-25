@@ -23,8 +23,6 @@ structure Randomness where
   exceptionPad : FieldMacToECMac.ExceptionPad
   bridgeKey : BaseField
   curveMask : NonZeroBase
-  curveR1 : BaseField
-  curveR2 : BaseField
   fixedKeyOracle : PermutationOracle PlanB.FixedIndex Block
   inputZero : PlanB.Coord → Fin coordinateBitCount → Block
   inputDelta : PlanB.Coord → Block
@@ -77,7 +75,7 @@ def garble (construction : Construction) (scalar : NonZeroScalar)
   (Pipeline.garble
       (FieldMacToECMac.outputKeys construction scalar.value randomness.offsets)
       randomness.pointRandomness randomness.exceptionPad randomness.bridgeKey
-      randomness.curveMask randomness.curveR1 randomness.curveR2
+      randomness.curveMask
       randomness.fixedKeyOracle randomness.encPRFOracle randomness.hashOracle
       randomness.inputDelta randomness.inputMacKey,
     { scalar, randomness })
@@ -170,8 +168,7 @@ theorem evaluateEncodeRows [FieldCertificate] (construction : Construction)
   Pipeline.evaluateEncoded
     (FieldMacToECMac.outputKeys construction key.scalar.value key.randomness.offsets)
     key.randomness.pointRandomness key.randomness.exceptionPad
-    key.randomness.bridgeKey key.randomness.curveMask
-    key.randomness.curveR1 key.randomness.curveR2 key.randomness.fixedKeyOracle
+    key.randomness.bridgeKey key.randomness.curveMask key.randomness.fixedKeyOracle
     key.randomness.encPRFOracle key.randomness.hashOracle key.randomness.inputDelta
     key.randomness.inputMacKey key.randomness.correlated delivers input point decoded
 

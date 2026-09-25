@@ -1,6 +1,6 @@
 # Intuition: chunked one-hot projectivization of ArgoMAC
 
-This entry garbles BN254 scalar multiplication at **1,103,204 bytes** of public ciphertext.
+This entry garbles BN254 scalar multiplication at **1,100,521 bytes** of public ciphertext.
 Garbling makes at most **1,123,253** oracle queries (gate 1,759,967) and evaluation at most
 **1,042,077** (gate 1,055,879). Both figures are the exact bounds carried in the types of
 `garbleProgram` and `evaluateProgram`.
@@ -8,17 +8,25 @@ Garbling makes at most **1,123,253** oracle queries (gate 1,759,967) and evaluat
 This note explains the design, the byte count, the query count and the privacy argument.
 Section 7 states what is proved: every obligation.
 
-This entry builds on xinshu's Plan B entry (`xinshudong/bn254-entry`), which went through four
-versions. The first (3,363,376 bytes) drew each switch mask element from three fixed-key
+This entry is a fork of Lazar's sign-row entry (`Lazar955/bn254-planb`, commit `a79310d`,
+1,103,204 bytes). Lazar's entry builds on xinshu's Plan B entry (`xinshudong/bn254-entry`), which
+went through four versions. The first (3,363,376 bytes) drew each switch mask element from three fixed-key
 Davies–Meyer blocks and used 127 chunks of 2 bits. The second (1,719,202 bytes) drew each switch's
 whole mask vector from one batch of hash-oracle answers (§2.3), which made switches cheap enough
 for 4-bit chunks. The third (1,534,306 bytes) adopted Lazar's four-element `Y` row, which cuts the
 encodings per digit from nine to eight. The fourth (1,348,634 bytes) mixed 5-bit and 4-bit chunks,
-so a coordinate needed 56 chunks instead of 64. This entry replaces the `Y` row by a sign row
+so a coordinate needed 56 chunks instead of 64. Lazar's entry replaces the `Y` row by a sign row
 (§2.6), which reads three encodings instead of four, and adds a second exceptional case to the
 gadget. A switch then covers 642 elements instead of 733 and costs 641 hash queries instead of
 731, cheap enough for more 5-bit chunks: a coordinate needs 52 chunks (§2.1, §4), and the
 ciphertext is 18.2% smaller.
+
+**This version keeps Lazar's construction, query programs and privacy argument, and changes only
+how the public value is packed and how the curve check publishes its mask.** The curve check
+publishes one constant instead of three (§2.4, 64 bytes). The curve and row constants form one
+base-`p` number (§3, 273 bytes), each chunk word is one base-`p` number (§3, `52 · 32 = 1,664`
+bytes), and the gadget slots are 3-bit codes packed into one word (§3, 682 bytes). That is 2,683
+bytes in all, and no query count changes.
 
 ---
 
@@ -149,7 +157,10 @@ Each coordinate carries **two** systems, so there are four *lanes*.
 
 * **System A** (`curveX`, `curveY`) is keyed on the raw Lamport labels. It delivers the five
   curve-check encodings. The check publishes `t + mask · (x³ + 3 − y²)`, which is the bridge key
-  `t` exactly on the curve and uniform off it.
+  `t` exactly on the curve and uniform off it. The mask rides in the slopes: `x3` (read with
+  `x²`) has slope `+mask` and `y4` (read with `y`) has slope `−mask`, and the chain
+  `x3 → x5 → x7`, `y4 → y6` cancels the offsets. So the check publishes the single constant
+  `c0 = t + 3 · mask − K[y6] − K[x7]`, where the baseline published three.
 * **System B** (`pointX`, `pointY`) is keyed on EncPRF-whitened labels. Their one-time pads are
   derived from `H(bridgeInput t)`, and system B delivers the 637 point-row encodings. An
   evaluator who cannot produce `t` holds only garbage labels for system B.
@@ -209,9 +220,9 @@ is gone, and with it one randomizer and one published constant.
 - `T = 2K`: the tangent at `−K` meets the curve again at `2K`, so `L = 0` and `S = 0 ≠ Z`, and
   the MAC is `3K = (3/2) · T`.
 
-The exception gadget covers the first and the third. Each digit has a 12-byte entry: six slots
-for the doubling case and six for the sign row's zero. The slot of an exceptional input holds the
-digit's code, masked by the low byte of a digest of that input's labels. The evaluator computes
+The exception gadget covers the first and the third. Each digit has a twelve-slot entry of 3-bit
+codes: six slots for the doubling case and six for the sign row's zero. The slot of an exceptional
+input holds the digit's code, masked by the low 3 bits of a digest of that input's labels. The evaluator computes
 one digest per digit, at its own input, and that digest unlocks both slots (508 queries per digit,
 as before). The garbler writes both slots, so it needs the digests of both exceptional inputs. Its
 gadget permutations are indexed by label position *and* label bit, and it asks both bits of every
@@ -225,21 +236,25 @@ README credits each part.
 
 ---
 
-## 3. Why the ciphertext is 1,103,204 bytes
+## 3. Why the ciphertext is 1,100,521 bytes
 
 | Field | Contents | Bytes |
 |---|---|---|
-| `curve` | 3 curve-check constants | 96 |
-| `rows` | 91 digits × 10 constants × 32 B | 29,120 |
-| `exception` | 91 digits × 12-byte gadget entry | 1,092 |
+| `curve`, `rows` | 1 curve-check constant and 91 digits × 10 row constants, one base-`p` number | 28,879 |
+| `exception` | 91 digits × 12 gadget codes of 3 bits, one word | 410 |
 | 4 × `hot` | 4 lanes × 202 fold joins × 16 B | 12,928 |
-| `scale` | 52 chunk words × (642 elements × 254 bits + 4 zero bits) = 20,384 B | 1,059,968 |
-| **total** | | **1,103,204** |
+| `scale` | 52 chunk words, each 642 elements as one base-`p` number = 20,352 B | 1,058,304 |
+| **total** | | **1,100,521** |
 
 Every field has a fixed width and there are no tags. So every public value encodes to the same
 length, and the byte-count theorem (`PlanB.Wire.ciphertextSize`) does not mention `garble` at
-all. Each chunk word packs its 642 field elements at 254 bits each, the exact bit length, without
-padding each element to 32 bytes; four zero bits make the word fill whole bytes.
+all. A word of `n` canonical field elements is published as the single number
+`Σ v_i · p^i < p^n`, which needs `⌈n · log₂ p⌉` bits instead of `254 · n`: `p^642 < 2^162,810`
+gives 20,352 bytes per chunk word (20,384 at 254 bits per element), and `p^911 < 2^231,027` gives
+28,879 bytes for the constants (28,925 at 254 bits, 29,152 at 32 bytes). Each gadget slot holds one
+of the 7 digit codes masked by the low 3 bits of a block, so 3 bits carry it: `1,092 · 3` bits and
+four zero bits. The simulator's stage 1 builds the same numbers with its big-integer Horner
+encoder.
 
 **The size is dominated by the chunk count.** Each chunk publishes one 642-element join, whatever
 its width. So fewer, wider chunks mean fewer bytes: `C = 10` would give about 0.25 MB. The price
@@ -343,7 +358,7 @@ and a linear term below `2^-100` per query would suffice. The entry is far insid
 **Stage 1 programs nothing and asks nothing.** It publishes a table whose every field is drawn
 uniformly in source form:
 
-- the curve and row constants and the gadget bytes;
+- the curve and row constants and the gadget codes;
 - the fold joins;
 - the `52 × 642` scale joins as canonical field elements, packed exactly as the construction
   packs them.
@@ -431,7 +446,7 @@ Seven points in this chain are worth stating.
 - **The exceptional inputs.** If the adversary's input makes a digit exceptional (its image is
   its offset, `T = K`, or twice it, `T = 2K`), the real rows are not a lift: `X = Z = 0` at
   `T = K` and `S = 0 ≠ Z` at `T = 2K`. The real gadget then unlocks the true digit, while the
-  simulator's gadget bytes are uniform. The simulator does not reproduce these cases. They are
+  simulator's gadget codes are uniform. The simulator does not reproduce these cases. They are
   charged twice, once in each hop where they make a difference:
   - `364/(r−1)` in the public-first hop, where the gadget becomes uniform. The reveal event is
     that some nonzero digit has an exceptional input, of either kind, that matches the
@@ -461,10 +476,10 @@ Seven points in this chain are worth stating.
 
 ### 6.4 The machine
 
-The simulator's machine samples 34,297 field cells by bounded rejection and serialises the
+The simulator's machine samples 34,295 field cells by bounded rejection and serialises the
 table. In stage 2 it replays 994,979 lazy queries, extracting the base-`p` digits of every
 replayed mask vector with division-free big-integer arithmetic, draws the 91 lift pairs `(λ, t)`,
-and makes 362 hash programs. Its exact total is `size + 1 + fuels = 46,837,161,227 ≈ 2^35.4`, far
+and makes 362 hash programs. Its exact total is `size + 1 + fuels = 48,384,145,715 ≈ 2^35.5`, far
 inside `2^60`.
 
 The machine reaches `FixedIndex` through `Fintype.equivFin`, and it embeds those ordinals as
@@ -504,7 +519,9 @@ Also proved are:
 - the exact identification of the library's ideal game with the abstract simulator of §6.2;
 - the budget arithmetic.
 
-This entry was written with AI coding agents under human direction and review. It builds on
-xinshu's phase-5b entry (`xinshudong/bn254-entry`); its own changes are the sign row, the second
-exceptional case of the gadget and the 52-chunk profile (§2.6, §4). The README's credit paragraph
-gives the details.
+This entry was written with AI coding agents under human direction and review. It is a fork
+of Lazar's sign-row entry (`Lazar955/bn254-planb`, commit `a79310d`), which builds on xinshu's
+phase-5b entry (`xinshudong/bn254-entry`). Lazar's changes are the sign row, the second exceptional
+case of the gadget and the 52-chunk profile (§2.6, §4); this version's own changes are the
+one-constant curve check (§2.4) and the packing of the constants, the chunk words and the gadget
+(§3). The README's credit paragraph gives the details.

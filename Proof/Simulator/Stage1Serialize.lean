@@ -4,14 +4,17 @@
 `serialize` pushes the wire bits in reverse wire order; each `emitWord address width` pushes the
 low `width` bits of `RAM[address]`, least significant on top. `memSem_serialize`: the serializer
 is deterministic, leaves the RAM and the other stacks unchanged, and leaves stack `3` holding
-`serialBits RAM` (curve and rows, bytes, fold joins, the `52` scale chunk words, each least
-significant bit first) on top of the old stack. A chunk word is its `642` scale cells, the first
-`641` as `254` bits and the last as `256` bits, then two explicit zero bits: the word's four zero
-padding bits are the top bits of its last cell and the two pushed zeros (`chunkWordBits`,
+`serialBits RAM` (the curve-and-rows word, the gadget word, fold joins, the `52` scale chunk
+words, each least significant bit first) on top of the old stack. The curve-and-rows word and
+each chunk word are base-`p` numbers, built in the limb scratch by the big-integer Horner encoder
+and emitted limb by limb (`fieldsLimbBits`, `chunkWordBits`, `memSem_serializeFields`,
 `memSem_serializeChunk`).
 -/
 
 import Proof.Simulator.Stage1Cells
+import Proof.Simulator.Stage1Bits
+import Proof.Simulator.BigIntMachine
+import Construction.PGS.Encoding
 
 namespace Kriterion.ArgoMAC.PlanB.SimMachine
 
@@ -110,89 +113,288 @@ theorem memSem_emitBlock (width : Nat) (small : width ≤ 256) (top : Nat) :
           simp only [Fin.val_succ]
           omega
 
-/-- **The serialized bits of one chunk word** (chunk `chunk`, counted from the bottom): the
-chunk's first `641` scale cells as `254` bits each, then its last cell as `256` bits, then two
-zero bits. -/
-def chunkWordBits (ram : Word → Word) (chunk : Nat) : List Bool :=
-  (List.ofFn fun index : Fin 641 =>
-      bitRun (ram (word (scaleCellBase + 642 * chunk + index.val))) 0 254).flatten ++
-    (bitRun (ram (word (scaleCellBase + 642 * chunk + 641))) 0 256 ++ [false, false])
+/-! ### The chunk words -/
 
-/-- **The serialized bits of a RAM**: curve and rows (`256` bits each), the exception bytes
-(`8`), the fold joins (`128`), the `52` chunk words (`chunkWordBits`), each least significant bit
-first. -/
+/-- A stored word's emitted bits. -/
+theorem bitRun_word (value width : Nat) (small : width ≤ 256) :
+    bitRun (word value) 0 width = lsbs width value := by
+  unfold bitRun lsbs
+  refine congrArg List.ofFn (funext fun index => ?_)
+  rw [Nat.zero_add, BitVec.getLsbD_ofNat]
+  have : index.val < 256 := lt_of_lt_of_le index.isLt small
+  simp [this]
+
+/-- The low bits of a residue modulo a larger power of two. -/
+theorem lsbs_mod_le (width modulus value : Nat) (small : width ≤ modulus) :
+    lsbs width (value % 2 ^ modulus) = lsbs width value := by
+  unfold lsbs
+  refine congrArg List.ofFn (funext fun index => ?_)
+  have : index.val < modulus := lt_of_lt_of_le index.isLt small
+  simp [Nat.testBit_mod_two_pow, this]
+
+/-- **A number's low bits, limb by limb.** -/
+theorem lsbs_limbs (rest : Nat) : ∀ (count value : Nat),
+    lsbs (256 * count + rest) value =
+      (List.ofFn fun index : Fin count => lsbs 256 (BigInt.limb value index.val)).flatten ++
+        lsbs rest (value / 2 ^ (256 * count))
+  | 0, value => by simp
+  | count + 1, value => by
+      rw [show 256 * (count + 1) + rest = 256 + (256 * count + rest) by ring, lsbs_add,
+        lsbs_limbs rest count (value / 2 ^ 256), List.ofFn_succ, List.flatten_cons,
+        List.append_assoc]
+      refine congrArg₂ (· ++ ·) ?_ (congrArg₂ (· ++ ·) ?_ ?_)
+      · rw [BigInt.limb, Fin.val_zero, Nat.mul_zero, pow_zero, Nat.div_one, lsbs_mod]
+      · refine congrArg List.flatten (congrArg List.ofFn (funext fun index => ?_))
+        rw [BigInt.limb, BigInt.limb, Nat.div_div_eq_div_mul, ← pow_add, Fin.val_succ,
+          show 256 + 256 * index.val = 256 * (index.val + 1) by ring]
+      · rw [Nat.div_div_eq_div_mul, ← pow_add, show 256 + 256 * count = 256 * (count + 1) by ring]
+
+/-- The bits of one chunk word's number: `635` limbs of `256` bits, then the top `256` bits. -/
+def chunkLimbBits (value : Nat) : List Bool :=
+  (List.ofFn fun index : Fin (chunkLimbCount - 1) =>
+      lsbs 256 (BigInt.limb value index.val)).flatten ++
+    lsbs topLimbBits (BigInt.limb value (chunkLimbCount - 1))
+
+/-- `chunkLimbBits` is the low `162,816` bits. -/
+theorem lsbs_chunkLimbBits (value : Nat) :
+    lsbs (8 * chunkJoinBytes) value = chunkLimbBits value := by
+  rw [show 8 * chunkJoinBytes = 256 * (chunkLimbCount - 1) + topLimbBits from rfl,
+    lsbs_limbs, chunkLimbBits, BigInt.limb, lsbs_mod_le _ _ _ (by decide)]
+
+/-- The base-`p` number of chunk `chunk`'s `642` scale cells, read from RAM. -/
+def chunkWordValue (ram : Word → Word) (chunk : Nat) : Nat :=
+  BigInt.encNat (fun e => (ram (word (scaleCellBase + 642 * chunk + e))).toNat) 642
+
+/-- **The serialized bits of one chunk word** (chunk `chunk`, counted from the bottom). -/
+def chunkWordBits (ram : Word → Word) (chunk : Nat) : List Bool :=
+  chunkLimbBits (chunkWordValue ram chunk)
+
+/-- The bits of the curve-and-rows word's number: `902` limbs of `256` bits, then the top
+`120` bits. -/
+def fieldsLimbBits (value : Nat) : List Bool :=
+  (List.ofFn fun index : Fin (fieldsLimbCount - 1) =>
+      lsbs 256 (BigInt.limb value index.val)).flatten ++
+    lsbs fieldsTopLimbBits (BigInt.limb value (fieldsLimbCount - 1))
+
+/-- `fieldsLimbBits` is the low `231,032` bits. -/
+theorem lsbs_fieldsLimbBits (value : Nat) :
+    lsbs (8 * Wire.fieldsBytes) value = fieldsLimbBits value := by
+  rw [show 8 * Wire.fieldsBytes = 256 * (fieldsLimbCount - 1) + fieldsTopLimbBits from rfl,
+    lsbs_limbs, fieldsLimbBits, BigInt.limb, lsbs_mod_le _ _ _ (by decide)]
+
+/-- The base-`p` number of the `911` curve and row cells, read from RAM. -/
+def fieldsWordValue (ram : Word → Word) : Nat :=
+  BigInt.encNat (fun e => (ram (word (fieldBase + e))).toNat) (curveCellCount + rowCellCount)
+
+/-- What the serializer needs of the RAM: a zero limb scratch, canonical scale cells and
+canonical curve and row cells. -/
+def SerialReady (ram : Word → Word) : Prop :=
+  (∀ index, index < serialLimbCount → ram (word (serialLimbBase + index)) = 0) ∧
+    (∀ index, index < scaleCellCount → (ram (word (scaleCellBase + index))).toNat < pNat) ∧
+    ∀ index, index < curveCellCount + rowCellCount → (ram (word (fieldBase + index))).toNat < pNat
+
+omit [FieldCertificate] in
+theorem plain_clearLimbs : BigInt.IsPlain Stage1.clearLimbs :=
+  ⟨trivial, BigInt.plain_rep _ _ fun _ _ => ⟨trivial, trivial⟩⟩
+
+omit [FieldCertificate] in
+/-- **Clearing the limb scratch.** -/
+theorem det_clearLimbs (memory : Memory) :
+    ∃ after, BigInt.det Stage1.clearLimbs memory = some after ∧
+      after.ram = BigInt.writeCells memory.ram serialLimbBase serialLimbCount (fun _ => 0) ∧
+      after.bits = memory.bits := by
+  obtain ⟨after, reach, _, ram, bits⟩ := BigInt.det_rep_inv
+    (fun count current => current.registers rAcc = word 0 ∧
+      current.ram = BigInt.writeCells memory.ram serialLimbBase count (fun _ => 0) ∧
+      current.bits = memory.bits)
+    (fun index => storeAt (serialLimbBase + index) rAcc) serialLimbCount
+    (fun index bound current holds => by
+      obtain ⟨acc, ram, bits⟩ := holds
+      refine ⟨_, rfl, ?_, ?_, ?_⟩
+      · simp only [BigInt.opDet, Option.bind_some, BigInt.regs_storeRam, BigInt.regs_setReg]
+        rw [if_neg (by decide), acc]
+      · simp only [BigInt.opDet, Option.bind_some, BigInt.ram_storeRam, BigInt.ram_setReg,
+          BigInt.regs_setReg, if_pos, if_neg (show rAcc ≠ rAddr by decide)]
+        rw [ram, acc, BigInt.writeCells_succ _ _ _ _
+          (by unfold serialLimbBase serialLimbCount at *; omega)]
+      · simp only [BigInt.opDet, Option.bind_some, BigInt.bits_storeRam, BigInt.bits_setReg]
+        exact bits)
+    (setReg memory rAcc (word 0)) ⟨by simp, by rw [BigInt.ram_setReg, BigInt.writeCells_zero], rfl⟩
+  refine ⟨after, ?_, ram, bits⟩
+  unfold Stage1.clearLimbs
+  rw [BigInt.det_seq_some (rfl : BigInt.det (cst rAcc 0) memory = some (setReg memory rAcc (word 0)))]
+  exact reach
+
+set_option maxHeartbeats 1000000 in
+/-- **One chunk word.** `serializeChunk r` builds chunk `51 − r`'s base-`p` number in the limb
+scratch, emits it top limb first, and clears the scratch. -/
+theorem memSem_serializeChunk (step : Nat) (small : step < 52) (memory : Memory)
+    (ready : SerialReady memory.ram) :
+    ∃ after, (Stage1.serializeChunk step).memSem memory = PMF.pure (some after) ∧
+      Emits memory after (chunkWordBits memory.ram (51 - step)) := by
+  obtain ⟨zero, canonical, _⟩ := ready
+  have baseEq : fieldBase + curveCellCount + rowCellCount + 642 * (51 - step) =
+      scaleCellBase + 642 * (51 - step) := rfl
+  obtain ⟨m1, det1, consts1, ram1, bits1, _⟩ := BigInt.det_setup memory
+  obtain ⟨m2, det2, _, ram2, bits2, _⟩ := BigInt.det_macPasses serialLimbBase serialLimbCount 642
+    (fieldBase + curveCellCount + rowCellCount + 642 * (51 - step))
+    (by unfold serialLimbBase serialLimbCount; norm_num)
+    (by unfold fieldBase curveCellCount rowCellCount; omega)
+    (Or.inl (by unfold serialLimbBase serialLimbCount fieldBase curveCellCount rowCellCount; omega))
+    m1 consts1 0 (fun e => (memory.ram (word (scaleCellBase + 642 * (51 - step) + e))).toNat)
+    (fun e bound => by
+      have cell := canonical (642 * (51 - step) + e) (by unfold scaleCellCount; omega)
+      rwa [← Nat.add_assoc] at cell)
+    (fun e bound => by rw [ram1, baseEq, BigInt.word_toNat])
+    (fun index bound => by
+      rw [ram1, zero index bound]
+      simp [BigInt.limb])
+  have value : 0 * pNat ^ 642 + BigInt.encNat
+      (fun e => (memory.ram (word (scaleCellBase + 642 * (51 - step) + e))).toNat) 642 =
+        chunkWordValue memory.ram (51 - step) := by
+    rw [Nat.zero_mul, Nat.zero_add, chunkWordValue]
+  rw [value] at ram2
+  obtain ⟨m3, run3, emits3⟩ :=
+    memSem_emitWord (serialLimbBase + (chunkLimbCount - 1)) topLimbBits (by decide) m2
+  obtain ⟨m4, run4, emits4⟩ := memSem_emitBlock 256 le_rfl
+    (serialLimbBase + (chunkLimbCount - 2)) (chunkLimbCount - 1)
+    (by unfold chunkLimbCount; omega) m3
+  obtain ⟨m5, det5, ram5, bits5⟩ := det_clearLimbs m4
+  have r1 : BigInt.setup.memSem memory = PMF.pure (some m1) := by
+    rw [BigInt.memSem_det _ BigInt.plain_setup, det1]
+  have r2 : (BigInt.macPasses serialLimbBase serialLimbCount 642
+      (fieldBase + curveCellCount + rowCellCount + 642 * (51 - step))).memSem m1 =
+        PMF.pure (some m2) := by
+    rw [BigInt.memSem_det _ (BigInt.plain_macPasses _ _ _ _), det2]
+  have r5 : Stage1.clearLimbs.memSem m4 = PMF.pure (some m5) := by
+    rw [BigInt.memSem_det _ plain_clearLimbs, det5]
+  have limbAt : ∀ index, index < serialLimbCount →
+      m2.ram (word (serialLimbBase + index)) =
+        word (BigInt.limb (chunkWordValue memory.ram (51 - step)) index) := by
+    intro index bound
+    rw [ram2, BigInt.writeCells_in _ _ _ _ _ bound
+      (by unfold serialLimbBase serialLimbCount; norm_num)]
+  refine ⟨m5, ?_, ?_, ?_, ?_⟩
+  · unfold Stage1.serializeChunk
+    rw [memSem_seq, r1, PMF.pure_bind]
+    simp only [kleisli]
+    rw [memSem_seq, r2, PMF.pure_bind]
+    simp only [kleisli]
+    rw [memSem_seq, run3, PMF.pure_bind]
+    simp only [kleisli]
+    rw [memSem_seq, run4, PMF.pure_bind]
+    simp only [kleisli]
+    exact r5
+  · rw [ram5, emits4.1, emits3.1, ram2, ram1, BigInt.writeCells_writeCells]
+    exact BigInt.writeCells_self _ _ _ _ fun index bound => zero index bound
+  · rw [bits5, emits4.2.1, emits3.2.1, bits2, bits1, chunkWordBits, chunkLimbBits,
+      List.append_assoc]
+    refine congrArg₂ (· ++ ·) ?_ (congrArg₂ (· ++ ·) ?_ rfl)
+    · refine congrArg List.flatten (congrArg List.ofFn (funext fun index => ?_))
+      have indexSmall : index.val < serialLimbCount := by
+        have := index.isLt; unfold chunkLimbCount at this; unfold serialLimbCount; omega
+      have shift : ∀ base : Nat, base + (chunkLimbCount - 2) + 1 - (chunkLimbCount - 1) +
+          index.val = base + index.val := fun base => by
+        rw [Nat.add_assoc base, show chunkLimbCount - 2 + 1 = chunkLimbCount - 1 from rfl,
+          Nat.add_sub_cancel]
+      rw [emits3.1, shift, limbAt index.val indexSmall, bitRun_word _ _ le_rfl]
+    · rw [limbAt _ (by decide), bitRun_word _ _ (by decide)]
+  · intro stack other
+    rw [bits5, emits4.2.2 stack other, emits3.2.2 stack other, bits2, bits1]
+
+set_option maxHeartbeats 1000000 in
+/-- **The curve-and-rows word.** `serializeFields` builds the base-`p` number of the `911` curve
+and row cells in the limb scratch, emits it top limb first, and clears the scratch. -/
+theorem memSem_serializeFields (memory : Memory) (ready : SerialReady memory.ram) :
+    ∃ after, Stage1.serializeFields.memSem memory = PMF.pure (some after) ∧
+      Emits memory after (fieldsLimbBits (fieldsWordValue memory.ram)) := by
+  obtain ⟨zero, _, canonical⟩ := ready
+  obtain ⟨m1, det1, consts1, ram1, bits1, _⟩ := BigInt.det_setup memory
+  obtain ⟨m2, det2, _, ram2, bits2, _⟩ := BigInt.det_macPasses serialLimbBase serialLimbCount
+    (curveCellCount + rowCellCount) fieldBase
+    (by unfold serialLimbBase serialLimbCount; norm_num)
+    (by unfold fieldBase curveCellCount rowCellCount; omega)
+    (Or.inl (by unfold serialLimbBase serialLimbCount fieldBase; omega))
+    m1 consts1 0 (fun e => (memory.ram (word (fieldBase + e))).toNat)
+    (fun e bound => canonical e bound)
+    (fun e bound => by rw [ram1, BigInt.word_toNat])
+    (fun index bound => by
+      rw [ram1, zero index bound]
+      simp [BigInt.limb])
+  have value : 0 * pNat ^ (curveCellCount + rowCellCount) + BigInt.encNat
+      (fun e => (memory.ram (word (fieldBase + e))).toNat) (curveCellCount + rowCellCount) =
+        fieldsWordValue memory.ram := by
+    rw [Nat.zero_mul, Nat.zero_add, fieldsWordValue]
+  rw [value] at ram2
+  obtain ⟨m3, run3, emits3⟩ :=
+    memSem_emitWord (serialLimbBase + (fieldsLimbCount - 1)) fieldsTopLimbBits (by decide) m2
+  obtain ⟨m4, run4, emits4⟩ := memSem_emitBlock 256 le_rfl
+    (serialLimbBase + (fieldsLimbCount - 2)) (fieldsLimbCount - 1)
+    (by unfold fieldsLimbCount; omega) m3
+  obtain ⟨m5, det5, ram5, bits5⟩ := det_clearLimbs m4
+  have r1 : BigInt.setup.memSem memory = PMF.pure (some m1) := by
+    rw [BigInt.memSem_det _ BigInt.plain_setup, det1]
+  have r2 : (BigInt.macPasses serialLimbBase serialLimbCount (curveCellCount + rowCellCount)
+      fieldBase).memSem m1 = PMF.pure (some m2) := by
+    rw [BigInt.memSem_det _ (BigInt.plain_macPasses _ _ _ _), det2]
+  have r5 : Stage1.clearLimbs.memSem m4 = PMF.pure (some m5) := by
+    rw [BigInt.memSem_det _ plain_clearLimbs, det5]
+  have limbAt : ∀ index, index < serialLimbCount →
+      m2.ram (word (serialLimbBase + index)) =
+        word (BigInt.limb (fieldsWordValue memory.ram) index) := by
+    intro index bound
+    rw [ram2, BigInt.writeCells_in _ _ _ _ _ bound
+      (by unfold serialLimbBase serialLimbCount; norm_num)]
+  refine ⟨m5, ?_, ?_, ?_, ?_⟩
+  · unfold Stage1.serializeFields
+    rw [memSem_seq, r1, PMF.pure_bind]
+    simp only [kleisli]
+    rw [memSem_seq, r2, PMF.pure_bind]
+    simp only [kleisli]
+    rw [memSem_seq, run3, PMF.pure_bind]
+    simp only [kleisli]
+    rw [memSem_seq, run4, PMF.pure_bind]
+    simp only [kleisli]
+    exact r5
+  · rw [ram5, emits4.1, emits3.1, ram2, ram1, BigInt.writeCells_writeCells]
+    exact BigInt.writeCells_self _ _ _ _ fun index bound => zero index bound
+  · rw [bits5, emits4.2.1, emits3.2.1, bits2, bits1, fieldsLimbBits, List.append_assoc]
+    refine congrArg₂ (· ++ ·) ?_ (congrArg₂ (· ++ ·) ?_ rfl)
+    · refine congrArg List.flatten (congrArg List.ofFn (funext fun index => ?_))
+      have indexSmall : index.val < serialLimbCount := by
+        have := index.isLt; unfold fieldsLimbCount at this; unfold serialLimbCount; omega
+      have shift : ∀ base : Nat, base + (fieldsLimbCount - 2) + 1 - (fieldsLimbCount - 1) +
+          index.val = base + index.val := fun base => by
+        rw [Nat.add_assoc base, show fieldsLimbCount - 2 + 1 = fieldsLimbCount - 1 from rfl,
+          Nat.add_sub_cancel]
+      rw [emits3.1, shift, limbAt index.val indexSmall, bitRun_word _ _ le_rfl]
+    · rw [limbAt _ (by decide), bitRun_word _ _ (by decide)]
+  · intro stack other
+    rw [bits5, emits4.2.2 stack other, emits3.2.2 stack other, bits2, bits1]
+
+/-- **The serialized bits of a RAM**: the curve-and-rows word (`fieldsLimbBits`), the gadget
+cells (`3` bits) and four padding bits, the fold joins (`128`), the `52` chunk words
+(`chunkWordBits`), each least significant bit first. -/
 def serialBits (ram : Word → Word) : List Bool :=
-  (List.ofFn fun index : Fin (curveCellCount + rowCellCount) =>
-      bitRun (ram (word (fieldBase + index.val))) 0 256).flatten ++
-    ((List.ofFn fun index : Fin exceptionByteCount =>
-      bitRun (ram (word (exceptionBase + index.val))) 0 8).flatten ++
+  fieldsLimbBits (fieldsWordValue ram) ++
+    (((List.ofFn fun index : Fin exceptionByteCount =>
+      bitRun (ram (word (exceptionBase + index.val))) 0 3).flatten ++
+      bitRun (ram (word serialLimbBase)) 0 4) ++
     ((List.ofFn fun index : Fin hotBlockCount =>
       bitRun (ram (word (hotBase + index.val))) 0 128).flatten ++
     (List.ofFn fun chunk : Fin 52 => chunkWordBits ram chunk.val).flatten))
 
-omit [FieldCertificate] in
-/-- One pushed zero bit on the response stack. -/
-theorem emits_pushZero (memory : Memory) : Emits memory (pushOn memory 3 false) [false] :=
-  ⟨rfl, by simp [pushOn], fun stack other => by simp [pushOn, Function.update_of_ne other]⟩
-
-/-- A pushed bit, then the rest. -/
-theorem memSem_push_seq (bit : Bool) (rest : Prog) (memory : Memory) :
-    (Prog.seq (.op (.push 3 bit)) rest).memSem memory = rest.memSem (pushOn memory 3 bit) := by
-  rw [memSem_seq]
-  exact PMF.pure_bind _ _
-
-/-- **One chunk word.** `serializeChunk r` emits chunk `51 − r`: two zero bits, its last cell
-(`256` bits), then its other `641` cells from the top down, which leaves the word's bits in wire
-order. -/
-theorem memSem_serializeChunk (step : Nat) (small : step < 52) (memory : Memory) :
-    ∃ after, (Stage1.serializeChunk step).memSem memory = PMF.pure (some after) ∧
-      Emits memory after (chunkWordBits memory.ram (51 - step)) := by
-  have lastCell : fieldBase + fieldCellCount - 1 - 642 * step =
-      scaleCellBase + 642 * (51 - step) + 641 := by
-    unfold fieldCellCount scaleCellBase curveCellCount rowCellCount scaleCellCount
-    omega
-  have blockCell : ∀ index : Nat,
-      fieldBase + fieldCellCount - 1 - 642 * step - 1 + 1 - 641 + index =
-        scaleCellBase + 642 * (51 - step) + index := by
-    intro index
-    unfold fieldCellCount scaleCellBase curveCellCount rowCellCount scaleCellCount
-    omega
-  set pushed := pushOn (pushOn memory 3 false) 3 false with pushedDef
-  have emitsPushed : Emits memory pushed ([false] ++ [false]) :=
-    (emits_pushZero memory).trans (emits_pushZero _)
-  obtain ⟨middle, runLast, emitsLast⟩ :=
-    memSem_emitWord (fieldBase + fieldCellCount - 1 - 642 * step) 256 le_rfl pushed
-  obtain ⟨after, runBlock, emitsBlock⟩ := memSem_emitBlock 254 (by norm_num)
-    (fieldBase + fieldCellCount - 1 - 642 * step - 1) 641
-    (by unfold fieldCellCount curveCellCount rowCellCount scaleCellCount; omega) middle
-  refine ⟨after, ?_, ?_⟩
-  · unfold Stage1.serializeChunk
-    rw [memSem_push_seq, memSem_push_seq, ← pushedDef, memSem_seq, runLast, PMF.pure_bind]
-    exact runBlock
-  · have joined := (emitsPushed.trans emitsLast).trans emitsBlock
-    have pushedRam : pushed.ram = memory.ram := rfl
-    have block : (List.ofFn fun index : Fin 641 =>
-        bitRun (middle.ram (word (fieldBase + fieldCellCount - 1 - 642 * step - 1 + 1 - 641 +
-          index.val))) 0 254) =
-        List.ofFn fun index : Fin 641 =>
-          bitRun (memory.ram (word (scaleCellBase + 642 * (51 - step) + index.val))) 0 254 := by
-      congr 1
-      funext index
-      rw [emitsLast.1, pushedRam, blockCell index.val]
-    rw [block, pushedRam, lastCell] at joined
-    unfold chunkWordBits
-    exact joined
-
 /-- **The chunk words**: the first `count` steps emit the top `count` chunk words, in wire order. -/
 theorem memSem_serializeChunks :
-    ∀ (count : Nat), count ≤ 52 → ∀ memory : Memory,
+    ∀ (count : Nat), count ≤ 52 → ∀ memory : Memory, SerialReady memory.ram →
       ∃ after, (Prog.rep count Stage1.serializeChunk).memSem memory = PMF.pure (some after) ∧
         Emits memory after (List.ofFn fun index : Fin count =>
           chunkWordBits memory.ram (52 - count + index.val)).flatten
-  | 0, _, memory => ⟨memory, by rw [Prog.rep]; rfl, by simpa using Emits.refl memory⟩
-  | count + 1, bound, memory => by
-      obtain ⟨middle, run, emits⟩ := memSem_serializeChunks count (by omega) memory
+  | 0, _, memory, _ => ⟨memory, by rw [Prog.rep]; rfl, by simpa using Emits.refl memory⟩
+  | count + 1, bound, memory, ready => by
+      obtain ⟨middle, run, emits⟩ := memSem_serializeChunks count (by omega) memory ready
       obtain ⟨after, step, emitsStep⟩ := memSem_serializeChunk count (by omega) middle
+        (by rw [emits.1]; exact ready)
       refine ⟨after, ?_, ?_⟩
       · rw [Prog.rep, memSem_seq, run, PMF.pure_bind]
         exact step
@@ -225,42 +427,39 @@ theorem top_sub (base count : Nat) (pos : 0 < count) : base + count - 1 + 1 - co
   omega
 
 /-- **The serializer's law.** -/
-theorem memSem_serialize (memory : Memory) :
+theorem memSem_serialize (memory : Memory) (ready : SerialReady memory.ram) :
     ∃ after, Stage1.serialize.memSem memory = PMF.pure (some after) ∧
       Emits memory after (serialBits memory.ram) := by
   have hotTop : hotBase + hotBlockCount - 1 + 1 - hotBlockCount = hotBase :=
     top_sub _ _ (by decide)
   have byteTop : exceptionBase + exceptionByteCount - 1 + 1 - exceptionByteCount =
       exceptionBase := top_sub _ _ (by decide)
-  have fieldTop : fieldBase + curveCellCount + rowCellCount - 1 + 1 -
-      (curveCellCount + rowCellCount) = fieldBase := by
-    rw [Nat.add_assoc]
-    exact top_sub _ _ (by decide)
-  obtain ⟨afterScale, runScale, emitsScale⟩ := memSem_serializeChunks 52 le_rfl memory
+  obtain ⟨afterScale, runScale, emitsScale⟩ := memSem_serializeChunks 52 le_rfl memory ready
   obtain ⟨afterHot, runHot, emitsHot⟩ := memSem_emitBlock 128 (by norm_num)
     (hotBase + hotBlockCount - 1) hotBlockCount
     (block_le _ _ _ le_rfl (by unfold hotBlockCount; decide)) afterScale
-  obtain ⟨afterBytes, runBytes, emitsBytes⟩ := memSem_emitBlock 8 (by norm_num)
+  obtain ⟨afterLast, runLast, emitsLast⟩ := memSem_emitWord serialLimbBase 4 (by norm_num) afterHot
+  obtain ⟨afterBytes, runBytes, emitsBytes⟩ := memSem_emitBlock 3 (by norm_num)
     (exceptionBase + exceptionByteCount - 1) exceptionByteCount
-    (block_le _ _ _ le_rfl (by unfold exceptionByteCount; decide)) afterHot
-  obtain ⟨afterFields, runFields, emitsFields⟩ := memSem_emitBlock 256 (by norm_num)
-    (fieldBase + curveCellCount + rowCellCount - 1) (curveCellCount + rowCellCount)
-    (by rw [Nat.add_assoc]; exact block_le _ _ _ le_rfl (by decide))
-    afterBytes
+    (block_le _ _ _ le_rfl (by unfold exceptionByteCount; decide)) afterLast
+  obtain ⟨afterFields, runFields, emitsFields⟩ := memSem_serializeFields afterBytes
+    (by rw [emitsBytes.1, emitsLast.1, emitsHot.1, emitsScale.1]; exact ready)
   refine ⟨afterFields, ?_, ?_⟩
   · unfold Stage1.serialize
     rw [memSem_seq, runScale, PMF.pure_bind]
     simp only [kleisli]
     rw [memSem_seq, runHot, PMF.pure_bind]
     simp only [kleisli]
-    rw [memSem_seq, runBytes, PMF.pure_bind]
+    rw [memSem_seq, memSem_seq, runLast, PMF.pure_bind]
+    simp only [kleisli]
+    rw [runBytes, PMF.pure_bind]
     simp only [kleisli]
     exact runFields
-  · have all := ((emitsScale.trans emitsHot).trans emitsBytes).trans emitsFields
-    rw [emitsBytes.1, emitsHot.1, emitsScale.1, hotTop, byteTop, fieldTop] at all
+  · have all := (((emitsScale.trans emitsHot).trans emitsLast).trans emitsBytes).trans emitsFields
+    rw [emitsBytes.1, emitsLast.1, emitsHot.1, emitsScale.1, hotTop, byteTop] at all
     convert all using 1
     unfold serialBits
-    simp only [Nat.sub_self, Nat.zero_add]
+    simp only [Nat.sub_self, Nat.zero_add, List.append_assoc]
 
 end Serializer
 

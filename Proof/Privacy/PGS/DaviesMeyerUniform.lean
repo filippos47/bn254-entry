@@ -667,24 +667,24 @@ theorem uniform_pad_xor {Value : Type*} (value : Value) (mask : Value → Block)
       PMF.uniformOfFintype Block :=
   uniform_const_xor (mask value)
 
-/-- This equivalence splits a block into its low byte and its remaining 120 bits. -/
-def blockLowByteEquiv : Block ≃ BitVec 8 × BitVec 120 where
-  toFun block := (BitVec.ofNat 8 block.toNat, BitVec.ofNat 120 (block.toNat / 256))
-  invFun pair := BitVec.ofNat 128 (pair.1.toNat + 256 * pair.2.toNat)
+/-- This equivalence splits a block into its low three bits and its remaining 125 bits. -/
+def blockLowByteEquiv : Block ≃ BitVec 3 × BitVec 125 where
+  toFun block := (BitVec.ofNat 3 block.toNat, BitVec.ofNat 125 (block.toNat / 8))
+  invFun pair := BitVec.ofNat 128 (pair.1.toNat + 8 * pair.2.toNat)
   left_inv block := by
-    have byteWidth : (2 : Nat) ^ 8 = 256 := by norm_num
+    have byteWidth : (2 : Nat) ^ 3 = 8 := by norm_num
     have bound : block.toNat < 2 ^ 128 := block.isLt
-    have divLt : block.toNat / 256 < 2 ^ 120 := by omega
+    have divLt : block.toNat / 8 < 2 ^ 125 := by omega
     apply BitVec.eq_of_toNat_eq
     simp only [BitVec.toNat_ofNat, byteWidth]
     rw [Nat.mod_eq_of_lt divLt, Nat.mod_add_div, Nat.mod_eq_of_lt bound]
   right_inv pair := by
     obtain ⟨low, high⟩ := pair
-    have byteWidth : (2 : Nat) ^ 8 = 256 := by norm_num
-    have lowBound : low.toNat < 256 := by simpa [byteWidth] using low.isLt
-    have highBound : high.toNat < 2 ^ 120 := high.isLt
-    have small : low.toNat + 256 * high.toNat < 2 ^ 128 := by omega
-    have quotient : (low.toNat + 256 * high.toNat) / 256 = high.toNat := by omega
+    have byteWidth : (2 : Nat) ^ 3 = 8 := by norm_num
+    have lowBound : low.toNat < 8 := by simpa [byteWidth] using low.isLt
+    have highBound : high.toNat < 2 ^ 125 := high.isLt
+    have small : low.toNat + 8 * high.toNat < 2 ^ 128 := by omega
+    have quotient : (low.toNat + 8 * high.toNat) / 8 = high.toNat := by omega
     apply Prod.ext
     · apply BitVec.eq_of_toNat_eq
       simp only [BitVec.toNat_ofNat, byteWidth]
@@ -697,10 +697,10 @@ def blockLowByteEquiv : Block ≃ BitVec 8 × BitVec 120 where
 @[simp] theorem blockLowByteEquiv_fst (block : Block) :
     (blockLowByteEquiv block).1 = Exception.lowByte block := rfl
 
-/-- Truncating a uniform block to its low byte gives a uniform byte: `2 ^ 128 = 2 ^ 8 * 2 ^ 120`
-exactly, so there is no rounding loss. -/
+/-- Truncating a uniform block to its low three bits gives a uniform code:
+`2 ^ 128 = 2 ^ 3 * 2 ^ 125` exactly, so there is no rounding loss. -/
 theorem map_uniform_lowByte :
-    (PMF.uniformOfFintype Block).map Exception.lowByte = PMF.uniformOfFintype (BitVec 8) := by
+    (PMF.uniformOfFintype Block).map Exception.lowByte = PMF.uniformOfFintype (BitVec 3) := by
   have split := congrArg (fun law => law.map Prod.fst)
     (uniformOfFintype_map_equiv blockLowByteEquiv)
   simpa only [PMF.map_comp, uniformOfFintype_map_fst, Function.comp_def, blockLowByteEquiv_fst]
@@ -709,7 +709,7 @@ theorem map_uniform_lowByte :
 /-- The low byte of a Davies–Meyer value at a fixed point is a uniform byte. -/
 theorem daviesMeyer_lowByte_uniform (u : Block) :
     (PMF.uniformOfFintype (Equiv Block Block)).map
-        (fun π => Exception.lowByte (daviesMeyer π u)) = PMF.uniformOfFintype (BitVec 8) := by
+        (fun π => Exception.lowByte (daviesMeyer π u)) = PMF.uniformOfFintype (BitVec 3) := by
   have factor : (fun π : Equiv.Perm Block => Exception.lowByte (daviesMeyer π u)) =
       Exception.lowByte ∘ (fun π => daviesMeyer π u) := rfl
   rw [factor, ← PMF.map_comp, daviesMeyer_uniform' u]

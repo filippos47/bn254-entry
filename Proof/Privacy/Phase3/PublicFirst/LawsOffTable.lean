@@ -579,7 +579,7 @@ pads and the gadget on the table. -/
 theorem garbleM_table (scalar : NonZeroScalar) (A : Table) (coins : Coins) :
     (Programs.garbleM scalar coins).eval (tableAnswer A) =
       (Programs.assemble (FieldMacToECMac.outputKeys construction scalar.value coins.offsets)
-        coins.pointRandomness coins.bridgeKey coins.curveMask coins.curveR1 coins.curveR2
+        coins.pointRandomness coins.bridgeKey coins.curveMask
         (Programs.laneTables (tableOracle A) (tableHash A) .curveX (coins.inputDelta .x)
           (Pipeline.bitKeyOf coins.inputMacKey .x))
         (Programs.laneTables (tableOracle A) (tableHash A) .curveY (coins.inputDelta .y)

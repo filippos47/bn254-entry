@@ -96,7 +96,7 @@ theorem coins_marginal (g : ClampedOffsets → (Fin digitCount → NonZeroBase �
   refine tsum_congr fun K => congrArg _ ?_
   rw [tsum_uniform_prod (α := Fin outputMacCount → RowRandomness)]
   have perR : ∀ (R : Fin outputMacCount → RowRandomness)
-      (b : (Fin outputMacCount → Exception.Entry) × BaseField × NonZeroBase × BaseField × BaseField ×
+      (b : (Fin outputMacCount → Exception.Entry) × BaseField × NonZeroBase ×
         (Coord → Fin coordinateBitCount → Block) × (Coord → Block)),
       g ⟨(coinsSplit.symm (K, R, b)).offsets, (coinsSplit.symm (K, R, b)).offsetsClamped⟩
           (fun d => (((coinsSplit.symm (K, R, b)).pointRandomness.get d).rho,

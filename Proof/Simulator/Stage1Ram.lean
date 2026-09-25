@@ -170,7 +170,7 @@ theorem ofNat_mod_256 (width value : Nat) (small : width ≤ 256) :
 theorem sourceOfDraws_congr (cells cells' : Nat → BaseField) (bytes bytes' hot hot' key key' : Nat → Nat)
     (sameCells : ∀ index, index < fieldCellCount → cells index = cells' index)
     (sameBytes : ∀ index, index < exceptionByteCount →
-      BitVec.ofNat 8 (bytes index) = BitVec.ofNat 8 (bytes' index))
+      BitVec.ofNat 3 (bytes index) = BitVec.ofNat 3 (bytes' index))
     (sameHot : ∀ index, index < hotBlockCount →
       BitVec.ofNat 128 (hot index) = BitVec.ofNat 128 (hot' index))
     (sameKey : ∀ index, index < keyBlockCount →
@@ -178,17 +178,17 @@ theorem sourceOfDraws_congr (cells cells' : Nat → BaseField) (bytes bytes' hot
     sourceOfDraws cells bytes hot key = sourceOfDraws cells' bytes' hot' key' := by
   have cellCount := fieldCellCount_eq
   apply stage1Source_ext
-  · show (cells 0, cells 1, cells 2) = (cells' 0, cells' 1, cells' 2)
-    rw [sameCells 0 (by omega), sameCells 1 (by omega), sameCells 2 (by omega)]
+  · show cells 0 = cells' 0
+    rw [sameCells 0 (by omega)]
   · apply Vector.ext
     intro digit bound
     have small : digit < 91 := bound
     simp only [sourceOfDraws, Vector.getElem_ofFn]
-    rw [sameCells _ (by omega), sameCells (3 + 10 * digit + 1) (by omega),
-      sameCells (3 + 10 * digit + 2) (by omega), sameCells (3 + 10 * digit + 3) (by omega),
-      sameCells (3 + 10 * digit + 4) (by omega), sameCells (3 + 10 * digit + 5) (by omega),
-      sameCells (3 + 10 * digit + 6) (by omega), sameCells (3 + 10 * digit + 7) (by omega),
-      sameCells (3 + 10 * digit + 8) (by omega), sameCells (3 + 10 * digit + 9) (by omega)]
+    rw [sameCells _ (by omega), sameCells (1 + 10 * digit + 1) (by omega),
+      sameCells (1 + 10 * digit + 2) (by omega), sameCells (1 + 10 * digit + 3) (by omega),
+      sameCells (1 + 10 * digit + 4) (by omega), sameCells (1 + 10 * digit + 5) (by omega),
+      sameCells (1 + 10 * digit + 6) (by omega), sameCells (1 + 10 * digit + 7) (by omega),
+      sameCells (1 + 10 * digit + 8) (by omega), sameCells (1 + 10 * digit + 9) (by omega)]
   · apply Vector.ext
     intro digit bound
     apply Vector.ext
@@ -250,7 +250,7 @@ theorem extractSource_final (memory : Memory) (draw : Stage1Draw) :
   · intro index bound
     rw [total_apply _ _ _ bound, show exceptionBase + index =
       exceptionBase + (⟨index, bound⟩ : Fin exceptionByteCount).val from rfl, ram_byte,
-      BitVec.toNat_ofNat, ofNat_mod_256 8 _ (by norm_num)]
+      BitVec.toNat_ofNat, ofNat_mod_256 3 _ (by norm_num)]
   · intro index bound
     rw [total_apply _ _ _ bound,
       show hotBase + index = hotBase + (⟨index, bound⟩ : Fin hotBlockCount).val from rfl,

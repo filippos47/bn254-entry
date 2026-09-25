@@ -14,7 +14,7 @@ Exactly two named hypotheses remain:
 * `machine`: `MachineBound simulator` (P2; its `cost` field is `MachineBound.of_law`'s).
 
 The conclusion is literally the type of `Submission.solution.adaptivePrivacy`, at the ciphertext
-size `1,103,204` (the sign row, `642` elements per chunk word, chunk widths
+size `1,100,521` (the sign row, `642` elements per chunk word, chunk widths
 `[2, 5 × 48, 4 × 3]`).
 
 This is a chain-end module: it imports the hybrid chain (`Hybrids`, `Hidden.Final`,
@@ -45,7 +45,7 @@ theorem planB_oracleAdaptivePrivacy_of {simulator : BoundedMachine.Simulator}
       letI := @Fintype.ofFinite EncPRF.PermutationIndex inferInstance
       letI := Classical.decEq PlanB.FixedIndex
       letI := Classical.decEq EncPRF.PermutationIndex
-      GarbledCircuit.OracleAdaptivePrivacy (@Scheme.scheme field group) PlanB.Wire.encoding 1103204
+      GarbledCircuit.OracleAdaptivePrivacy (@Scheme.scheme field group) PlanB.Wire.encoding 1100521
         (@uniformRandomTape Scheme.Coins (@Fintype.ofFinite Scheme.Coins inferInstance)
           Scheme.witness)
         (fun parameter scalar coins =>

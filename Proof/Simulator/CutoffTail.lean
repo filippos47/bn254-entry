@@ -67,7 +67,7 @@ abbrev GoodTail := {tail : Vector FieldMacToECMac.AffineOffset 90 //
 
 /-- A coin without its offsets. -/
 abbrev CoinRest := FieldMacToECMac.Randomness × FieldMacToECMac.ExceptionPad × BaseField ×
-  NonZeroBase × BaseField × BaseField × (PlanB.Coord → Fin coordinateBitCount → Block) ×
+  NonZeroBase × (PlanB.Coord → Fin coordinateBitCount → Block) ×
   (PlanB.Coord → Block)
 
 noncomputable instance goodTailFintype : Fintype GoodTail := Fintype.ofFinite _
@@ -92,35 +92,31 @@ theorem clamped_offsetOf (free : Vector FieldMacToECMac.AffineOffset 90)
 /-- **The coin split**: a coin is a tail with a nonzero clamp and the rest of the coin. -/
 def coinSplit (coin : Coins) : GoodTail × CoinRest :=
   (⟨coin.offsets.free, coin_clamp_ne coin⟩, (coin.pointRandomness, coin.exceptionPad,
-    coin.bridgeKey, coin.curveMask, coin.curveR1, coin.curveR2, coin.inputZero, coin.inputDelta))
+    coin.bridgeKey, coin.curveMask, coin.inputZero, coin.inputDelta))
 
 theorem coinSplit_bijective : Function.Bijective coinSplit := by
   constructor
   · intro first second same
     have clampedFirst : first.offsets.IsClamped := first.offsetsClamped
     have clampedSecond : second.offsets.IsClamped := second.offsetsClamped
-    rcases first with ⟨⟨head, free⟩, clamped, randomness, pad, bridge, mask, r1, r2, zero, delta⟩
-    rcases second with ⟨⟨head', free'⟩, clamped', randomness', pad', bridge', mask', r1', r2',
-      zero', delta'⟩
+    rcases first with ⟨⟨head, free⟩, clamped, randomness, pad, bridge, mask, zero, delta⟩
+    rcases second with ⟨⟨head', free'⟩, clamped', randomness', pad', bridge', mask', zero', delta'⟩
     simp only [coinSplit, Prod.mk.injEq, Subtype.mk.injEq] at same
-    obtain ⟨sameFree, sameRandomness, samePad, sameBridge, sameMask, sameR1, sameR2, sameZero,
-      sameDelta⟩ := same
-    subst sameFree sameRandomness samePad sameBridge sameMask sameR1 sameR2 sameZero sameDelta
+    obtain ⟨sameFree, sameRandomness, samePad, sameBridge, sameMask, sameZero, sameDelta⟩ := same
+    subst sameFree sameRandomness samePad sameBridge sameMask sameZero sameDelta
     unfold FieldMacToECMac.SuccessfulOffsets.IsClamped at clampedFirst clampedSecond
     simp only at clampedFirst clampedSecond
     have sameHead : head = head' := affineOffset_point_injective
       (clampedFirst.trans clampedSecond.symm)
     subst sameHead
     rfl
-  · rintro ⟨⟨free, nonzero⟩, randomness, pad, bridge, mask, r1, r2, zero, delta⟩
+  · rintro ⟨⟨free, nonzero⟩, randomness, pad, bridge, mask, zero, delta⟩
     refine ⟨{ offsets := ⟨offsetOf _ nonzero, free⟩
               offsetsClamped := fun {_} {_} => clamped_offsetOf free nonzero
               pointRandomness := randomness
               exceptionPad := pad
               bridgeKey := bridge
               curveMask := mask
-              curveR1 := r1
-              curveR2 := r2
               inputZero := zero
               inputDelta := delta }, rfl⟩
 

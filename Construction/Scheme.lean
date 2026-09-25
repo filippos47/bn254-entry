@@ -32,8 +32,6 @@ structure Coins where
   exceptionPad : FieldMacToECMac.ExceptionPad
   bridgeKey : BaseField
   curveMask : NonZeroBase
-  curveR1 : BaseField
-  curveR2 : BaseField
   inputZero : PlanB.Coord → Fin coordinateBitCount → Block
   inputDelta : PlanB.Coord → Block
 
@@ -45,8 +43,6 @@ def Coins.withOracle (coins : Coins) (oracle : Oracle) : Garbling.Randomness whe
   exceptionPad := coins.exceptionPad
   bridgeKey := coins.bridgeKey
   curveMask := coins.curveMask
-  curveR1 := coins.curveR1
-  curveR2 := coins.curveR2
   fixedKeyOracle := oracle.1
   inputZero := coins.inputZero
   inputDelta := coins.inputDelta
@@ -61,8 +57,6 @@ def Coins.ofRandomness (tape : Garbling.Randomness) : Coins where
   exceptionPad := tape.exceptionPad
   bridgeKey := tape.bridgeKey
   curveMask := tape.curveMask
-  curveR1 := tape.curveR1
-  curveR2 := tape.curveR2
   inputZero := tape.inputZero
   inputDelta := tape.inputDelta
 
@@ -157,13 +151,13 @@ instance successfulOffsetsFinite : Finite FieldMacToECMac.SuccessfulOffsets :=
 /-- The data part of the coins: every field except the `Prop`. -/
 abbrev CoinsData :=
   FieldMacToECMac.SuccessfulOffsets × FieldMacToECMac.Randomness ×
-    FieldMacToECMac.ExceptionPad × BaseField × NonZeroBase × BaseField × BaseField ×
+    FieldMacToECMac.ExceptionPad × BaseField × NonZeroBase ×
     (PlanB.Coord → Fin coordinateBitCount → Block) × (PlanB.Coord → Block)
 
 /-- The coins' data part. -/
 def Coins.data (coins : Coins) : CoinsData :=
   (coins.offsets, coins.pointRandomness, coins.exceptionPad, coins.bridgeKey, coins.curveMask,
-    coins.curveR1, coins.curveR2, coins.inputZero, coins.inputDelta)
+    coins.inputZero, coins.inputDelta)
 
 /-- `offsetsClamped` is a `Prop`, so the data part determines the coins. -/
 theorem Coins.data_injective : Function.Injective Coins.data := by

@@ -8,15 +8,14 @@ to exactly `ciphertextBytesConstant` bytes; the byte-count theorem therefore doe
 
 | Field       | Encoding                                 | Bytes   |
 |-------------|------------------------------------------|---------|
-| `curve`     | `3 * Wire.field`                          | 96      |
-| `rows`      | `Vector RowGamma 91`, 10 field elements   | 29,120  |
-| `exception` | `Vector (Vector (BitVec 8) 12) 91`        | 1,092   |
+| `curve`, `rows` | one base-`p` word of `1 + 91 * 10 = 911` field elements | 28,879 |
+| `exception` | `Vector (Vector (BitVec 3) 12) 91`, one word | 410     |
 | `curveXHot` | `Vector Block 202`                        | 3,232   |
 | `curveYHot` | `Vector Block 202`                        | 3,232   |
 | `pointXHot` | `Vector Block 202`                        | 3,232   |
 | `pointYHot` | `Vector Block 202`                        | 3,232   |
-| `scale`     | `Vector (BitVec 163072) 52`               | 1,059,968 |
-| **total**   |                                           | **1,103,204** |
+| `scale`     | `Vector (BitVec 162816) 52`, base-`p` words | 1,058,304 |
+| **total**   |                                           | **1,100,521** |
 -/
 
 import Construction.ArgoMAC.Exception
@@ -52,16 +51,36 @@ structure RowGamma where
   /-- `Z` row constant `c1`. -/
   zC1 : BaseField
 
+/-- The published constants of one digit, in wire order (`xC0, xC1, xC2, xC4, yC0, yC2, yC4,
+yC5, zC0, zC1` at `0 .. 9`). -/
+def RowGamma.cell (row : RowGamma) : Nat → BaseField
+  | 0 => row.xC0
+  | 1 => row.xC1
+  | 2 => row.xC2
+  | 3 => row.xC4
+  | 4 => row.yC0
+  | 5 => row.yC2
+  | 6 => row.yC4
+  | 7 => row.yC5
+  | 8 => row.zC0
+  | _ => row.zC1
+
+/-- A digit's constants are its ten cells. -/
+theorem RowGamma.eta_cell (row : RowGamma) :
+    (⟨row.cell 0, row.cell 1, row.cell 2, row.cell 3, row.cell 4, row.cell 5, row.cell 6,
+      row.cell 7, row.cell 8, row.cell 9⟩ : RowGamma) = row := by
+  cases row; rfl
+
 /-- The complete public value of a Plan B garbling.
 
 Every field is fixed-width: there are no `Option` tags, so every inhabitant encodes to exactly
 `ciphertextBytesConstant` bytes. -/
 structure Public where
-  /-- The curve-membership check: three published constants. -/
-  curve : BaseField × BaseField × BaseField
+  /-- The curve-membership check: one published constant. -/
+  curve : BaseField
   /-- The ten published row constants of each digit. -/
   rows : Vector RowGamma digitCount
-  /-- The exception gadget, twelve bytes per digit. -/
+  /-- The exception gadget, twelve three-bit slots per digit. -/
   exception : Vector Exception.Entry digitCount
   /-- System A's `bin-to-hot` fold joins on the x coordinate's raw Lamport labels. -/
   curveXHot : Vector Block foldStepCount
@@ -75,6 +94,6 @@ structure Public where
   scale : Vector (BitVec chunkJoinBits) chunkCount
 
 /-- The Plan B ciphertext size in bytes. -/
-def ciphertextBytesConstant : Nat := 1103204
+def ciphertextBytesConstant : Nat := 1100521
 
 end Kriterion.ArgoMAC.PlanB

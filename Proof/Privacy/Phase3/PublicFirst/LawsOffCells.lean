@@ -479,22 +479,22 @@ abbrev ClampedOffsets :=
 
 /-- The coins, field by field, the vectors read as functions. -/
 abbrev CoinsParts := ClampedOffsets × (Fin outputMacCount → RowRandomness) ×
-  (Fin outputMacCount → Exception.Entry) × BaseField × NonZeroBase × BaseField × BaseField ×
+  (Fin outputMacCount → Exception.Entry) × BaseField × NonZeroBase ×
   (Coord → Fin coordinateBitCount → Block) × (Coord → Block)
 
 /-- **The coins are their fields.** -/
 def coinsSplit : Coins ≃ CoinsParts where
   toFun c := (⟨c.offsets, c.offsetsClamped⟩, c.pointRandomness.get, c.exceptionPad.get, c.bridgeKey,
-    c.curveMask, c.curveR1, c.curveR2, c.inputZero, c.inputDelta)
+    c.curveMask, c.inputZero, c.inputDelta)
   invFun p := ⟨p.1.1, p.1.2, Vector.ofFn p.2.1, Vector.ofFn p.2.2.1, p.2.2.2.1, p.2.2.2.2.1,
-    p.2.2.2.2.2.1, p.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2⟩
+    p.2.2.2.2.2.1, p.2.2.2.2.2.2⟩
   left_inv c := by
-    obtain ⟨offsets, clamped, pR, pad, t, mask, r1, r2, Z, Δ⟩ := c
+    obtain ⟨offsets, clamped, pR, pad, t, mask, Z, Δ⟩ := c
     show Kriterion.ArgoMAC.Scheme.Coins.mk offsets clamped (Vector.ofFn pR.get) (Vector.ofFn pad.get)
-      t mask r1 r2 Z Δ = _
+      t mask Z Δ = _
     rw [ofFn_get', ofFn_get']
   right_inv p := by
-    obtain ⟨offsets, pR, pad, t, mask, r1, r2, Z, Δ⟩ := p
+    obtain ⟨offsets, pR, pad, t, mask, Z, Δ⟩ := p
     refine Prod.ext rfl (Prod.ext ?_ (Prod.ext ?_ rfl))
     · exact funext fun d => Vector.get_ofFn pR d
     · exact funext fun d => Vector.get_ofFn pad d
@@ -510,27 +510,26 @@ abbrev Outer := ClampedOffsets × (Fin digitCount → NonZeroBase × NonZeroBase
 /-- **The coins' fields, the fixed-key answers and the masks are the rest and F4's coins.** -/
 def regroup : CoinsParts × (FixedIndex → Block) × MaskVectors ≃ Outer input × JointCoins where
   toFun ω :=
-    ((ω.1.1, fun d => ((ω.1.2.1 d).rho, (ω.1.2.1 d).tau), ω.1.2.2.2.2.2.2.2.1,
-        ω.1.2.2.2.2.2.2.2.2, (splitAlong (hiddenIdx input) (hiddenIdx_injective input) ω.2.1).2),
+    ((ω.1.1, fun d => ((ω.1.2.1 d).rho, (ω.1.2.1 d).tau), ω.1.2.2.2.2.2.1,
+        ω.1.2.2.2.2.2.2, (splitAlong (hiddenIdx input) (hiddenIdx_injective input) ω.2.1).2),
       (fun d => ((maskSiteEquiv (maskCoordEquiv ω.2.2)).1 d,
           ((ω.1.2.1 d).x, (ω.1.2.1 d).y, (ω.1.2.1 d).z)),
         ((maskSiteEquiv (maskCoordEquiv ω.2.2)).2, ω.1.2.2.2.1,
-          ⟨ω.1.2.2.2.2.1.value, ω.1.2.2.2.2.1.nonzero⟩,
-          ω.1.2.2.2.2.2.1, ω.1.2.2.2.2.2.2.1),
+          ⟨ω.1.2.2.2.2.1.value, ω.1.2.2.2.2.1.nonzero⟩),
         (fun ℓ s => ω.2.1 (hiddenIdx input (.inl (ℓ, s))),
           fun d => (ω.1.2.2.1 d, (ω.2.1 (hiddenIdx input (.inr (d, false))),
             ω.2.1 (hiddenIdx input (.inr (d, true))))))))
   invFun p :=
     ((p.1.1, fun d => ⟨(p.1.2.1 d).1, (p.1.2.1 d).2, (p.2.1 d).2.1, (p.2.1 d).2.2.1,
           (p.2.1 d).2.2.2⟩,
-        fun d => (p.2.2.2.2 d).1, p.2.2.1.2.1, ⟨p.2.2.1.2.2.1.1, p.2.2.1.2.2.1.2⟩,
-        p.2.2.1.2.2.2.1, p.2.2.1.2.2.2.2, p.1.2.2.1, p.1.2.2.2.1),
+        fun d => (p.2.2.2.2 d).1, p.2.2.1.2.1, ⟨p.2.2.1.2.2.1, p.2.2.1.2.2.2⟩,
+        p.1.2.2.1, p.1.2.2.2.1),
       (splitAlong (hiddenIdx input) (hiddenIdx_injective input)).symm
         (Sum.elim (fun q => p.2.2.2.1 q.1 q.2)
           (fun q => if q.2 then (p.2.2.2.2 q.1).2.2 else (p.2.2.2.2 q.1).2.1), p.1.2.2.2.2),
       maskCoordEquiv.symm (maskSiteEquiv.symm (fun d => (p.2.1 d).1, p.2.2.1.1)))
   left_inv ω := by
-    obtain ⟨⟨offsets, pR, pad, t, mask, r1, r2, Z, Δ⟩, v, m⟩ := ω
+    obtain ⟨⟨offsets, pR, pad, t, mask, Z, Δ⟩, v, m⟩ := ω
     have hidden : (Sum.elim
         (fun q : Lane × Fin foldStepCount => v (hiddenIdx input (.inl (q.1, q.2))))
         (fun q : Fin digitCount × Bool => if q.2 then v (hiddenIdx input (.inr (q.1, true)))
@@ -551,7 +550,7 @@ def regroup : CoinsParts × (FixedIndex → Block) × MaskVectors ≃ Outer inpu
         (maskSiteEquiv (maskCoordEquiv m)).2)) = m
       rw [Prod.mk.eta, Equiv.symm_apply_apply, Equiv.symm_apply_apply]
   right_inv p := by
-    obtain ⟨⟨offsets, rho, Z, Δ, rest⟩, digits, ⟨cm, t, mask, r1, r2⟩, fold, gadget⟩ := p
+    obtain ⟨⟨offsets, rho, Z, Δ, rest⟩, digits, ⟨cm, t, mask⟩, fold, gadget⟩ := p
     have masks : maskSiteEquiv (maskCoordEquiv (maskCoordEquiv.symm
         (maskSiteEquiv.symm (fun d => (digits d).1, cm)))) = (fun d => (digits d).1, cm) := by
       rw [Equiv.apply_symm_apply, Equiv.apply_symm_apply]

@@ -57,10 +57,25 @@ abbrev rSecond : Register := 15
 
 /-! ### RAM regions -/
 
-/-- The `34,297` public field cells, in `Wire.encoding` order: curve (3), rows (`91 · 10`),
+/-- Stage 1's serializer scratch: the `903` limbs of the current word's base-`p` number (the
+largest word is the curve-and-rows word), below every other region. It is zero outside the
+serializer, which clears it after each word. -/
+def serialLimbBase : Nat := 2 ^ 39
+/-- The limbs of the serializer scratch: `903 · 256 ≥ 231,032` bits. -/
+def serialLimbCount : Nat := 903
+/-- The limbs of one chunk word: `636 · 256 = 162,816` bits. -/
+def chunkLimbCount : Nat := 636
+/-- The bits of the chunk word's top limb: `162,816 − 635 · 256 = 256`. -/
+def topLimbBits : Nat := 256
+/-- The limbs of the curve-and-rows word: `903 · 256 ≥ 231,032` bits. -/
+def fieldsLimbCount : Nat := 903
+/-- The bits of the curve-and-rows word's top limb: `231,032 − 902 · 256 = 120`. -/
+def fieldsTopLimbBits : Nat := 120
+
+/-- The `34,295` public field cells, in `Wire.encoding` order: curve (1), rows (`91 · 10`),
 scale (`52 · 642`). -/
 def fieldBase : Nat := 2 ^ 40
-/-- The `1,092` exception bytes. -/
+/-- The `1,092` three-bit exception cells. -/
 def exceptionBase : Nat := 2 ^ 41
 /-- The `4 · 202` fold joins: `curveX`, `curveY`, `pointX`, `pointY`, each the lane's
 `foldStepCount = 202` blocks in flat slot order. -/
@@ -108,7 +123,7 @@ def designatedLabel : Nat := hotLabelBase + 48
 def designatedCell (element : Nat) : Nat := designatedBase + element
 
 /-- Field-cell counts. -/
-def curveCellCount : Nat := 3
+def curveCellCount : Nat := 1
 def rowCellCount : Nat := 91 * 10
 def scaleCellCount : Nat := 52 * 642
 def fieldCellCount : Nat := curveCellCount + rowCellCount + scaleCellCount
@@ -119,7 +134,7 @@ def hotBlockCount : Nat := 4 * 202
 def labelCount : Nat := 508
 def keyBlockCount : Nat := 2 * 508
 
-theorem fieldCellCount_eq : fieldCellCount = 34297 := by
+theorem fieldCellCount_eq : fieldCellCount = 34295 := by
   norm_num [fieldCellCount, curveCellCount, rowCellCount, scaleCellCount]
 
 /-! ### Request cells -/

@@ -27,7 +27,7 @@ bit-dependent `EncPRF.transformMac` labels, unchanged from the baseline.
    **not** mention the slopes,
 3. derive the slopes from the offsets (`curveSlopes`, `pointSlopes`),
 4. weight them per chunk (`chunkScalar`, inside `garbleCoord`),
-5. publish the joins (`garbleCoord`), the ten row constants and the three curve constants,
+5. publish the joins (`garbleCoord`), the ten row constants and the one curve constant,
    each with its element offsets absorbed.
 
 The four lanes' `642` joins of one chunk are still interleaved into a single
@@ -443,23 +443,23 @@ def curveK (oracle : PermutationOracle FixedIndex Block) (hashOracle : EncPRF.Ha
 
 /-- **Step 3.** The five slopes of the curve check, derived from its element offsets. -/
 def curveSlopes (oracle : PermutationOracle FixedIndex Block) (hashOracle : EncPRF.HashOracle)
-    (delta : Coord → Block) (key : InputMacKey) (curveR1 curveR2 : BaseField) :
+    (delta : Coord → Block) (key : InputMacKey) (mask : BaseField) :
     CurveMembership.Values :=
-  CurveMembership.slopes curveR1 curveR2 (curveK oracle hashOracle delta key)
+  CurveMembership.slopes mask (curveK oracle hashOracle delta key)
 
 /-- **Steps 4 and 5.** The `curveX` lane's published fold joins and chunk joins. -/
 def curveXGarbled (oracle : PermutationOracle FixedIndex Block) (hashOracle : EncPRF.HashOracle)
-    (delta : Coord → Block) (key : InputMacKey) (curveR1 curveR2 : BaseField) :
+    (delta : Coord → Block) (key : InputMacKey) (mask : BaseField) :
     Vector Block foldStepCount × (Fin chunkCount → Fin curveElementCountX → BaseField) :=
   garbleCoord oracle hashOracle .curveX (delta .x) (bitKeyOf key .x)
-    (curveXAssemble (curveSlopes oracle hashOracle delta key curveR1 curveR2))
+    (curveXAssemble (curveSlopes oracle hashOracle delta key mask))
 
 /-- **Steps 4 and 5.** The `curveY` lane's published fold joins and chunk joins. -/
 def curveYGarbled (oracle : PermutationOracle FixedIndex Block) (hashOracle : EncPRF.HashOracle)
-    (delta : Coord → Block) (key : InputMacKey) (curveR1 curveR2 : BaseField) :
+    (delta : Coord → Block) (key : InputMacKey) (mask : BaseField) :
     Vector Block foldStepCount × (Fin chunkCount → Fin curveElementCountY → BaseField) :=
   garbleCoord oracle hashOracle .curveY (delta .y) (bitKeyOf key .y)
-    (curveYAssemble (curveSlopes oracle hashOracle delta key curveR1 curveR2))
+    (curveYAssemble (curveSlopes oracle hashOracle delta key mask))
 
 /-! ### System B, in plan D.4's order
 
@@ -529,19 +529,19 @@ def pointTable (table : Public) : FieldMacToECMac.Table := (table.rows, table.ex
 def garble (outputKeys : FieldMacToECMac.OutputKeys)
     (pointRandomness : FieldMacToECMac.Randomness)
     (exceptionPad : FieldMacToECMac.ExceptionPad)
-    (bridgeKey : BaseField) (curveMask : NonZeroBase) (curveR1 curveR2 : BaseField)
+    (bridgeKey : BaseField) (curveMask : NonZeroBase)
     (fixedKeyOracle : PermutationOracle FixedIndex Block)
     (encPRFOracle : PermutationOracle EncPRF.PermutationIndex Block)
     (hashOracle : EncPRF.HashOracle) (delta : Coord → Block) (inputKey : InputMacKey) :
     Public :=
-  { curve := CurveMembership.garble bridgeKey curveMask.value curveR1 curveR2
+  { curve := CurveMembership.garble bridgeKey curveMask.value
       (curveK fixedKeyOracle hashOracle delta inputKey)
     rows := (pointGarble outputKeys pointRandomness exceptionPad bridgeKey fixedKeyOracle
       encPRFOracle hashOracle delta inputKey).1
     exception := (pointGarble outputKeys pointRandomness exceptionPad bridgeKey fixedKeyOracle
       encPRFOracle hashOracle delta inputKey).2
-    curveXHot := (curveXGarbled fixedKeyOracle hashOracle delta inputKey curveR1 curveR2).1
-    curveYHot := (curveYGarbled fixedKeyOracle hashOracle delta inputKey curveR1 curveR2).1
+    curveXHot := (curveXGarbled fixedKeyOracle hashOracle delta inputKey curveMask.value).1
+    curveYHot := (curveYGarbled fixedKeyOracle hashOracle delta inputKey curveMask.value).1
     pointXHot := (pointXGarbled fixedKeyOracle hashOracle delta
       (whitenedKey encPRFOracle hashOracle bridgeKey inputKey) pointRandomness).1
     pointYHot := (pointYGarbled fixedKeyOracle hashOracle delta
@@ -549,10 +549,10 @@ def garble (outputKeys : FieldMacToECMac.OutputKeys)
     scale := Vector.ofFn fun chunk => pack (assembleWord
       ((pointXGarbled fixedKeyOracle hashOracle delta
         (whitenedKey encPRFOracle hashOracle bridgeKey inputKey) pointRandomness).2 chunk)
-      ((curveXGarbled fixedKeyOracle hashOracle delta inputKey curveR1 curveR2).2 chunk)
+      ((curveXGarbled fixedKeyOracle hashOracle delta inputKey curveMask.value).2 chunk)
       ((pointYGarbled fixedKeyOracle hashOracle delta
         (whitenedKey encPRFOracle hashOracle bridgeKey inputKey) pointRandomness).2 chunk)
-      ((curveYGarbled fixedKeyOracle hashOracle delta inputKey curveR1 curveR2).2 chunk)) }
+      ((curveYGarbled fixedKeyOracle hashOracle delta inputKey curveMask.value).2 chunk)) }
 
 /-! ### The evaluator -/
 
@@ -699,7 +699,7 @@ section Encoded
 variable (outputKeys : FieldMacToECMac.OutputKeys)
   (pointRandomness : FieldMacToECMac.Randomness)
   (exceptionPad : FieldMacToECMac.ExceptionPad)
-  (bridgeKey : BaseField) (curveMask : NonZeroBase) (curveR1 curveR2 : BaseField)
+  (bridgeKey : BaseField) (curveMask : NonZeroBase)
   (fixedKeyOracle : PermutationOracle FixedIndex Block)
   (encPRFOracle : PermutationOracle EncPRF.PermutationIndex Block)
   (hashOracle : EncPRF.HashOracle) (delta : Coord → Block) (inputKey : InputMacKey)
@@ -707,78 +707,78 @@ variable (outputKeys : FieldMacToECMac.OutputKeys)
 /-- The published chunk words read back as the `pointX` lane's own chunk joins. -/
 theorem scale_pointX :
     (fun chunk => readPointX (unpack ((garble outputKeys pointRandomness exceptionPad bridgeKey
-        curveMask curveR1 curveR2 fixedKeyOracle encPRFOracle hashOracle delta inputKey).scale.get
+        curveMask fixedKeyOracle encPRFOracle hashOracle delta inputKey).scale.get
         chunk)))
       = (pointXGarbled fixedKeyOracle hashOracle delta
           (whitenedKey encPRFOracle hashOracle bridgeKey inputKey) pointRandomness).2 := by
   funext chunk
-  have word : (garble outputKeys pointRandomness exceptionPad bridgeKey curveMask curveR1 curveR2
+  have word : (garble outputKeys pointRandomness exceptionPad bridgeKey curveMask
         fixedKeyOracle encPRFOracle hashOracle delta inputKey).scale.get chunk
       = pack (assembleWord
           ((pointXGarbled fixedKeyOracle hashOracle delta
             (whitenedKey encPRFOracle hashOracle bridgeKey inputKey) pointRandomness).2 chunk)
-          ((curveXGarbled fixedKeyOracle hashOracle delta inputKey curveR1 curveR2).2 chunk)
+          ((curveXGarbled fixedKeyOracle hashOracle delta inputKey curveMask.value).2 chunk)
           ((pointYGarbled fixedKeyOracle hashOracle delta
             (whitenedKey encPRFOracle hashOracle bridgeKey inputKey) pointRandomness).2 chunk)
-          ((curveYGarbled fixedKeyOracle hashOracle delta inputKey curveR1 curveR2).2 chunk)) := by
+          ((curveYGarbled fixedKeyOracle hashOracle delta inputKey curveMask.value).2 chunk)) := by
     simp only [garble, Vector.get_ofFn]
   rw [word, unpack_pack_eq, readPointX_assembleWord]
 
 /-- The published chunk words read back as the `curveX` lane's own chunk joins. -/
 theorem scale_curveX :
     (fun chunk => readCurveX (unpack ((garble outputKeys pointRandomness exceptionPad bridgeKey
-        curveMask curveR1 curveR2 fixedKeyOracle encPRFOracle hashOracle delta inputKey).scale.get
+        curveMask fixedKeyOracle encPRFOracle hashOracle delta inputKey).scale.get
         chunk)))
-      = (curveXGarbled fixedKeyOracle hashOracle delta inputKey curveR1 curveR2).2 := by
+      = (curveXGarbled fixedKeyOracle hashOracle delta inputKey curveMask.value).2 := by
   funext chunk
-  have word : (garble outputKeys pointRandomness exceptionPad bridgeKey curveMask curveR1 curveR2
+  have word : (garble outputKeys pointRandomness exceptionPad bridgeKey curveMask
         fixedKeyOracle encPRFOracle hashOracle delta inputKey).scale.get chunk
       = pack (assembleWord
           ((pointXGarbled fixedKeyOracle hashOracle delta
             (whitenedKey encPRFOracle hashOracle bridgeKey inputKey) pointRandomness).2 chunk)
-          ((curveXGarbled fixedKeyOracle hashOracle delta inputKey curveR1 curveR2).2 chunk)
+          ((curveXGarbled fixedKeyOracle hashOracle delta inputKey curveMask.value).2 chunk)
           ((pointYGarbled fixedKeyOracle hashOracle delta
             (whitenedKey encPRFOracle hashOracle bridgeKey inputKey) pointRandomness).2 chunk)
-          ((curveYGarbled fixedKeyOracle hashOracle delta inputKey curveR1 curveR2).2 chunk)) := by
+          ((curveYGarbled fixedKeyOracle hashOracle delta inputKey curveMask.value).2 chunk)) := by
     simp only [garble, Vector.get_ofFn]
   rw [word, unpack_pack_eq, readCurveX_assembleWord]
 
 /-- The published chunk words read back as the `pointY` lane's own chunk joins. -/
 theorem scale_pointY :
     (fun chunk => readPointY (unpack ((garble outputKeys pointRandomness exceptionPad bridgeKey
-        curveMask curveR1 curveR2 fixedKeyOracle encPRFOracle hashOracle delta inputKey).scale.get
+        curveMask fixedKeyOracle encPRFOracle hashOracle delta inputKey).scale.get
         chunk)))
       = (pointYGarbled fixedKeyOracle hashOracle delta
           (whitenedKey encPRFOracle hashOracle bridgeKey inputKey) pointRandomness).2 := by
   funext chunk
-  have word : (garble outputKeys pointRandomness exceptionPad bridgeKey curveMask curveR1 curveR2
+  have word : (garble outputKeys pointRandomness exceptionPad bridgeKey curveMask
         fixedKeyOracle encPRFOracle hashOracle delta inputKey).scale.get chunk
       = pack (assembleWord
           ((pointXGarbled fixedKeyOracle hashOracle delta
             (whitenedKey encPRFOracle hashOracle bridgeKey inputKey) pointRandomness).2 chunk)
-          ((curveXGarbled fixedKeyOracle hashOracle delta inputKey curveR1 curveR2).2 chunk)
+          ((curveXGarbled fixedKeyOracle hashOracle delta inputKey curveMask.value).2 chunk)
           ((pointYGarbled fixedKeyOracle hashOracle delta
             (whitenedKey encPRFOracle hashOracle bridgeKey inputKey) pointRandomness).2 chunk)
-          ((curveYGarbled fixedKeyOracle hashOracle delta inputKey curveR1 curveR2).2 chunk)) := by
+          ((curveYGarbled fixedKeyOracle hashOracle delta inputKey curveMask.value).2 chunk)) := by
     simp only [garble, Vector.get_ofFn]
   rw [word, unpack_pack_eq, readPointY_assembleWord]
 
 /-- The published chunk words read back as the `curveY` lane's own chunk joins. -/
 theorem scale_curveY :
     (fun chunk => readCurveY (unpack ((garble outputKeys pointRandomness exceptionPad bridgeKey
-        curveMask curveR1 curveR2 fixedKeyOracle encPRFOracle hashOracle delta inputKey).scale.get
+        curveMask fixedKeyOracle encPRFOracle hashOracle delta inputKey).scale.get
         chunk)))
-      = (curveYGarbled fixedKeyOracle hashOracle delta inputKey curveR1 curveR2).2 := by
+      = (curveYGarbled fixedKeyOracle hashOracle delta inputKey curveMask.value).2 := by
   funext chunk
-  have word : (garble outputKeys pointRandomness exceptionPad bridgeKey curveMask curveR1 curveR2
+  have word : (garble outputKeys pointRandomness exceptionPad bridgeKey curveMask
         fixedKeyOracle encPRFOracle hashOracle delta inputKey).scale.get chunk
       = pack (assembleWord
           ((pointXGarbled fixedKeyOracle hashOracle delta
             (whitenedKey encPRFOracle hashOracle bridgeKey inputKey) pointRandomness).2 chunk)
-          ((curveXGarbled fixedKeyOracle hashOracle delta inputKey curveR1 curveR2).2 chunk)
+          ((curveXGarbled fixedKeyOracle hashOracle delta inputKey curveMask.value).2 chunk)
           ((pointYGarbled fixedKeyOracle hashOracle delta
             (whitenedKey encPRFOracle hashOracle bridgeKey inputKey) pointRandomness).2 chunk)
-          ((curveYGarbled fixedKeyOracle hashOracle delta inputKey curveR1 curveR2).2 chunk)) := by
+          ((curveYGarbled fixedKeyOracle hashOracle delta inputKey curveMask.value).2 chunk)) := by
     simp only [garble, Vector.get_ofFn]
   rw [word, unpack_pack_eq, readCurveY_assembleWord]
 
@@ -788,20 +788,19 @@ theorem curveXValues_garble (correlated : CorrelatedKey inputKey delta)
     (delivers : Delivers fixedKeyOracle hashOracle) (input : AffineInput)
     (element : Fin curveElementCountX) :
     curveXValues fixedKeyOracle hashOracle (garble outputKeys pointRandomness exceptionPad bridgeKey
-        curveMask curveR1 curveR2 fixedKeyOracle encPRFOracle hashOracle delta inputKey)
+        curveMask fixedKeyOracle encPRFOracle hashOracle delta inputKey)
         (BitInput.ofAffine input) (inputKey.encode (BitInput.ofAffine input)) element
       = curveXAssemble
-            (curveSlopes fixedKeyOracle hashOracle delta inputKey curveR1 curveR2) element
+            (curveSlopes fixedKeyOracle hashOracle delta inputKey curveMask.value) element
           * input.x
         + curveXK fixedKeyOracle hashOracle delta inputKey element := by
-  rw [curveXValues, scale_curveX outputKeys pointRandomness exceptionPad bridgeKey curveMask
-    curveR1 curveR2 fixedKeyOracle encPRFOracle hashOracle delta inputKey, macLabels_encode]
-  have hot : (garble outputKeys pointRandomness exceptionPad bridgeKey curveMask curveR1 curveR2
+  rw [curveXValues, scale_curveX outputKeys pointRandomness exceptionPad bridgeKey curveMask fixedKeyOracle encPRFOracle hashOracle delta inputKey, macLabels_encode]
+  have hot : (garble outputKeys pointRandomness exceptionPad bridgeKey curveMask
       fixedKeyOracle encPRFOracle hashOracle delta inputKey).curveXHot
-      = (curveXGarbled fixedKeyOracle hashOracle delta inputKey curveR1 curveR2).1 := rfl
+      = (curveXGarbled fixedKeyOracle hashOracle delta inputKey curveMask.value).1 := rfl
   rw [hot, curveXGarbled, coordBits_ofAffine]
   exact delivers .curveX (delta .x) (bitKeyOf inputKey .x) (fun position => correlated .x position)
-    (curveXAssemble (curveSlopes fixedKeyOracle hashOracle delta inputKey curveR1 curveR2))
+    (curveXAssemble (curveSlopes fixedKeyOracle hashOracle delta inputKey curveMask.value))
     input.x element
 
 /-- **System A, y lane.** -/
@@ -809,20 +808,19 @@ theorem curveYValues_garble (correlated : CorrelatedKey inputKey delta)
     (delivers : Delivers fixedKeyOracle hashOracle) (input : AffineInput)
     (element : Fin curveElementCountY) :
     curveYValues fixedKeyOracle hashOracle (garble outputKeys pointRandomness exceptionPad bridgeKey
-        curveMask curveR1 curveR2 fixedKeyOracle encPRFOracle hashOracle delta inputKey)
+        curveMask fixedKeyOracle encPRFOracle hashOracle delta inputKey)
         (BitInput.ofAffine input) (inputKey.encode (BitInput.ofAffine input)) element
       = curveYAssemble
-            (curveSlopes fixedKeyOracle hashOracle delta inputKey curveR1 curveR2) element
+            (curveSlopes fixedKeyOracle hashOracle delta inputKey curveMask.value) element
           * input.y
         + curveYK fixedKeyOracle hashOracle delta inputKey element := by
-  rw [curveYValues, scale_curveY outputKeys pointRandomness exceptionPad bridgeKey curveMask
-    curveR1 curveR2 fixedKeyOracle encPRFOracle hashOracle delta inputKey, macLabels_encode]
-  have hot : (garble outputKeys pointRandomness exceptionPad bridgeKey curveMask curveR1 curveR2
+  rw [curveYValues, scale_curveY outputKeys pointRandomness exceptionPad bridgeKey curveMask fixedKeyOracle encPRFOracle hashOracle delta inputKey, macLabels_encode]
+  have hot : (garble outputKeys pointRandomness exceptionPad bridgeKey curveMask
       fixedKeyOracle encPRFOracle hashOracle delta inputKey).curveYHot
-      = (curveYGarbled fixedKeyOracle hashOracle delta inputKey curveR1 curveR2).1 := rfl
+      = (curveYGarbled fixedKeyOracle hashOracle delta inputKey curveMask.value).1 := rfl
   rw [hot, curveYGarbled, coordBits_ofAffine]
   exact delivers .curveY (delta .y) (bitKeyOf inputKey .y) (fun position => correlated .y position)
-    (curveYAssemble (curveSlopes fixedKeyOracle hashOracle delta inputKey curveR1 curveR2))
+    (curveYAssemble (curveSlopes fixedKeyOracle hashOracle delta inputKey curveMask.value))
     input.y element
 
 /-- The curve check sees exactly the five values its algebra expects. -/
@@ -831,26 +829,24 @@ theorem curveValues_garble (correlated : CorrelatedKey inputKey delta)
     curveValues
         (curveXValues fixedKeyOracle hashOracle
           (garble outputKeys pointRandomness exceptionPad bridgeKey
-          curveMask curveR1 curveR2 fixedKeyOracle encPRFOracle hashOracle delta inputKey)
+          curveMask fixedKeyOracle encPRFOracle hashOracle delta inputKey)
           (BitInput.ofAffine input) (inputKey.encode (BitInput.ofAffine input)))
         (curveYValues fixedKeyOracle hashOracle
           (garble outputKeys pointRandomness exceptionPad bridgeKey
-          curveMask curveR1 curveR2 fixedKeyOracle encPRFOracle hashOracle delta inputKey)
+          curveMask fixedKeyOracle encPRFOracle hashOracle delta inputKey)
           (BitInput.ofAffine input) (inputKey.encode (BitInput.ofAffine input)))
-      = CurveMembership.delivered curveR1 curveR2 (curveK fixedKeyOracle hashOracle delta inputKey)
+      = CurveMembership.delivered curveMask.value (curveK fixedKeyOracle hashOracle delta inputKey)
           input := by
   funext element
   cases element with
   | inl slot =>
       show curveXValues _ _ _ _ _ (curveXElementIndex slot) = _
-      rw [curveXValues_garble outputKeys pointRandomness exceptionPad bridgeKey curveMask curveR1
-        curveR2 fixedKeyOracle encPRFOracle hashOracle delta inputKey correlated delivers input,
+      rw [curveXValues_garble outputKeys pointRandomness exceptionPad bridgeKey curveMask fixedKeyOracle encPRFOracle hashOracle delta inputKey correlated delivers input,
         curveXAssemble_slot]
       rfl
   | inr slot =>
       show curveYValues _ _ _ _ _ (curveYElementIndex slot) = _
-      rw [curveYValues_garble outputKeys pointRandomness exceptionPad bridgeKey curveMask curveR1
-        curveR2 fixedKeyOracle encPRFOracle hashOracle delta inputKey correlated delivers input,
+      rw [curveYValues_garble outputKeys pointRandomness exceptionPad bridgeKey curveMask fixedKeyOracle encPRFOracle hashOracle delta inputKey correlated delivers input,
         curveYAssemble_slot]
       rfl
 
@@ -859,7 +855,7 @@ theorem pointXValues_garble (correlated : CorrelatedKey inputKey delta)
     (delivers : Delivers fixedKeyOracle hashOracle) (input : AffineInput)
     (element : Fin pointElementCountX) :
     pointXValues fixedKeyOracle hashOracle (garble outputKeys pointRandomness exceptionPad bridgeKey
-        curveMask curveR1 curveR2 fixedKeyOracle encPRFOracle hashOracle delta inputKey)
+        curveMask fixedKeyOracle encPRFOracle hashOracle delta inputKey)
         (BitInput.ofAffine input)
         ((whitenedKey encPRFOracle hashOracle bridgeKey inputKey).encode
           (BitInput.ofAffine input)) element
@@ -869,8 +865,8 @@ theorem pointXValues_garble (correlated : CorrelatedKey inputKey delta)
         + pointXK fixedKeyOracle hashOracle delta
             (whitenedKey encPRFOracle hashOracle bridgeKey inputKey) element := by
   rw [pointXValues, scale_pointX outputKeys pointRandomness exceptionPad bridgeKey curveMask
-    curveR1 curveR2 fixedKeyOracle encPRFOracle hashOracle delta inputKey, macLabels_encode]
-  have hot : (garble outputKeys pointRandomness exceptionPad bridgeKey curveMask curveR1 curveR2
+    fixedKeyOracle encPRFOracle hashOracle delta inputKey, macLabels_encode]
+  have hot : (garble outputKeys pointRandomness exceptionPad bridgeKey curveMask
       fixedKeyOracle encPRFOracle hashOracle delta inputKey).pointXHot
       = (pointXGarbled fixedKeyOracle hashOracle delta
           (whitenedKey encPRFOracle hashOracle bridgeKey inputKey) pointRandomness).1 := rfl
@@ -887,7 +883,7 @@ theorem pointYValues_garble (correlated : CorrelatedKey inputKey delta)
     (delivers : Delivers fixedKeyOracle hashOracle) (input : AffineInput)
     (element : Fin pointElementCountY) :
     pointYValues fixedKeyOracle hashOracle (garble outputKeys pointRandomness exceptionPad bridgeKey
-        curveMask curveR1 curveR2 fixedKeyOracle encPRFOracle hashOracle delta inputKey)
+        curveMask fixedKeyOracle encPRFOracle hashOracle delta inputKey)
         (BitInput.ofAffine input)
         ((whitenedKey encPRFOracle hashOracle bridgeKey inputKey).encode
           (BitInput.ofAffine input)) element
@@ -897,8 +893,8 @@ theorem pointYValues_garble (correlated : CorrelatedKey inputKey delta)
         + pointYK fixedKeyOracle hashOracle delta
             (whitenedKey encPRFOracle hashOracle bridgeKey inputKey) element := by
   rw [pointYValues, scale_pointY outputKeys pointRandomness exceptionPad bridgeKey curveMask
-    curveR1 curveR2 fixedKeyOracle encPRFOracle hashOracle delta inputKey, macLabels_encode]
-  have hot : (garble outputKeys pointRandomness exceptionPad bridgeKey curveMask curveR1 curveR2
+    fixedKeyOracle encPRFOracle hashOracle delta inputKey, macLabels_encode]
+  have hot : (garble outputKeys pointRandomness exceptionPad bridgeKey curveMask
       fixedKeyOracle encPRFOracle hashOracle delta inputKey).pointYHot
       = (pointYGarbled fixedKeyOracle hashOracle delta
           (whitenedKey encPRFOracle hashOracle bridgeKey inputKey) pointRandomness).1 := rfl
@@ -916,13 +912,13 @@ theorem digitValues_garble (correlated : CorrelatedKey inputKey delta)
     digitValues
         (pointXValues fixedKeyOracle hashOracle
           (garble outputKeys pointRandomness exceptionPad bridgeKey
-          curveMask curveR1 curveR2 fixedKeyOracle encPRFOracle hashOracle delta inputKey)
+          curveMask fixedKeyOracle encPRFOracle hashOracle delta inputKey)
           (BitInput.ofAffine input)
           ((whitenedKey encPRFOracle hashOracle bridgeKey inputKey).encode
             (BitInput.ofAffine input)))
         (pointYValues fixedKeyOracle hashOracle
           (garble outputKeys pointRandomness exceptionPad bridgeKey
-          curveMask curveR1 curveR2 fixedKeyOracle encPRFOracle hashOracle delta inputKey)
+          curveMask fixedKeyOracle encPRFOracle hashOracle delta inputKey)
           (BitInput.ofAffine input)
           ((whitenedKey encPRFOracle hashOracle bridgeKey inputKey).encode
             (BitInput.ofAffine input)))
@@ -933,14 +929,12 @@ theorem digitValues_garble (correlated : CorrelatedKey inputKey delta)
   cases element with
   | inl slot =>
       show pointXValues _ _ _ _ _ (xElementIndex digit slot) = _
-      rw [pointXValues_garble outputKeys pointRandomness exceptionPad bridgeKey curveMask curveR1
-        curveR2 fixedKeyOracle encPRFOracle hashOracle delta inputKey correlated delivers input,
+      rw [pointXValues_garble outputKeys pointRandomness exceptionPad bridgeKey curveMask fixedKeyOracle encPRFOracle hashOracle delta inputKey correlated delivers input,
         pointXAssemble_digit]
       rfl
   | inr slot =>
       show pointYValues _ _ _ _ _ (yElementIndex digit slot) = _
-      rw [pointYValues_garble outputKeys pointRandomness exceptionPad bridgeKey curveMask curveR1
-        curveR2 fixedKeyOracle encPRFOracle hashOracle delta inputKey correlated delivers input,
+      rw [pointYValues_garble outputKeys pointRandomness exceptionPad bridgeKey curveMask fixedKeyOracle encPRFOracle hashOracle delta inputKey correlated delivers input,
         pointYAssemble_digit]
       rfl
 
@@ -949,7 +943,7 @@ theorem evaluateEncoded [FieldCertificate] (correlated : CorrelatedKey inputKey 
     (delivers : Delivers fixedKeyOracle hashOracle)
     (input : AffineInput) (point : Point) (decoded : decodePoint input = some point) :
     evaluate fixedKeyOracle encPRFOracle hashOracle
-        (garble outputKeys pointRandomness exceptionPad bridgeKey curveMask curveR1 curveR2
+        (garble outputKeys pointRandomness exceptionPad bridgeKey curveMask
           fixedKeyOracle encPRFOracle hashOracle delta inputKey)
         (BitInput.ofAffine input) (inputKey.encode (BitInput.ofAffine input)) =
       some (FieldMacToECMac.expectedResult outputKeys
@@ -960,26 +954,22 @@ theorem evaluateEncoded [FieldCertificate] (correlated : CorrelatedKey inputKey 
         (gadgetPermutations fixedKeyOracle) exceptionPad input) := by
   have inputOnCurve : OnCurve input := (decodePoint_defined input).mp (by simp [decoded])
   simp only [evaluate, BitInput.toAffineOfAffine, decoded]
-  rw [curveValues_garble outputKeys pointRandomness exceptionPad bridgeKey curveMask curveR1
-    curveR2 fixedKeyOracle encPRFOracle hashOracle delta inputKey correlated delivers input]
+  rw [curveValues_garble outputKeys pointRandomness exceptionPad bridgeKey curveMask fixedKeyOracle encPRFOracle hashOracle delta inputKey correlated delivers input]
   have curveValue : CurveMembership.evaluate
-      (garble outputKeys pointRandomness exceptionPad bridgeKey curveMask curveR1 curveR2
+      (garble outputKeys pointRandomness exceptionPad bridgeKey curveMask
         fixedKeyOracle encPRFOracle hashOracle delta inputKey).curve input
-      (CurveMembership.delivered curveR1 curveR2 (curveK fixedKeyOracle hashOracle delta inputKey)
+      (CurveMembership.delivered curveMask.value (curveK fixedKeyOracle hashOracle delta inputKey)
         input)
       = bridgeKey := by
-    show CurveMembership.evaluate (CurveMembership.garble bridgeKey curveMask.value curveR1
-      curveR2 (curveK fixedKeyOracle hashOracle delta inputKey)) input _ = bridgeKey
-    exact CurveMembership.evaluateEncodedOnCurve bridgeKey curveMask.value curveR1 curveR2
+    show CurveMembership.evaluate (CurveMembership.garble bridgeKey curveMask.value (curveK fixedKeyOracle hashOracle delta inputKey)) input _ = bridgeKey
+    exact CurveMembership.evaluateEncodedOnCurve bridgeKey curveMask.value
       (curveK fixedKeyOracle hashOracle delta inputKey) input inputOnCurve
   rw [curveValue, EncPRF.whitenEncode,
     show EncPRF.whitenKey encPRFOracle (EncPRF.whiteningKeys hashOracle bridgeKey) inputKey
       = whitenedKey encPRFOracle hashOracle bridgeKey inputKey from rfl,
-    digitValues_garble outputKeys pointRandomness exceptionPad bridgeKey curveMask curveR1
-      curveR2 fixedKeyOracle encPRFOracle hashOracle delta inputKey correlated delivers input,
+    digitValues_garble outputKeys pointRandomness exceptionPad bridgeKey curveMask fixedKeyOracle encPRFOracle hashOracle delta inputKey correlated delivers input,
     EncPRF.transformEncode]
-  rw [show pointTable (garble outputKeys pointRandomness exceptionPad bridgeKey curveMask
-      curveR1 curveR2 fixedKeyOracle encPRFOracle hashOracle delta inputKey)
+  rw [show pointTable (garble outputKeys pointRandomness exceptionPad bridgeKey curveMask fixedKeyOracle encPRFOracle hashOracle delta inputKey)
       = pointGarble outputKeys pointRandomness exceptionPad bridgeKey fixedKeyOracle
         encPRFOracle hashOracle delta inputKey from rfl,
     pointGarble, InputMacKey.encodeOfAffine,

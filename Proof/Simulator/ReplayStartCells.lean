@@ -1,7 +1,7 @@
 /-
 **The replay's inputs and pieces, for the whole `Replay.program`.**
 
-* `ReplayStart`: what the replay reads from the memory the prefix leaves (request, curve constants,
+* `ReplayStart`: what the replay reads from the memory the prefix leaves (request, curve constant,
   selected labels, fold joins, scale joins), in terms of a `Stage1Source` and the label vector;
 * `OffReplay`: the cells the replay never writes (outside the accumulators, the fold cells and
   `E*`, the temporaries, the digit-extraction region, the whitened labels);
@@ -42,9 +42,7 @@ structure ReplayStart (source : Stage1Source) (input : AffineInput) (labels : La
     (memory : Memory) : Prop where
   reqXCell : memory.ram (word reqX) = fieldWord input.x
   reqYCell : memory.ram (word reqY) = fieldWord input.y
-  curve0 : memory.ram (word fieldBase) = fieldWord source.curve.1
-  curve1 : memory.ram (word (fieldBase + 1)) = fieldWord source.curve.2.1
-  curve2 : memory.ram (word (fieldBase + 2)) = fieldWord source.curve.2.2
+  curve0 : memory.ram (word fieldBase) = fieldWord source.curve
   labelCells : ∀ (i : Nat) (bound : i < 508),
     memory.ram (word (labelBase + i)) = blockWord (labels[i]'bound)
   hotX : ∀ s : Fin foldStepCount,
@@ -308,7 +306,7 @@ theorem bridge_value (table : CurveMembership.Table) (input : AffineInput)
     (curveX : Fin curveElementCountX → BaseField) (curveY : Fin curveElementCountY → BaseField) :
     CurveMembership.evaluate table (BitInput.ofAffine input).toAffine
         (Pipeline.curveValues curveX curveY) =
-      table.1 + table.2.1 * input.x ^ 3 + table.2.2 * input.y ^ 2 +
+      table +
         curveX ⟨0, by decide⟩ * input.x ^ 2 + curveY ⟨0, by decide⟩ * input.y +
         curveX ⟨1, by decide⟩ * input.x + curveY ⟨1, by decide⟩ + curveX ⟨2, by decide⟩ := by
   rw [BitInput.toAffineOfAffine]

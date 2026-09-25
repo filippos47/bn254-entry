@@ -146,7 +146,7 @@ computed once. -/
 def garbleFast (outputKeys : FieldMacToECMac.OutputKeys)
     (pointRandomness : FieldMacToECMac.Randomness)
     (exceptionPad : FieldMacToECMac.ExceptionPad)
-    (bridgeKey : BaseField) (curveMask : NonZeroBase) (curveR1 curveR2 : BaseField)
+    (bridgeKey : BaseField) (curveMask : NonZeroBase)
     (fixedKeyOracle : PermutationOracle FixedIndex Block)
     (encPRFOracle : PermutationOracle EncPRF.PermutationIndex Block)
     (hashOracle : EncPRF.HashOracle) (delta : Coord → Block) (inputKey : InputMacKey) :
@@ -168,7 +168,7 @@ def garbleFast (outputKeys : FieldMacToECMac.OutputKeys)
     Pipeline.curveValues (fun e => offCX.get e) (fun e => offCY.get e)
   let digitK : FieldMacToECMac.DigitValues := fun digit =>
     Pipeline.digitValues (fun e => offPX.get e) (fun e => offPY.get e) digit
-  let curveSlopes := CurveMembership.slopes curveR1 curveR2 curveK
+  let curveSlopes := CurveMembership.slopes curveMask.value curveK
   let pointSlopes : Fin digitCount → Biquadratic.Values := fun digit =>
     Biquadratic.slopes (pointRandomness.get digit).x (pointRandomness.get digit).y
       (pointRandomness.get digit).z (digitK digit)
@@ -180,7 +180,7 @@ def garbleFast (outputKeys : FieldMacToECMac.OutputKeys)
     (FieldMacToECMac.rowsForOutputKeys outputKeys pointRandomness) pointRandomness digitK
     (EncPRF.transformKey encPRFOracle (EncPRF.whiteningKeys hashOracle bridgeKey) inputKey)
     (Pipeline.gadgetPermutations fixedKeyOracle) exceptionPad
-  { curve := CurveMembership.garble bridgeKey curveMask.value curveR1 curveR2 curveK
+  { curve := CurveMembership.garble bridgeKey curveMask.value curveK
     rows := table.1
     exception := table.2
     curveXHot := hotJoins fixedKeyOracle .curveX (delta .x) (bitKeyOf inputKey .x)
@@ -195,14 +195,13 @@ def garbleFast (outputKeys : FieldMacToECMac.OutputKeys)
 theorem garbleFast_eq (outputKeys : FieldMacToECMac.OutputKeys)
     (pointRandomness : FieldMacToECMac.Randomness)
     (exceptionPad : FieldMacToECMac.ExceptionPad)
-    (bridgeKey : BaseField) (curveMask : NonZeroBase) (curveR1 curveR2 : BaseField)
+    (bridgeKey : BaseField) (curveMask : NonZeroBase)
     (fixedKeyOracle : PermutationOracle FixedIndex Block)
     (encPRFOracle : PermutationOracle EncPRF.PermutationIndex Block)
     (hashOracle : EncPRF.HashOracle) (delta : Coord → Block) (inputKey : InputMacKey) :
-    garbleFast outputKeys pointRandomness exceptionPad bridgeKey curveMask curveR1 curveR2
+    garbleFast outputKeys pointRandomness exceptionPad bridgeKey curveMask
         fixedKeyOracle encPRFOracle hashOracle delta inputKey
-      = Pipeline.garble outputKeys pointRandomness exceptionPad bridgeKey curveMask curveR1
-          curveR2 fixedKeyOracle encPRFOracle hashOracle delta inputKey := by
+      = Pipeline.garble outputKeys pointRandomness exceptionPad bridgeKey curveMask fixedKeyOracle encPRFOracle hashOracle delta inputKey := by
   have curveK : Pipeline.curveValues
       (fun e => (offsetsVec .curveX (maskTable hashOracle .curveX
         (hotTable fixedKeyOracle .curveX (delta .x) (bitKeyOf inputKey .x)))).get e)
@@ -360,7 +359,7 @@ theorem evaluateFast_eq [FieldCertificate] (fixedKeyOracle : PermutationOracle F
 def seededTable (seed : BitVec 256) (scalar : NonZeroScalar) : Public :=
   let tape := Seed.randomness seed
   garbleFast (FieldMacToECMac.outputKeys construction scalar.value tape.offsets)
-    tape.pointRandomness tape.exceptionPad tape.bridgeKey tape.curveMask tape.curveR1 tape.curveR2
+    tape.pointRandomness tape.exceptionPad tape.bridgeKey tape.curveMask
     tape.fixedKeyOracle tape.encPRFOracle tape.hashOracle tape.inputDelta tape.inputMacKey
 
 /-- `seededTable` is the garbler's table on the seeded tape. -/

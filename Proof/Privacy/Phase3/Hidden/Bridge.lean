@@ -140,7 +140,7 @@ def tablesOf (rest : RestTape TapeRest) (masks : MaskVectors) (ℓ : Lane) :
 /-- **The published value, from the rest and the vectors.** -/
 def publishedOf (scalar : NonZeroScalar) (z : RestTape TapeRest × MaskVectors) : Public :=
   Programs.assemble (FieldMacToECMac.outputKeys construction scalar.value z.1.1.1.offsets)
-    z.1.1.1.pointRandomness z.1.1.1.bridgeKey z.1.1.1.curveMask z.1.1.1.curveR1 z.1.1.1.curveR2
+    z.1.1.1.pointRandomness z.1.1.1.bridgeKey z.1.1.1.curveMask
     (tablesOf z.1 z.2 .curveX) (tablesOf z.1 z.2 .curveY) (tablesOf z.1 z.2 .pointX)
     (tablesOf z.1 z.2 .pointY)
     (Vector.ofFn fun output => FieldMacToECMac.garbleEntry

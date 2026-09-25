@@ -45,9 +45,9 @@ scalar; the hop bound quantifies the adversary before the scalar, so the adversa
   never read by the simulator (`openedOpening_exception`: the opening reads the table only through
   its rows), and the opening (`openingQueriesM`: system A, the bridge hash, the pads, system B)
   never touches a gadget index, so the mask is a fresh lazy digest: the unlocked byte is uniform,
-  and the digit is `k_d` with mass `1/256`.
+  and the digit is `k_d` with mass `1/8`.
 
-So the advantage is `(255/256) · Pr[u₀ = exceptionalInput φ K_d]` (`gadget_counterShape`), and that
+So the advantage is `(7/8) · Pr[u₀ = exceptionalInput φ K_d]` (`gadget_counterShape`), and that
 mass is positive: `K_d` is the construction's offset (a free tail point, or the clamped head) and
 `u₀ = exceptionalInput φ K_d` iff `transformedInput φ u₀ = K_d`
 (`Exception.exceptionalInput_transform`), i.e. iff digit `d` **doubles** at `u₀` (P1's
@@ -186,7 +186,7 @@ theorem openedOpening_exception [FieldCertificate] [GroupCertificate] [Decidable
       = openedOpening rows install table input labels target oracle := rfl
 
 /-- A nonzero digit has exactly one code. -/
-theorem digitOfCode_eq_iff {digit : Digit} (nonzero : digit ≠ .zero) (code : BitVec 8) :
+theorem digitOfCode_eq_iff {digit : Digit} (nonzero : digit ≠ .zero) (code : BitVec 3) :
     Exception.digitOfCode code = digit ↔ code = Exception.digitCode digit := by
   constructor
   · intro decoded
@@ -205,20 +205,20 @@ random fact the two games disagree on: whether the hidden offset makes the selec
 exceptional one. -/
 
 /-- A uniform gadget byte. -/
-def uniformByte : PMF (BitVec 8) := PMF.uniformOfFintype (BitVec 8)
+def uniformByte : PMF (BitVec 3) := PMF.uniformOfFintype (BitVec 3)
 
-theorem card_byte : Fintype.card (BitVec 8) = 256 :=
+theorem card_byte : Fintype.card (BitVec 3) = 8 :=
   (Fintype.card_congr (⟨BitVec.toFin, BitVec.ofFin, fun _ => rfl, fun _ => rfl⟩ :
-    BitVec 8 ≃ Fin (2 ^ 8))).trans (Fintype.card_fin _)
+    BitVec 3 ≃ Fin (2 ^ 3))).trans (Fintype.card_fin _)
 
 /-- The digit unlocked from a uniform slot byte under a mask. -/
-def unlockUniform (mask : BitVec 8) : PMF Digit :=
+def unlockUniform (mask : BitVec 3) : PMF Digit :=
   uniformByte.map fun byte => Exception.digitOfCode (byte ^^^ mask)
 
 /-- **`HW`'s gadget coordinate**: a uniform published slot behind a fresh mask unlocks a nonzero
-digit with mass `1/256`. -/
-theorem unlockUniform_apply (mask : BitVec 8) {digit : Digit} (nonzero : digit ≠ .zero) :
-    unlockUniform mask digit = (256 : ℝ≥0∞)⁻¹ := by
+digit with mass `1/8`. -/
+theorem unlockUniform_apply (mask : BitVec 3) {digit : Digit} (nonzero : digit ≠ .zero) :
+    unlockUniform mask digit = (8 : ℝ≥0∞)⁻¹ := by
   classical
   unfold unlockUniform uniformByte
   rw [PMF.map_apply, tsum_eq_single (Exception.digitCode digit ^^^ mask)]
@@ -234,7 +234,7 @@ theorem unlockUniform_apply (mask : BitVec 8) {digit : Digit} (nonzero : digit �
 installed entries unlock the digit (`garbleEntry_unlock_exceptional`); otherwise the slot is a
 uniform byte. -/
 def g1uUnlock {X : Type} (offsetLaw : PMF X) (exceptional : X → Prop) [DecidablePred exceptional]
-    (digit : Digit) (mask : BitVec 8) : PMF Digit :=
+    (digit : Digit) (mask : BitVec 3) : PMF Digit :=
   offsetLaw.bind fun offset => if exceptional offset then PMF.pure digit else unlockUniform mask
 
 /-- The distinguisher: is the unlocked digit `k_d`? -/
@@ -254,10 +254,10 @@ def exceptionalMass {X : Type} (offsetLaw : PMF X) (exceptional : X → Prop) : 
   offsetLaw.toOuterMeasure {offset | exceptional offset}
 
 theorem g1uUnlock_apply {X : Type} (offsetLaw : PMF X) (exceptional : X → Prop)
-    [DecidablePred exceptional] (mask : BitVec 8) {digit : Digit} (nonzero : digit ≠ .zero) :
+    [DecidablePred exceptional] (mask : BitVec 3) {digit : Digit} (nonzero : digit ≠ .zero) :
     g1uUnlock offsetLaw exceptional digit mask digit
       = exceptionalMass offsetLaw exceptional
-        + offsetLaw.toOuterMeasure {offset | ¬ exceptional offset} * (256 : ℝ≥0∞)⁻¹ := by
+        + offsetLaw.toOuterMeasure {offset | ¬ exceptional offset} * (8 : ℝ≥0∞)⁻¹ := by
   classical
   unfold g1uUnlock exceptionalMass
   rw [PMF.bind_apply, PMF.toOuterMeasure_apply, PMF.toOuterMeasure_apply,
@@ -277,12 +277,12 @@ theorem exceptionalMass_add {X : Type} (offsetLaw : PMF X) (exceptional : X → 
   by_cases hit : exceptional offset <;> simp [hit, Set.indicator]
 
 /-- **The counter-shape.** Against the silent distinguisher the two gadget coordinates are at
-advantage exactly `(255/256) · Pr[exceptional]`. -/
+advantage exactly `(7/8) · Pr[exceptional]`. -/
 theorem gadget_counterShape {X : Type} (offsetLaw : PMF X) (exceptional : X → Prop)
-    [DecidablePred exceptional] (mask mask' : BitVec 8) {digit : Digit} (nonzero : digit ≠ .zero) :
+    [DecidablePred exceptional] (mask mask' : BitVec 3) {digit : Digit} (nonzero : digit ≠ .zero) :
     Assumptions.advantage (unlocks digit (g1uUnlock offsetLaw exceptional digit mask))
         (unlocks digit (unlockUniform mask'))
-      = (exceptionalMass offsetLaw exceptional).toReal * (255 / 256) := by
+      = (exceptionalMass offsetLaw exceptional).toReal * (7 / 8) := by
   unfold Assumptions.advantage
   rw [unlocks_true, unlocks_true, g1uUnlock_apply offsetLaw exceptional mask nonzero,
     unlockUniform_apply mask' nonzero]
@@ -293,7 +293,7 @@ theorem gadget_counterShape {X : Type} (offsetLaw : PMF X) (exceptional : X → 
   have missTop : miss ≠ ⊤ := ne_top_of_le_ne_top ENNReal.one_ne_top (total ▸ le_add_self)
   have totalReal : hit.toReal + miss.toReal = 1 := by
     rw [← ENNReal.toReal_add hitTop missTop, total, ENNReal.toReal_one]
-  have inverse : ((256 : ℝ≥0∞)⁻¹).toReal = 1 / 256 := by
+  have inverse : ((8 : ℝ≥0∞)⁻¹).toReal = 1 / 8 := by
     rw [ENNReal.toReal_inv]
     norm_num
   rw [ENNReal.toReal_add hitTop (ENNReal.mul_ne_top missTop (by norm_num)),
@@ -301,13 +301,13 @@ theorem gadget_counterShape {X : Type} (offsetLaw : PMF X) (exceptional : X → 
   have hitNonneg : 0 ≤ hit.toReal := ENNReal.toReal_nonneg
   have missEq : miss.toReal = 1 - hit.toReal := by linarith
   rw [missEq]
-  rw [show hit.toReal + (1 - hit.toReal) * (1 / 256) - 1 / 256 = hit.toReal * (255 / 256) by ring]
+  rw [show hit.toReal + (1 - hit.toReal) * (1 / 8) - 1 / 8 = hit.toReal * (7 / 8) by ring]
   exact abs_of_nonneg (by positivity)
 
 /-- **The counter-shape refutes `L2` at `q₁ = 0`**: a positive exceptional mass is a positive
 advantage, while the target allows `stageOneHitError 0 = 0`. -/
 theorem gadget_counterShape_refutes {X : Type} (offsetLaw : PMF X) (exceptional : X → Prop)
-    [DecidablePred exceptional] (mask mask' : BitVec 8) {digit : Digit} (nonzero : digit ≠ .zero)
+    [DecidablePred exceptional] (mask mask' : BitVec 3) {digit : Digit} (nonzero : digit ≠ .zero)
     (positive : 0 < exceptionalMass offsetLaw exceptional) :
     ¬ Assumptions.advantage (unlocks digit (g1uUnlock offsetLaw exceptional digit mask))
         (unlocks digit (unlockUniform mask')) ≤ stageOneHitError 0 := by
@@ -322,7 +322,7 @@ theorem gadget_counterShape_refutes {X : Type} (offsetLaw : PMF X) (exceptional 
 /-- **The honest constant, in the model**: the extra term is at most the exceptional mass (the
 mass of both exceptional kinds, within `364/(r−1)`). -/
 theorem gadget_honest {X : Type} (offsetLaw : PMF X) (exceptional : X → Prop)
-    [DecidablePred exceptional] (mask mask' : BitVec 8) {digit : Digit} (nonzero : digit ≠ .zero) :
+    [DecidablePred exceptional] (mask mask' : BitVec 3) {digit : Digit} (nonzero : digit ≠ .zero) :
     Assumptions.advantage (unlocks digit (g1uUnlock offsetLaw exceptional digit mask))
         (unlocks digit (unlockUniform mask')) ≤ (exceptionalMass offsetLaw exceptional).toReal := by
   rw [gadget_counterShape offsetLaw exceptional mask mask' nonzero]
@@ -363,16 +363,16 @@ theorem toOuterMeasure_le_one {α : Type} (law : PMF α) (set : Set α) : law.to
 
 /-- A flagged gadget coordinate: flag an event of the offsets, otherwise the uniform slot. -/
 def flaggedGadget {X : Type} (offsetLaw : PMF X) (flag : X → Prop) [DecidablePred flag]
-    (digit : Digit) (mask : BitVec 8) : PMF (Option Bool) :=
+    (digit : Digit) (mask : BitVec 3) : PMF (Option Bool) :=
   offsetLaw.bind fun offset => if flag offset then PMF.pure none
     else (unlocks digit (unlockUniform mask)).map some
 
-theorem unlocks_uniform_false (mask : BitVec 8) {digit : Digit} (nonzero : digit ≠ .zero) :
-    unlocks digit (unlockUniform mask) false = 1 - (256 : ℝ≥0∞)⁻¹ := by
+theorem unlocks_uniform_false (mask : BitVec 3) {digit : Digit} (nonzero : digit ≠ .zero) :
+    unlocks digit (unlockUniform mask) false = 1 - (8 : ℝ≥0∞)⁻¹ := by
   rw [pmf_bool_false, unlocks_true, unlockUniform_apply mask nonzero]
 
 theorem flaggedGadget_some {X : Type} (offsetLaw : PMF X) (flag : X → Prop) [DecidablePred flag]
-    (digit : Digit) (mask : BitVec 8) (b : Bool) :
+    (digit : Digit) (mask : BitVec 3) (b : Bool) :
     flaggedGadget offsetLaw flag digit mask (some b)
       = offsetLaw.toOuterMeasure {offset | ¬ flag offset} * unlocks digit (unlockUniform mask) b := by
   classical
@@ -402,7 +402,7 @@ theorem plan_not_flagMono {X : Type} (offsetLaw : PMF X) (doubling exceptional :
     [DecidablePred doubling] [DecidablePred exceptional]
     (sub : ∀ offset, doubling offset → exceptional offset)
     (extra : 0 < offsetLaw.toOuterMeasure {offset | exceptional offset ∧ ¬ doubling offset})
-    (mask mask' : BitVec 8) {digit : Digit} (nonzero : digit ≠ .zero) :
+    (mask mask' : BitVec 3) {digit : Digit} (nonzero : digit ≠ .zero) :
     ¬ FlagMono ((unlocks digit (g1uUnlock offsetLaw exceptional digit mask)).map some)
         (flaggedGadget offsetLaw doubling digit mask') := by
   intro mono
@@ -417,10 +417,10 @@ theorem plan_not_flagMono {X : Type} (offsetLaw : PMF X) (doubling exceptional :
   have aTop : a ≠ ⊤ := ne_top_of_le_ne_top ENNReal.one_ne_top (total ▸ le_self_add)
   have bTop : b ≠ ⊤ := ne_top_of_le_ne_top ENNReal.one_ne_top (total ▸ le_add_self)
   have eTop : e ≠ ⊤ := ne_top_of_le_ne_top ENNReal.one_ne_top (toOuterMeasure_le_one _ _)
-  have cTop : (256 : ℝ≥0∞)⁻¹ ≠ ⊤ := by simp
-  have cLe : (256 : ℝ≥0∞)⁻¹ ≤ 1 := ENNReal.inv_le_one.mpr (by norm_num)
-  have innerLe : a + b * (256 : ℝ≥0∞)⁻¹ ≤ 1 := by
-    calc a + b * 256⁻¹ ≤ a + b * 1 := add_le_add le_rfl (mul_le_mul' le_rfl cLe)
+  have cTop : (8 : ℝ≥0∞)⁻¹ ≠ ⊤ := by simp
+  have cLe : (8 : ℝ≥0∞)⁻¹ ≤ 1 := ENNReal.inv_le_one.mpr (by norm_num)
+  have innerLe : a + b * (8 : ℝ≥0∞)⁻¹ ≤ 1 := by
+    calc a + b * 8⁻¹ ≤ a + b * 1 := add_le_add le_rfl (mul_le_mul' le_rfl cLe)
       _ = 1 := by rw [mul_one, total]
   have real := ENNReal.toReal_mono (ENNReal.sub_ne_top ENNReal.one_ne_top) atFalse
   rw [ENNReal.toReal_mul, ENNReal.toReal_add bTop eTop, ENNReal.toReal_sub_of_le cLe ENNReal.one_ne_top,
@@ -430,7 +430,7 @@ theorem plan_not_flagMono {X : Type} (offsetLaw : PMF X) (doubling exceptional :
   have totalReal : a.toReal + b.toReal = 1 := by
     rw [← ENNReal.toReal_add aTop bTop, total, ENNReal.toReal_one]
   have ePos : 0 < e.toReal := ENNReal.toReal_pos extra.ne' eTop
-  have cReal : ((256 : ℝ≥0∞)⁻¹).toReal = 1 / 256 := by
+  have cReal : ((8 : ℝ≥0∞)⁻¹).toReal = 1 / 8 := by
     rw [ENNReal.toReal_inv]; norm_num
   rw [cReal] at real
   nlinarith
@@ -438,7 +438,7 @@ theorem plan_not_flagMono {X : Type} (offsetLaw : PMF X) (doubling exceptional :
 /-- **The corrected flag in the model**: flagging the whole reveal event gives a game below `G1U`'s
 gadget coordinate … -/
 theorem fixed_mono {X : Type} (offsetLaw : PMF X) (exceptional : X → Prop)
-    [DecidablePred exceptional] (mask : BitVec 8) (digit : Digit) :
+    [DecidablePred exceptional] (mask : BitVec 3) (digit : Digit) :
     FlagMono ((unlocks digit (g1uUnlock offsetLaw exceptional digit mask)).map some)
       (flaggedGadget offsetLaw exceptional digit mask) := by
   classical
@@ -454,7 +454,7 @@ theorem fixed_mono {X : Type} (offsetLaw : PMF X) (exceptional : X → Prop)
 
 /-- … and below the uniform slot of `HW`, with flag mass exactly the reveal mass. -/
 theorem fixed_below {X : Type} (offsetLaw : PMF X) (exceptional : X → Prop)
-    [DecidablePred exceptional] (mask : BitVec 8) (digit : Digit) :
+    [DecidablePred exceptional] (mask : BitVec 3) (digit : Digit) :
     Below (unlocks digit (unlockUniform mask)) (flaggedGadget offsetLaw exceptional digit mask) ∧
       flaggedGadget offsetLaw exceptional digit mask none = exceptionalMass offsetLaw exceptional := by
   classical
