@@ -5,12 +5,12 @@ The sources, with `ρ_F`, `ρ_λ ≤ 2^-500` the field-cell and randomiser cutof
 `lambdaAbort_le`), `ρ_x ≤ 2^-170` the curve-`x` cutoff (`curveXAbort_le`) and
 `ρ_t ≤ 2^-138` the designated preimage's `t` sampler (`BigInt.samplerAbort_le`):
 
-`42,052 ρ_F + (90 ρ_x + 1/#A) + 91 ρ_λ + 182 ρ_F + ρ_t
-  ≤ 2^16 · 2^-500 + (2^7 · 2^-170 + 2^-131) + 2^7 · 2^-500 + 2^8 · 2^-500 + 2^-138 ≤ 2^-128`
+`34,297 ρ_F + (90 ρ_x + 1/#A) + 91 · 2 ρ_λ + 91 ρ_F + ρ_t
+  ≤ 2^16 · 2^-500 + (2^7 · 2^-170 + 2^-131) + 2^8 · 2^-500 + 2^7 · 2^-500 + 2^-138 ≤ 2^-128`
 
 (`cells ≤ 2^-129`, `tail ≤ 2^-130`, `lambdas ≤ 2^-131`, `free ≤ 2^-132`, `t ≤ 2^-132`). Every
 numeric step is exponent arithmetic on powers of two (`CutoffNat`, `CutoffPow`): the draw counts
-are bounded by powers of two (`42,052 ≤ 2^16`, `91 ≤ 2^7`, `182 ≤ 2^8`, `90 ≤ 2^7`) and the
+are bounded by powers of two (`34,297 ≤ 2^16`, `182 ≤ 2^8`, `91 ≤ 2^7`, `90 ≤ 2^7`) and the
 curve-`x` rejection ratio by `5/8` (`5^3 ≤ 2^7`), so no large numeral is formed.
 -/
 
@@ -78,9 +78,9 @@ theorem affineCount_inv_le : (affineCount : ENNReal)⁻¹ ≤ ((2 : ENNReal) ^ 1
 theorem cutoffMass_le :
     (fieldCellCount * rejectLaw fieldWidth (fun value => decide (value < pNat)) attempts none + 0) +
       ((90 * rejectLaw fieldWidth curveXAccept attempts none + (affineCount : ENNReal)⁻¹) +
-        ((digitCount : ENNReal) *
-            rejectLaw fieldWidth (fun value => decide (1 ≤ value ∧ value < pNat)) attempts none +
-          (((digitCount * 2 : Nat) : ENNReal) *
+        ((digitCount : ENNReal) * (((2 : Nat) : ENNReal) *
+            rejectLaw fieldWidth (fun value => decide (1 ≤ value ∧ value < pNat)) attempts none) +
+          (((digitCount * 1 : Nat) : ENNReal) *
               rejectLaw fieldWidth (fun value => decide (value < pNat)) attempts none +
             ((2 : ENNReal) ^ 138)⁻¹)) + 0) ≤
       ((2 : ENNReal) ^ 128)⁻¹ := by
@@ -99,16 +99,17 @@ theorem cutoffMass_le :
       (affineCount : ENNReal)⁻¹ ≤ ((2 : ENNReal) ^ 130)⁻¹ := by
     rw [← inv_pow_add_self 130 131 rfl]
     exact add_le_add points affineCount_inv_le
-  have lambdas : (digitCount : ENNReal) *
-      rejectLaw fieldWidth (fun value => decide (1 ≤ value ∧ value < pNat)) attempts none ≤
-      ((2 : ENNReal) ^ 131)⁻¹ :=
-    (mul_le_mul' le_rfl lambdaAbort_le).trans (mul_inv_pow_le _ 500 131
-      (count_le _ 7 131 500 (by unfold digitCount; decide) (by decide)))
-  have free : (((digitCount * 2 : Nat) : ENNReal)) *
+  have lambdas : (digitCount : ENNReal) * (((2 : Nat) : ENNReal) *
+      rejectLaw fieldWidth (fun value => decide (1 ≤ value ∧ value < pNat)) attempts none) ≤
+      ((2 : ENNReal) ^ 131)⁻¹ := by
+    rw [← mul_assoc, ← Nat.cast_mul]
+    exact (mul_le_mul' le_rfl lambdaAbort_le).trans (mul_inv_pow_le _ 500 131
+      (count_le _ 8 131 500 (by unfold digitCount; decide) (by decide)))
+  have free : (((digitCount * 1 : Nat) : ENNReal)) *
       rejectLaw fieldWidth (fun value => decide (value < pNat)) attempts none ≤
       ((2 : ENNReal) ^ 132)⁻¹ :=
     (mul_le_mul' le_rfl fieldAbort_le).trans (mul_inv_pow_le _ 500 132
-      (count_le _ 8 132 500 (by unfold digitCount; decide) (by decide)))
+      (count_le _ 7 132 500 (by unfold digitCount; decide) (by decide)))
   have preimage : ((2 : ENNReal) ^ 138)⁻¹ ≤ ((2 : ENNReal) ^ 132)⁻¹ :=
     ENNReal.inv_le_inv.mpr (pow_le_pow_right₀ one_le_two (by decide))
   refine (add_le_add (add_le_add cells le_rfl) (add_le_add (add_le_add tailPart
@@ -124,8 +125,8 @@ end Numbers
 the abstract ideal game. -/
 theorem samplerCutoff : SamplerCutoff := by
   intro field group adversary parameter scalar
-  have lift := AbortClose.optionProduct digitCount (fun _ => lambdaLaw)
-    (fun _ => (PMF.uniformOfFintype NonZeroBase).map some) (fun _ => lambda_close)
+  have lift := AbortClose.optionProduct digitCount (fun _ => pairLaw)
+    (fun _ => (PMF.uniformOfFintype (NonZeroBase × NonZeroBase)).map some) (fun _ => pair_close)
   rw [optionProduct_uniform] at lift
   have finite : ((2 : ENNReal) ^ 128)⁻¹ ≠ ⊤ := ENNReal.inv_ne_top.mpr (two_pow_ne_zero 128)
   have bound := @game_close field group (Classical.decEq _) (Classical.decEq _) _ _ _ _ _

@@ -147,7 +147,7 @@ theorem slotChunk_eq (slot : Fin foldStepCount) (c : Fin chunkCount) (position :
       show (slot.val - (2 - 1)) / (5 - 1) + 1 = c.val
       split_ifs at value small <;> omega
     · apply Fin.ext
-      show (slot.val - ((2 - 1) + 32 * (5 - 1))) / (4 - 1) + 32 + 1 = c.val
+      show (slot.val - ((2 - 1) + 48 * (5 - 1))) / (4 - 1) + 48 + 1 = c.val
       split_ifs at value small <;> omega
 
 /-- ... at position `position` inside it. -/
@@ -259,7 +259,7 @@ def offsets (oracle : PermutationOracle FixedIndex Block) (hashOracle : EncPRF.H
 /-! ### One lane, evaluator side -/
 
 /-- **`Eval` for one lane.** Per chunk: rebuild the one-hot labels from the published fold
-joins, fold them against the chunk index (Lemma 6.1), then sum over the 56 chunks. -/
+joins, fold them against the chunk index (Lemma 6.1), then sum over the 52 chunks. -/
 def evalCoord (oracle : PermutationOracle FixedIndex Block) (hashOracle : EncPRF.HashOracle)
     (lane : Lane) (joins : Vector Block foldStepCount)
     (scale : Fin chunkCount → Fin (laneCount lane) → BaseField)

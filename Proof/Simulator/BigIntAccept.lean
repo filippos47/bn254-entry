@@ -1,18 +1,18 @@
 /-
 **The preimage sampler's acceptance, uniformity and abort mass** at the phase-4 parameters
-(`K = 453` working limbs, `n = 455` digits, `326 = 70 + 256` coins, `R = 80` attempts).
+(`K = 363` working limbs, `n = 364` digits, `363 = 107 + 256` coins, `R = 80` attempts).
 
 * `acceptTop_eq`: the machine's test (top working limb `0`) is `samplerAccept`:
-  `enc + p^455 · t < 2^115712` (`= 2^(256 · 452)`), for every `t < 2^326` and `enc < p^455`;
+  `enc + p^364 · t < 2^92672` (`= 2^(256 · 362)`), for every `t < 2^363` and `enc < p^364`;
 * `memSem_preimageSampler_A1`: the sampler's law with that acceptance;
-* `kept_below`: every kept `t` gives `V = enc + p^455 · t < 2^115712`;
-* `fibre_below`, `accepted_iff_fibre`: the fibre `{t : enc + p^455 · t < 2^115712}` (with `t`
-  unrestricted, as the swap kernel's fibre) lies below `2^326`, so it is exactly the set of
-  accepted `326`-bit draws (from `preimageComplete_nat : 2^115712 ≤ 2^326 · p^455`);
+* `kept_below`: every kept `t` gives `V = enc + p^364 · t < 2^92672`;
+* `fibre_below`, `accepted_iff_fibre`: the fibre `{t : enc + p^364 · t < 2^92672}` (with `t`
+  unrestricted, as the swap kernel's fibre) lies below `2^363`, so it is exactly the set of
+  accepted `363`-bit draws (from `preimageComplete_nat : 2^92672 ≤ 2^363 · p^364`);
 * `kept_uniform`, `kept_off`: conditioned on acceptance, `t` is uniform on the **whole** fibre
-  `{t : enc + p^455 · t < 2^115712}` (A1 §4 item 4);
+  `{t : enc + p^364 · t < 2^92672}` (A1 §4 item 4);
 * `rejectedCount_sampler`: at most `3/10` of the draws are rejected, from the single inequality
-  `preimageAccept_nat : (7 · 2^326 + 10) · p^455 ≤ 10 · 2^115712`;
+  `preimageAccept_nat : (7 · 2^363 + 10) · p^364 ≤ 10 · 2^92672`;
 * `samplerAbort_le`: the abort mass over `80` attempts is below `2^-138` (`(3/10)^80 < 2^-138.9`),
   in the `((2 : ENNReal) ^ k)⁻¹` form `CutoffMass` consumes.
 
@@ -30,19 +30,19 @@ open Cryptography Cryptography.BoundedMachine Blocks
 
 namespace BigInt
 
-/-- **The acceptance predicate of A1 §4.4**: `enc + p^455 · t < 2^115712`. -/
+/-- **The acceptance predicate of A1 §4.4**: `enc + p^364 · t < 2^92672`. -/
 def samplerAccept (enc t : Nat) : Bool :=
   decide (enc + pNat ^ samplerDigits * t < 2 ^ (256 * (samplerLimbs - 1)))
 
-theorem samplerWidth_eq : hiWidth + 256 = 326 := rfl
-theorem samplerBoundary_eq : 256 * (samplerLimbs - 1) = 115712 := rfl
+theorem samplerWidth_eq : hiWidth + 256 = 363 := rfl
+theorem samplerBoundary_eq : 256 * (samplerLimbs - 1) = 92672 := rfl
 
-/-- `p^455 < 2^(254 · 455)`, by exponent arithmetic. -/
+/-- `p^364 < 2^(254 · 364)`, by exponent arithmetic. -/
 theorem pow_samplerDigits_lt : pNat ^ samplerDigits < 2 ^ (254 * samplerDigits) := by
   rw [Nat.pow_mul]
   exact Nat.pow_lt_pow_left pNat_lt_254 (by decide)
 
-/-- Every attempt's value fits the `453` working limbs. -/
+/-- Every attempt's value fits the `363` working limbs. -/
 theorem samplerValue_lt (enc t : Nat) (encSmall : enc < pNat ^ samplerDigits)
     (tSmall : t < 2 ^ (hiWidth + 256)) :
     samplerValue samplerDigits enc t < 2 ^ (256 * samplerLimbs) := by
@@ -57,7 +57,7 @@ theorem samplerValue_lt (enc t : Nat) (encSmall : enc < pNat ^ samplerDigits)
         Nat.pow_le_pow_right (by norm_num) (by unfold hiWidth samplerDigits samplerLimbs; norm_num)
 
 /-- **The machine's test is the acceptance predicate**: the top working limb of
-`t · p^455 + enc` is `0` iff `enc + p^455 · t < 2^115712`. -/
+`t · p^364 + enc` is `0` iff `enc + p^364 · t < 2^92672`. -/
 theorem acceptTop_eq (enc t : Nat) (encSmall : enc < pNat ^ samplerDigits)
     (tSmall : t < 2 ^ (hiWidth + 256)) :
     acceptTop samplerLimbs samplerDigits enc t = samplerAccept enc t := by
@@ -88,8 +88,8 @@ theorem rejectLaw_congr (width : Nat) (first second : Nat → Bool)
       rw [same value.val value.isLt, ih]
 
 /-- **The preimage sampler at the phase-4 parameters** (A1 §4 item 5): bounded rejection of
-`326`-bit draws `t` accepted iff `enc + p^455 · t < 2^115712`, `80` attempts, the kept `t` mapped to
-the halves of `V = enc + p^455 · t`. -/
+`363`-bit draws `t` accepted iff `enc + p^364 · t < 2^92672`, `80` attempts, the kept `t` mapped to
+the halves of `V = enc + p^364 · t`. -/
 theorem memSem_preimageSampler_A1 [BN254.FieldCertificate] (work yBase : Nat)
     (layout : SamplerLayout work samplerLimbs samplerDigits yBase) (memory : Memory)
     (digitValues : Nat → Nat) (digitsSmall : ∀ e, e < samplerDigits → digitValues e < pNat)
@@ -104,10 +104,10 @@ theorem memSem_preimageSampler_A1 [BN254.FieldCertificate] (work yBase : Nat)
     rejectLaw_congr _ _ _ (fun t small => acceptTop_eq _ t
       (encNat_lt digitValues samplerDigits digitsSmall) small)]
 
-/-- **On acceptance** `V = enc + p^455 · t < 2^115712` (the `452` programmed limbs hold `V`). -/
+/-- **On acceptance** `V = enc + p^364 · t < 2^92672` (the `362` programmed limbs hold `V`). -/
 theorem kept_below (enc t : Nat)
     (member : some t ∈ (rejectLaw (hiWidth + 256) (samplerAccept enc) samplerAttempts).support) :
-    enc + pNat ^ samplerDigits * t < 2 ^ 115712 ∧ t < 2 ^ 326 := by
+    enc + pNat ^ samplerDigits * t < 2 ^ 92672 ∧ t < 2 ^ 363 := by
   obtain ⟨accepted, small⟩ := kept_accepted _ _ _ _ member
   unfold samplerAccept at accepted
   have below := of_decide_eq_true accepted
@@ -126,28 +126,28 @@ theorem fibre_below_generic (enc power bound width t : Nat) (key : bound ≤ 2 ^
   generalize power * t = high at scaled inFibre
   omega
 
-/-- **The fibre lies below `2^326`**: every `t ∈ ℕ` with `enc + p^455 · t < 2^115712` has
-`t < 2^326` (`T ≤ 2^326`), for every `enc`. -/
-theorem fibre_below (enc t : Nat) (inFibre : enc + pNat ^ samplerDigits * t < 2 ^ 115712) :
+/-- **The fibre lies below `2^363`**: every `t ∈ ℕ` with `enc + p^364 · t < 2^92672` has
+`t < 2^363` (`T ≤ 2^363`), for every `enc`. -/
+theorem fibre_below (enc t : Nat) (inFibre : enc + pNat ^ samplerDigits * t < 2 ^ 92672) :
     t < 2 ^ (hiWidth + 256) := by
   have key := preimageComplete_nat
-  rw [show (326 : Nat) = hiWidth + 256 from rfl, show (455 : Nat) = samplerDigits from rfl] at key
+  rw [show (363 : Nat) = hiWidth + 256 from rfl, show (364 : Nat) = samplerDigits from rfl] at key
   exact fibre_below_generic enc _ _ _ t key inFibre
 
-/-- **The accepted `326`-bit draws are exactly the fibre** `{t : enc + p^455 · t < 2^115712}`. -/
+/-- **The accepted `363`-bit draws are exactly the fibre** `{t : enc + p^364 · t < 2^92672}`. -/
 theorem accepted_iff_fibre (enc t : Nat) :
     (samplerAccept enc t = true ∧ t < 2 ^ (hiWidth + 256)) ↔
-      enc + pNat ^ samplerDigits * t < 2 ^ 115712 := by
+      enc + pNat ^ samplerDigits * t < 2 ^ 92672 := by
   unfold samplerAccept
   simp only [decide_eq_true_eq]
   rw [samplerBoundary_eq]
   exact ⟨fun both => both.1, fun inFibre => ⟨inFibre, fibre_below enc t inFibre⟩⟩
 
 /-- **Conditioned on acceptance, `t` is uniform on the whole fibre** (A1 §4 item 4): any two
-`t, t' ∈ ℕ` with `enc + p^455 · t < 2^115712` have the same mass, for every `enc`. -/
+`t, t' ∈ ℕ` with `enc + p^364 · t < 2^92672` have the same mass, for every `enc`. -/
 theorem kept_uniform (enc first second : Nat)
-    (firstIn : enc + pNat ^ samplerDigits * first < 2 ^ 115712)
-    (secondIn : enc + pNat ^ samplerDigits * second < 2 ^ 115712) :
+    (firstIn : enc + pNat ^ samplerDigits * first < 2 ^ 92672)
+    (secondIn : enc + pNat ^ samplerDigits * second < 2 ^ 92672) :
     rejectLaw (hiWidth + 256) (samplerAccept enc) samplerAttempts (some first) =
       rejectLaw (hiWidth + 256) (samplerAccept enc) samplerAttempts (some second) :=
   rejectLaw_uniform _ _ _ _ _ ((accepted_iff_fibre enc first).mpr firstIn)
@@ -155,7 +155,7 @@ theorem kept_uniform (enc first second : Nat)
 
 /-- **No mass off the fibre.** -/
 theorem kept_off (enc value : Nat)
-    (outside : ¬ enc + pNat ^ samplerDigits * value < 2 ^ 115712) :
+    (outside : ¬ enc + pNat ^ samplerDigits * value < 2 ^ 92672) :
     rejectLaw (hiWidth + 256) (samplerAccept enc) samplerAttempts (some value) = 0 :=
   rejectLaw_off _ _ _ _ fun good => outside ((accepted_iff_fibre enc value).mp good)
 
@@ -187,13 +187,13 @@ theorem rejectedCount_generic (enc power boundary width : Nat) (encSmall : enc <
   rw [Fin.card_Ici, Fin.val_mk] at card
   omega
 
-/-- **At most `3/10` of the draws are rejected**, for every `enc < p^455`: the per-attempt
+/-- **At most `3/10` of the draws are rejected**, for every `enc < p^364`: the per-attempt
 acceptance probability is at least `7/10`. -/
 theorem rejectedCount_sampler (enc : Nat) (encSmall : enc < pNat ^ samplerDigits) :
     10 * rejectedCount (hiWidth + 256) (samplerAccept enc) ≤ 3 * 2 ^ (hiWidth + 256) := by
   have key := preimageAccept_nat
-  rw [show (326 : Nat) = hiWidth + 256 from rfl, show (455 : Nat) = samplerDigits from rfl,
-    show (115712 : Nat) = 256 * (samplerLimbs - 1) from rfl] at key
+  rw [show (363 : Nat) = hiWidth + 256 from rfl, show (364 : Nat) = samplerDigits from rfl,
+    show (92672 : Nat) = 256 * (samplerLimbs - 1) from rfl] at key
   have wide : 4 ≤ 2 ^ (hiWidth + 256) :=
     calc 4 = 2 ^ 2 := rfl
       _ ≤ 2 ^ (hiWidth + 256) := Nat.pow_le_pow_right (by norm_num) (by decide)
@@ -217,7 +217,7 @@ theorem abort_generic (total : Nat) :
   exact Nat.le_of_mul_le_mul_left chain (by positivity)
 
 /-- **The abort mass of the `80` attempts is below `2^-138`** (`(3/10)^80 ≈ 2^-138.97`), for every
-`enc < p^455`. -/
+`enc < p^364`. -/
 theorem samplerAbort_le (enc : Nat) (encSmall : enc < pNat ^ samplerDigits) :
     rejectLaw (hiWidth + 256) (samplerAccept enc) samplerAttempts none ≤ ((2 : ENNReal) ^ 138)⁻¹ := by
   have rejected := rejectedCount_sampler enc encSmall

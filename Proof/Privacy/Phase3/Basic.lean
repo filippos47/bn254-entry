@@ -622,7 +622,7 @@ theorem sampleLaneDelta_le (n k e : Nat) (exponents : 254 * n + e ≤ 256 * k) :
         ring
 
 /-- **The per-lane proof bias** `laneDelta lane = 2 ^ (254 n - 256 k)`, with `n` the lane's vector
-length (curveX 3, curveY 2, pointX 455, pointY 273) and `k = limbCount lane`. -/
+length (curveX 3, curveY 2, pointX 364, pointY 273) and `k = limbCount lane`. -/
 def laneDelta : Lane → ℝ≥0∞
   | .curveX => sampleLaneDelta curveElementCountX (limbCount .curveX)
   | .curveY => sampleLaneDelta curveElementCountY (limbCount .curveY)
@@ -636,7 +636,7 @@ def laneDeltaExponent : Lane → Nat
   | .pointX => 142
   | .pointY => 290
 
-/-- pointX: `n = 455`, `k = 452`, `2 ^ (254 · 455 - 256 · 452) = 2 ^ -142`. -/
+/-- pointX: `n = 364`, `k = 362`, `2 ^ (254 · 364 - 256 · 362) = 2 ^ -216 ≤ 2 ^ -142`. -/
 theorem laneDelta_pointX_le : laneDelta .pointX ≤ ((2 : ℝ≥0∞) ^ 142)⁻¹ :=
   sampleLaneDelta_le _ _ _ (by decide)
 

@@ -85,12 +85,13 @@ end Sums
 
 variable [FieldCertificate] [GroupCertificate] (scalar : NonZeroScalar) (input : AffineInput)
 
-/-- **A function of the offsets and the `ρ`s, averaged over uniform coins.** -/
-theorem coins_marginal (g : ClampedOffsets → (Fin digitCount → NonZeroBase) → ℝ≥0∞) :
+/-- **A function of the offsets and the `(ρ, τ)`s, averaged over uniform coins.** -/
+theorem coins_marginal (g : ClampedOffsets → (Fin digitCount → NonZeroBase × NonZeroBase) → ℝ≥0∞) :
     ∑' coins, PMF.uniformOfFintype Coins coins *
-        g ⟨coins.offsets, coins.offsetsClamped⟩ (fun d => (coins.pointRandomness.get d).rho) =
+        g ⟨coins.offsets, coins.offsetsClamped⟩
+          (fun d => ((coins.pointRandomness.get d).rho, (coins.pointRandomness.get d).tau)) =
       ∑' K, PMF.uniformOfFintype ClampedOffsets K *
-        ∑' ρ, PMF.uniformOfFintype (Fin digitCount → NonZeroBase) ρ * g K ρ := by
+        ∑' ρ, PMF.uniformOfFintype (Fin digitCount → NonZeroBase × NonZeroBase) ρ * g K ρ := by
   rw [tsum_equiv_uniform coinsSplit, tsum_uniform_prod (α := ClampedOffsets) (β := CoinsRest)]
   refine tsum_congr fun K => congrArg _ ?_
   rw [tsum_uniform_prod (α := Fin outputMacCount → RowRandomness)]
@@ -98,24 +99,32 @@ theorem coins_marginal (g : ClampedOffsets → (Fin digitCount → NonZeroBase) 
       (b : (Fin outputMacCount → Exception.Entry) × BaseField × NonZeroBase × BaseField × BaseField ×
         (Coord → Fin coordinateBitCount → Block) × (Coord → Block)),
       g ⟨(coinsSplit.symm (K, R, b)).offsets, (coinsSplit.symm (K, R, b)).offsetsClamped⟩
-          (fun d => ((coinsSplit.symm (K, R, b)).pointRandomness.get d).rho) =
-        g K (fun d => (rowRandEquiv (R d)).1) := by
+          (fun d => (((coinsSplit.symm (K, R, b)).pointRandomness.get d).rho,
+            ((coinsSplit.symm (K, R, b)).pointRandomness.get d).tau)) =
+        g K (fun d => ((rowRandEquiv.trans (Equiv.prodAssoc NonZeroBase NonZeroBase
+          (Biquadratic.XRandomness × Biquadratic.YRandomness × Biquadratic.ZRandomness)).symm) (R d)).1) := by
     intro R b
-    exact congrArg (g K) (funext fun d => congrArg RowRandomness.rho (Vector.get_ofFn R d))
+    have rowEq : ∀ d : Fin digitCount, (coinsSplit.symm (K, R, b)).pointRandomness.get d = R d :=
+      fun d => Vector.get_ofFn R d
+    refine congrArg (g K) (funext fun d => ?_)
+    rw [rowEq d]
+    rfl
   simp only [perR]
   simp only [tsum_const_uniform]
-  exact tsum_uniform_pi_fst rowRandEquiv (g K)
+  exact tsum_uniform_pi_fst (rowRandEquiv.trans (Equiv.prodAssoc NonZeroBase NonZeroBase
+          (Biquadratic.XRandomness × Biquadratic.YRandomness × Biquadratic.ZRandomness)).symm) (g K)
 
 omit [GroupCertificate] in
 theorem rowsAt_eq (coins : Coins) (K : ClampedOffsets) (hK : K.1 = coins.offsets) (d : Fin digitCount) :
-    rowsAt scalar coins d = rowsK scalar K (fun d => (coins.pointRandomness.get d).rho) d := by
+    rowsAt scalar coins d = rowsK scalar K
+      (fun d => ((coins.pointRandomness.get d).rho, (coins.pointRandomness.get d).tau)) d := by
   unfold rowsAt rowsK
   rw [rowsGet, hK]
 
 theorem desT_eq (coins : Coins) (cells : PublicCells) (vis : VisibleCells (offShape input)) :
     desT scalar input coins cells vis =
-      desK scalar input ⟨coins.offsets, coins.offsetsClamped⟩ (fun d => (coins.pointRandomness.get d).rho)
-        cells vis := by
+      desK scalar input ⟨coins.offsets, coins.offsetsClamped⟩
+        (fun d => ((coins.pointRandomness.get d).rho, (coins.pointRandomness.get d).tau)) cells vis := by
   funext dc
   unfold desT desK
   rw [rowsAt_eq scalar coins ⟨coins.offsets, coins.offsetsClamped⟩ rfl]
@@ -129,7 +138,7 @@ theorem coins_bd (cells : PublicCells) (vis : VisibleCells (offShape input))
             (desT scalar input coins cells vis)) (dsiteV input)) limbs *
           (if Exact0 scalar input coins.offsets then 0 else Z limbs) =
       ∑' K, PMF.uniformOfFintype ClampedOffsets K *
-        ∑' ρ, PMF.uniformOfFintype (Fin digitCount → NonZeroBase) ρ *
+        ∑' ρ, PMF.uniformOfFintype (Fin digitCount → NonZeroBase × NonZeroBase) ρ *
           ∑' limbs, siteFibreLaw .pointX (siteVector input (Sum.elim (visEquiv input vis)
               (desK scalar input K ρ cells vis)) (dsiteV input)) limbs *
             (if Exact0 scalar input K.1 then 0 else Z limbs) := by

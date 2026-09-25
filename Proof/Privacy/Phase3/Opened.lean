@@ -4,14 +4,14 @@
 Design note B §3 and the P3 interface (`Glue/Assembly.lean`). Both games have the shape of P4's
 `I^U` (`Lazy.idealUniformHybrid`, `Lazy/Refill.lean`): the glue's ideal game `I` whose honest
 evaluation is P4's refill run (`Lazy.refillRun`: every non-designated switch-mask vector the run
-asks is programmed from a uniform mask tape at its cell's first stage-2 touch, the `452` designated
+asks is programmed from a uniform mask tape at its cell's first stage-2 touch, the `362` designated
 hash queries intercepted). They differ from `I^U`, and from each other, only after that run
 (`openedCont`):
 
 * **the target rows** come from a kernel (`RowsKernel`): the construction's true rows under the
   coins' law (`realRows scalar`) for `HW`, the simulator's tail/head-clamp/lift sampler
   (`simulatedRows`, drawn exactly as `I`/`I^U` draw it) for `H`; the designated vector's free
-  coordinates, collector solve and `452` hash answers follow (`Glue.designatedLimbs`);
+  coordinates, collector solve and `362` hash answers follow (`Glue.designatedLimbs`);
 * **the designated installation**: `HW` and `H` skip a failed program (`programAllSkip`); `I^U`
   aborts (`Glue.programAll`). `idealUniformHybrid_eq_opened` shows `I^U` *is* the opened game at
   (`simulatedRows`, `abortInstallation`), so `H → I^U` (`AbortBound`) changes the installation only.
@@ -85,7 +85,7 @@ def programAllSkip [DecidableEq FixedIndex] [DecidableEq EncPRF.PermutationIndex
     | some input => programAllSkip rest
         ((LazyOracle.program (.hash input) answer oracle).getD oracle)
 
-/-- A designated installation: the `452` hash program requests on the oracle, `none` an abort. -/
+/-- A designated installation: the `362` hash program requests on the oracle, `none` an abort. -/
 abbrev Installation [DecidableEq FixedIndex] [DecidableEq EncPRF.PermutationIndex] :=
   List (Option BaseField × (Block × Block)) →
     LazyOracle.State FixedIndex EncPRF.PermutationIndex →
@@ -102,7 +102,7 @@ def abortInstallation [DecidableEq FixedIndex] [DecidableEq EncPRF.PermutationIn
 /-! ### The opened simulators -/
 
 /-- **The opening after its honest run**: the target rows from a kernel, the designated vector's
-free coordinates, collector solve and `452` hash answers (`Glue.designatedLimbs`), the installation
+free coordinates, collector solve and `362` hash answers (`Glue.designatedLimbs`), the installation
 (P4's `Lazy.openingCont` with a rows kernel and an installation). -/
 def openedCont [FieldCertificate] [GroupCertificate] [DecidableEq FixedIndex]
     [DecidableEq EncPRF.PermutationIndex] (rows : RowsKernel) (install : Installation)

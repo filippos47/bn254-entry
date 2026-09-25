@@ -14,7 +14,7 @@ It is proved along the designed route (`LiftHop.planB_publicFirst_of_designed`):
   `LiftGuess.coincidenceBound_of_guess`);
 * **`G1U° → HW`** is the overlap with the middle game `M'` of the designed shadow: its F4 lift from
   the two laws (`designedLaws`: `LawOff` off the curve, `LawOn` on it), its flag mass from P1k's
-  bounds (`designedBounds`: `4q₁/2^128 + 182/(r−1)`), and its two tape readings within the curve
+  bounds (`designedBounds`: `4q₁/2^128 + 364/(r−1)`), and its two tape readings within the curve
   lanes' share of the mask swap (`LiftTV`, `LiftHop.curveSwapError_le`: `≤ maskSwapError`).
 
 `LawsGuess.planB_publicFirst_of_laws_bounds` assembles the three.
@@ -57,8 +57,8 @@ mass is positive: `K_d` is the construction's offset (a free tail point, or the 
 **Where the chain charges it.** The gadget changes from real to lazy in `G1U → HW`; `HW → H`
 (`OpeningBound`) has the lazy gadget on both sides. Under the public-first coupling (`K` independent
 of the view, P1's F4) the two games' doubling events coincide, and they differ only on it, so this
-hop carries the doubling mass itself: in the model the extra term is exactly the exceptional mass
-(`gadget_honest`), `ε_exc ≤ 182/#Point ≤ 182/(r−1)` (P1's `doubling_mass_le`/
+hop carries the exceptional mass itself: in the model the extra term is exactly the exceptional mass
+(`gadget_honest`), `ε_exc ≤ 364/(r−1)` with both exceptional kinds of every digit (P1's `doubling_mass_le`/
 `bn254_doubling_real_le`, `scalarFieldModulus_le_card_point`), the field's `exceptionalError`
 (`≈ 2^-246`). §4 shows that the flag must be the whole reveal event, not the doubling event alone.
 -/
@@ -164,13 +164,14 @@ theorem garbleEntry_unlock_exceptional (perms : FieldMacToECMac.GadgetPermutatio
     (inputKey : InputMacKey) (pad : Exception.Entry) (phi : BaseField)
     (selected : digitEndomorphismBase key.digit = some phi) :
     Exception.unlock
-        (FieldMacToECMac.gadgetMask perms output
+        (FieldMacToECMac.gadgetMask perms output (Exception.exceptionalInput phi key.offset.coordinates)
           (inputKey.encodeAffine (Exception.exceptionalInput phi key.offset.coordinates)))
-        (FieldMacToECMac.garbleEntry perms output key inputKey pad)
+        (FieldMacToECMac.garbleEntry perms output key inputKey pad) false
         (Exception.exceptionalInput phi key.offset.coordinates)
       = key.digit := by
-  simp only [FieldMacToECMac.garbleEntry, selected]
-  exact Exception.unlock_writeEntry _ _ _ _
+  simp only [FieldMacToECMac.garbleEntry, selected, FieldMacToECMac.writeCase]
+  rw [Exception.unlock_writeEntry_ne _ _ _ _ _ _ (Exception.slotOf_ne _ _).symm]
+  exact Exception.unlock_writeEntry _ _ _ _ _
 
 /-- **`HW` never reads the published gadget**: its opening (the refill run of `openingQueriesM`,
 the rows kernel, the collector solve on `evaluateHomogeneous`, the installation) is the same for
@@ -319,7 +320,7 @@ theorem gadget_counterShape_refutes {X : Type} (offsetLaw : PMF X) (exceptional 
   positivity
 
 /-- **The honest constant, in the model**: the extra term is at most the exceptional mass (the
-doubling mass, `≤ 182/#Point`). -/
+mass of both exceptional kinds, within `364/(r−1)`). -/
 theorem gadget_honest {X : Type} (offsetLaw : PMF X) (exceptional : X → Prop)
     [DecidablePred exceptional] (mask mask' : BitVec 8) {digit : Digit} (nonzero : digit ≠ .zero) :
     Assumptions.advantage (unlocks digit (g1uUnlock offsetLaw exceptional digit mask))
@@ -343,9 +344,10 @@ doubling event. P1d's plan flags only the doubling event (and stage-1 touches, n
 and **such a flagged game is not below `G1U`** (`plan_not_flagMono`): on `exceptional ∧ ¬ doubling`
 the plan's game keeps the uniform slot, while `G1U` reveals the digit, so the plan's flag-down mass
 of `false` exceeds `G1U`'s. The correct flag is the whole reveal event (`fixed_below`, `fixed_mono`):
-the honest constant does not move (the true doubling mass is `≈ 91/#Point`, half of `182/(r−1)`),
-but `M`'s flag mass must be bounded by a doubling bound sharper than P1's `182/#Point`, whose slack
-below `182/(r−1)` is only `182/(r(r−1)) ≈ 2^-500`. -/
+the honest constant does not move (the true exceptional mass is `≈ 182/#Point`, half of
+`364/(r−1)`), but `M`'s flag mass must be bounded sharper than a plain union bound over the two
+exceptional kinds and the good-tail restriction, whose slack below the constant is only
+`≈ 2^-500`. -/
 
 namespace Kriterion.ArgoMAC.Security.Phase3.PublicFirst
 

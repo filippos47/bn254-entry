@@ -72,11 +72,11 @@ abbrev ordF0 : PlanB.FixedIndex → Nat := @ordinal PlanB.FixedIndex (Fintype.of
 abbrev ordE0 : EncPRF.PermutationIndex → Nat := @ordinal EncPRF.PermutationIndex (Fintype.ofFinite _)
 
 omit [FieldCertificate] in
-theorem card_fixed_ofFinite : @Fintype.card PlanB.FixedIndex (Fintype.ofFinite _) = 117908 :=
+theorem card_fixed_ofFinite : @Fintype.card PlanB.FixedIndex (Fintype.ofFinite _) = 159016 :=
   calc @Fintype.card PlanB.FixedIndex (Fintype.ofFinite _) = Nat.card PlanB.FixedIndex :=
         @Fintype.card_eq_nat_card _ (Fintype.ofFinite _)
     _ = Fintype.card PlanB.FixedIndex := Fintype.card_eq_nat_card.symm
-    _ = 117908 := card_fixedIndex
+    _ = 159016 := card_fixedIndex
 
 omit [FieldCertificate] in
 theorem card_enc_ofFinite : @Fintype.card EncPRF.PermutationIndex (Fintype.ofFinite _) = 508 :=

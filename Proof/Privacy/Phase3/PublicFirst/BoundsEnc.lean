@@ -248,13 +248,13 @@ def onCurveRest (table : Public) (bits : BitInput) (mac : InputMac)
       (fun chunk => Pipeline.readPointY (unpack (table.scale.get chunk)))
       (Pipeline.coordBits bits .y) (Pipeline.macLabels (Programs.whitenMacOf pads mac) .y)
     >>= fun pointY =>
-  Programs.unlockM (Pipeline.pointTable table) bits.toAffine (Programs.transformMacOf pads mac)
-    >>= fun digits =>
+  Programs.masksM bits.toAffine (Programs.transformMacOf pads mac) >>= fun masks =>
   pure (some (Garbling.decodeResult
     { point := bits.toAffine
       pointMacs := FieldMacToECMac.evaluateHomogeneous (Pipeline.pointTable table)
         (Pipeline.digitValues pointX pointY) bits.toAffine
-      exceptionDigits := digits }))
+      exceptionDigits := Programs.unlockDigits (Pipeline.pointTable table) bits.toAffine masks false
+      tripleDigits := Programs.unlockDigits (Pipeline.pointTable table) bits.toAffine masks true }))
 
 /-- **The evaluator starts with the prefix and its pads.** -/
 theorem onCurveM_eq_prefix (table : Public) (bits : BitInput) (mac : InputMac) :

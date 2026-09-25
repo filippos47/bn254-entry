@@ -17,7 +17,7 @@
 
 **The abort sites** (`AbortSite`) are the stage-1 entries an abort may be billed to: the level-1
 fold indices of chunk 0 of lanes `pointX` and `curveX` (fixed-key entries; the fold hit of `E*` and
-of the `curveX` chunk-0 labels), and the chunk-0 **hash cells** of `pointX` (the `4 · 452`
+of the `curveX` chunk-0 labels), and the chunk-0 **hash cells** of `pointX` (the `4 · 362`
 candidate designated inputs, `Glue.CandidateSite`) and of `curveX` (`4 · 4`; a stage-1 hit there
 makes the curve lane read the chunk-0 labels). A cell's entries are the stored labels at its inputs
 (`hashCount`); the cells' inputs are pairwise distinct over (cell, label), so all the sites together
@@ -52,7 +52,7 @@ noncomputable section
 `curveX`. -/
 def IsFoldAbort : FixedIndex → Prop
   | .hot lane chunk fold _ _ => (lane = .pointX ∨ lane = .curveX) ∧ chunk = chunkZero ∧ fold.val = 1
-  | .gadget _ _ _ => False
+  | .gadget _ _ _ _ => False
 
 /-- **The hash abort cells**: the chunk-`0` cells of lanes `pointX` (the candidate designated
 inputs) and `curveX`. -/

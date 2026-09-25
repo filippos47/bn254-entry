@@ -3,7 +3,7 @@ Stage 2, part 1: the replay of the honest evaluator's queries (`Programs.evalLan
 §4 item 1).
 
 For every lane and chunk `c` (width `w = chunkWidthNat c`: `2` for `c = 0`, `5` for the wide
-chunks `1 .. 32`, `4` for the narrow chunks `33 .. 55`) the machine rebuilds the
+chunks `1 .. 48`, `4` for the narrow chunks `49 .. 51`) the machine rebuilds the
 chunk's one-hot labels exactly as `evalFoldM` does, then extracts every inactive switch's mask
 vector from its hash limbs and accumulates the delivered value
 `Σ_c [ι(α_c) · J_c[e] + Σ_{j ≠ α_c} (ι(j) − ι(α_c)) · Y_{c,j}[e]]`
@@ -27,7 +27,7 @@ has zero limbs, hence zero digits, so it adds nothing. The limb cells are theref
 written in the same step that reads them; what the extraction leaves behind is never read.
 
 **The designated switch.** In lane `pointX`, chunk `0`, the switch `j* = α₀ ⊕ 1` is skipped as
-well (the guard is `(s ⊕ α) >>> 1`): its `452` limbs `scaleInput pointX 0 j* i E*` are the
+well (the guard is `(s ⊕ α) >>> 1`): its `362` limbs `scaleInput pointX 0 j* i E*` are the
 hash inputs stage 2 programs. The `pointX` accumulators therefore hold the sums without `j*`'s
 vector. The label `E* = E_{0, j*}`, `j*` and `κ = ι(j*) − ι(α₀) = 1 − 2 · (α₀ mod 2)`
 are recorded for the opening.
@@ -46,7 +46,7 @@ open Cryptography.BoundedMachine Blocks Prog
 
 namespace Replay
 
-/-- A chunk number as a `Fin chunkCount` (the identity below `56`). -/
+/-- A chunk number as a `Fin chunkCount` (the identity below `52`). -/
 def chunkFin (chunk : Nat) : Fin chunkCount := ⟨chunk % chunkCount, Nat.mod_lt _ chunkCount_pos⟩
 
 /-- The fold index of step `step`, entry `entry`, half `half`. -/
@@ -75,10 +75,10 @@ def LaneSpec.count (spec : LaneSpec) : Nat := laneCount spec.lane
 /-- The number of hash limbs `k = limbCount lane` of one switch mask vector. -/
 def LaneSpec.limbs (spec : LaneSpec) : Nat := limbCount spec.lane
 
-def curveXSpec : LaneSpec := ⟨.curveX, reqX, labelBase, 455, 0⟩
-def curveYSpec : LaneSpec := ⟨.curveY, reqY, labelBase + 254, 731, 1⟩
+def curveXSpec : LaneSpec := ⟨.curveX, reqX, labelBase, 364, 0⟩
+def curveYSpec : LaneSpec := ⟨.curveY, reqY, labelBase + 254, 640, 1⟩
 def pointXSpec : LaneSpec := ⟨.pointX, reqX, whiteBase, 0, 2⟩
-def pointYSpec : LaneSpec := ⟨.pointY, reqY, whiteBase + 254, 458, 3⟩
+def pointYSpec : LaneSpec := ⟨.pointY, reqY, whiteBase + 254, 367, 3⟩
 
 /-- The label cell of bit `position` of chunk `chunk`. -/
 def bitLabel (spec : LaneSpec) (chunk position : Nat) : Nat :=
@@ -209,7 +209,7 @@ def chunkBody (spec : LaneSpec) (designated : Bool) (chunk : Nat) : Prog :=
     rep (2 ^ chunkWidthNat chunk) (fun switch => switchStep spec designated chunk switch),
     loadAt rF tmpAlpha, rep spec.count fun element => joinTerm spec chunk element]
 
-/-- One lane: its `56` chunks. -/
+/-- One lane: its `52` chunks. -/
 def lane (spec : LaneSpec) : Prog :=
   .seq (chunkBody ordF spec false 0)
     (rep (chunkCount - 1) fun chunk => chunkBody ordF spec false (chunk + 1))
@@ -221,9 +221,9 @@ def designatedLane (spec : LaneSpec) : Prog :=
 
 /-! ### System A's output, the bridge and the pads -/
 
-/-- Zero the `733` accumulators. -/
+/-- Zero the `642` accumulators. -/
 def initAcc : Prog :=
-  .seq (cst rA 0) (rep 733 fun index => storeAt (accBase + index) rA)
+  .seq (cst rA 0) (rep 642 fun index => storeAt (accBase + index) rA)
 
 /-- The bridge value `t` of `CurveMembership.evaluate`, moved to `bridgeInput t` (`t + 2 ^ 150`
 when `t < 2 ^ 150`), then the hash query; `k1`, `k2` are stored. -/
@@ -232,11 +232,11 @@ def bridge : Prog :=
     ar .fieldMul rE rB rB, loadAt rInput fieldBase,
     loadAt rAcc (fieldBase + 1), ar .fieldMul rAcc rAcc rD, ar .fieldAdd rInput rInput rAcc,
     loadAt rAcc (fieldBase + 2), ar .fieldMul rAcc rAcc rE, ar .fieldAdd rInput rInput rAcc,
-    loadAt rAcc (accBase + 455), ar .fieldMul rAcc rAcc rC, ar .fieldAdd rInput rInput rAcc,
-    loadAt rAcc (accBase + 731), ar .fieldMul rAcc rAcc rB, ar .fieldAdd rInput rInput rAcc,
-    loadAt rAcc (accBase + 456), ar .fieldMul rAcc rAcc rA, ar .fieldAdd rInput rInput rAcc,
-    loadAt rAcc (accBase + 732), ar .fieldAdd rInput rInput rAcc,
-    loadAt rAcc (accBase + 457), ar .fieldAdd rInput rInput rAcc,
+    loadAt rAcc (accBase + 364), ar .fieldMul rAcc rAcc rC, ar .fieldAdd rInput rInput rAcc,
+    loadAt rAcc (accBase + 640), ar .fieldMul rAcc rAcc rB, ar .fieldAdd rInput rInput rAcc,
+    loadAt rAcc (accBase + 365), ar .fieldMul rAcc rAcc rA, ar .fieldAdd rInput rInput rAcc,
+    loadAt rAcc (accBase + 641), ar .fieldAdd rInput rInput rAcc,
+    loadAt rAcc (accBase + 366), ar .fieldAdd rInput rInput rAcc,
     cst rAcc scaleRange, ar .less rSel rInput rAcc, ar .mul rSel rSel rAcc,
     ar .add rInput rInput rSel,
     .op (.query 4 rIndex rInput rFirst rSecond), storeAt tmpK1 rFirst, storeAt tmpK2 rSecond]
@@ -471,17 +471,17 @@ theorem cost_rep_sum (count : Nat) (body : Nat → Prog) :
   | zero => simp [Prog.rep, Prog.cost]
   | succ count ih => rw [Prog.rep, Prog.cost_seq, ih, Finset.sum_range_succ]
 
-/-- One lane: the width-`2` chunk `0`, `32` width-`5` chunks and `23` width-`4` chunks. -/
+/-- One lane: the width-`2` chunk `0`, `48` width-`5` chunks and `3` width-`4` chunks. -/
 def laneSize (limbs count : Nat) : Nat :=
-  chunkSize 2 limbs count + 32 * chunkSize 5 limbs count + 23 * chunkSize 4 limbs count
+  chunkSize 2 limbs count + 48 * chunkSize 5 limbs count + 3 * chunkSize 4 limbs count
 /-- Its cost. -/
 def laneCost (limbs count : Nat) : Nat :=
-  chunkCost 2 limbs count + 32 * chunkCost 5 limbs count + 23 * chunkCost 4 limbs count
+  chunkCost 2 limbs count + 48 * chunkCost 5 limbs count + 3 * chunkCost 4 limbs count
 
-/-- The chunks after chunk `0`, all plain: `32` wide and `23` narrow chunk sizes. -/
+/-- The chunks after chunk `0`, all plain: `48` wide and `3` narrow chunk sizes. -/
 theorem size_laterChunks (spec : LaneSpec) :
     (Prog.rep (chunkCount - 1) fun chunk => chunkBody ordF spec false (chunk + 1)).size =
-      32 * chunkSize 5 spec.limbs spec.count + 23 * chunkSize 4 spec.limbs spec.count := by
+      48 * chunkSize 5 spec.limbs spec.count + 3 * chunkSize 4 spec.limbs spec.count := by
   have chunks : ∀ chunk ∈ Finset.range (chunkCount - 1),
       (chunkBody ordF spec false (chunk + 1)).size =
         chunkSize (chunkWidthNat (chunk + 1)) spec.limbs spec.count := by
@@ -489,13 +489,13 @@ theorem size_laterChunks (spec : LaneSpec) :
     rw [size_chunkBody, size_designatedPart_false, Nat.zero_add]
   rw [size_rep_sum, Finset.sum_congr rfl chunks,
     sum_range_chunkWidthNat_succ (fun width => chunkSize width spec.limbs spec.count),
-    show narrowChunkCount = 23 from rfl, show narrowChunkBits = 4 from rfl,
-    show wideChunkCount = 32 from rfl, show chunkBits = 5 from rfl]
+    show narrowChunkCount = 3 from rfl, show narrowChunkBits = 4 from rfl,
+    show wideChunkCount = 48 from rfl, show chunkBits = 5 from rfl]
   omega
 /-- Their cost. -/
 theorem cost_laterChunks (spec : LaneSpec) :
     (Prog.rep (chunkCount - 1) fun chunk => chunkBody ordF spec false (chunk + 1)).cost =
-      32 * chunkCost 5 spec.limbs spec.count + 23 * chunkCost 4 spec.limbs spec.count := by
+      48 * chunkCost 5 spec.limbs spec.count + 3 * chunkCost 4 spec.limbs spec.count := by
   have chunks : ∀ chunk ∈ Finset.range (chunkCount - 1),
       (chunkBody ordF spec false (chunk + 1)).cost =
         chunkCost (chunkWidthNat (chunk + 1)) spec.limbs spec.count := by
@@ -503,8 +503,8 @@ theorem cost_laterChunks (spec : LaneSpec) :
     rw [cost_chunkBody, cost_designatedPart_false, Nat.zero_add]
   rw [cost_rep_sum, Finset.sum_congr rfl chunks,
     sum_range_chunkWidthNat_succ (fun width => chunkCost width spec.limbs spec.count),
-    show narrowChunkCount = 23 from rfl, show narrowChunkBits = 4 from rfl,
-    show wideChunkCount = 32 from rfl, show chunkBits = 5 from rfl]
+    show narrowChunkCount = 3 from rfl, show narrowChunkBits = 4 from rfl,
+    show wideChunkCount = 48 from rfl, show chunkBits = 5 from rfl]
   omega
 
 theorem size_lane (spec : LaneSpec) : (lane ordF spec).size = laneSize spec.limbs spec.count := by
@@ -531,11 +531,11 @@ theorem cost_designatedLane (spec : LaneSpec) :
     show chunkWidthNat 0 = 2 from rfl]
   omega
 
-theorem size_initAcc : initAcc.size = 1 + 733 * 2 := by
+theorem size_initAcc : initAcc.size = 1 + 642 * 2 := by
   simp only [initAcc, Prog.size_seq, size_cst]
   rw [size_rep _ _ _ fun _ _ => size_storeAt _ _]
 
-theorem cost_initAcc : initAcc.cost = 1 + 733 * 2 := by
+theorem cost_initAcc : initAcc.cost = 1 + 642 * 2 := by
   simp only [initAcc, Prog.cost_seq, cost_cst]
   rw [cost_rep _ _ _ fun _ _ => cost_storeAt _ _]
 
@@ -555,14 +555,14 @@ theorem cost_whiten : (whiten ordE).cost = 4 + labelCount * 8 := by
   omega
 
 /-- The replay's code size: system A (`k = 4`, `3`; `n = 3`, `2`), the bridge, the pads, and
-system B (`k = 452`, `272`; `n = 455`, `273`). -/
+system B (`k = 362`, `272`; `n = 364`, `273`). -/
 def programSize : Nat :=
-  (1 + 733 * 2) + laneSize 4 3 + laneSize 3 2 + 44 + (4 + 508 * 8) + (20 + laneSize 452 455) +
+  (1 + 642 * 2) + laneSize 4 3 + laneSize 3 2 + 44 + (4 + 508 * 8) + (20 + laneSize 362 364) +
     laneSize 272 273
 
 /-- The replay's cost. -/
 def programCost : Nat :=
-  (1 + 733 * 2) + laneCost 4 3 + laneCost 3 2 + 44 + (4 + 508 * 8) + (20 + laneCost 452 455) +
+  (1 + 642 * 2) + laneCost 4 3 + laneCost 3 2 + 44 + (4 + 508 * 8) + (20 + laneCost 362 364) +
     laneCost 272 273
 
 theorem size_program : (program ordF ordE).size = programSize := by

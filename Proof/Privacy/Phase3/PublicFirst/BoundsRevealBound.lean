@@ -1,18 +1,19 @@
 /-
-**Phase 3, P1k — (B2) assembled: `RevealBound (planBShadow scalar off) scalar (182/(r − 1))`.**
+**Phase 3, P1k — (B2) assembled: `RevealBound (planBShadow scalar off) scalar (364/(r − 1))`.**
 
-* `differTargets_card_le` — for a fixed collision set `T`, each digit has at most one offset point
-  whose exceptional input differs from `u` exactly on `T` (`exc` is injective off `φ = 0`, the bit
-  encoding is injective, a point has one affine form).
+* `differTargets_card_le` — for a fixed collision set `T`, each digit has at most two offset points
+  one of whose exceptional inputs differs from `u` exactly on `T`, one per kind (`exc` is injective
+  off `φ = 0`, doubling is injective on the curve, the bit encoding is injective, a point has one
+  affine form).
 * `coins_differ_mul_le` — the coins' offsets hit these targets with mass
-  `Pr[∃ o, DiffersOn o T] · (1 − 91/#Point) ≤ 91/#Point` (P1's `tailRho_law`, `values_point`,
+  `Pr[∃ o, DiffersOn o T] · (1 − 91/#Point) ≤ 182/#Point` (P1's `tailRho_law`, `values_point`,
   P1e's `goodTails_hit_mul_le`).
 * `onCurve_reveal_le` — on the curve, the reveal mass of `M'`'s unflagged private stage 2 is at
   most `Σ_T ε^{|T|} · Pr_coins[∃ o, DiffersOn o T]` (`shadow_reveal_le` after `HW`'s opening, whose
   EncPRF part is exact, `opening_encExact`).
-* `reveal_numeric` — `(1 + ε)^508 · 91/#Point ≤ 182/(r − 1) · (1 − 91/#Point)`, from `#Point ≥ r`
+* `reveal_numeric` — `(1 + ε)^508 · 182/#Point ≤ 364/(r − 1) · (1 − 91/#Point)`, from `#Point ≥ r`
   only (Bernoulli: `(1 + ε)^508 ≤ 3/2`).
-* **`revealBound_planBShadow`**: `RevealBound (planBShadow scalar off) scalar (ofReal (182/(r−1)))`
+* **`revealBound_planBShadow`**: `RevealBound (planBShadow scalar off) scalar (ofReal (364/(r−1)))`
   for every off-curve part whose own reveal mass is within the same budget (`OffRevealBound`); the
   off-curve branch of `M'` is exactly the off-curve part's outcome law (`privateStage2U_off`).
 -/
@@ -44,14 +45,21 @@ section Coins
 variable [FieldCertificate] [GroupCertificate]
 
 open Classical in
-/-- **The offset points of digit `o` whose exceptional input differs from `bits` exactly on `T`.** -/
-def differTargets (scalar : NonZeroScalar) (bits : BitInput) (T : Finset EncPRF.PermutationIndex)
-    (o : Fin 91) : Finset Point :=
+/-- **The offset points of digit `o` whose exceptional input of `kind` differs from `bits` exactly
+on `T`.** -/
+def differKind (scalar : NonZeroScalar) (bits : BitInput) (T : Finset EncPRF.PermutationIndex)
+    (o : Fin 91) (kind : Bool) : Finset Point :=
   Finset.univ.filter fun K : Point => ∃ coords : AffineInput, decodePoint coords = some K ∧
     ∃ phi, digitEndomorphismBase ((digitsOf scalar).get o) = some phi ∧
       ∀ j : EncPRF.PermutationIndex,
-        (inputBit (BitInput.ofAffine (Exception.exceptionalInput phi coords)) j.1 j.2 ≠
+        (inputBit (BitInput.ofAffine (kindInput phi coords kind)) j.1 j.2 ≠
           inputBit bits j.1 j.2 ↔ j ∈ T)
+
+/-- **The offset points of digit `o` one of whose exceptional inputs differs from `bits` exactly on
+`T`.** -/
+def differTargets (scalar : NonZeroScalar) (bits : BitInput) (T : Finset EncPRF.PermutationIndex)
+    (o : Fin 91) : Finset Point :=
+  differKind scalar bits T o false ∪ differKind scalar bits T o true
 
 /-- Two bit inputs with the same bits are equal. -/
 theorem bitInput_ext {first second : BitInput}
@@ -67,42 +75,63 @@ theorem bitInput_ext {first second : BitInput}
     simpa [inputBit] using this
   rw [xs, ys]
 
-/-- **At most one offset point per digit differs from `bits` exactly on `T`.** -/
-theorem differTargets_card_le (scalar : NonZeroScalar) (bits : BitInput)
-    (T : Finset EncPRF.PermutationIndex) (o : Fin 91) :
-    (differTargets scalar bits T o).card ≤ 1 := by
+/-- An exceptional input of each kind is injective in the offset on the curve (`φ ≠ 0`; the
+sign-zero kind goes through the double, and doubling is injective). -/
+theorem kindInput_injective (phi : BaseField) (phiSix : phi ^ 6 = 1) (kind : Bool)
+    (first second : AffineInput) (firstOnCurve : OnCurve first) (secondOnCurve : OnCurve second)
+    (same : kindInput phi first kind = kindInput phi second kind) : first = second := by
+  have nonzero : phi ≠ 0 := by
+    rintro rfl
+    simp at phiSix
+  have cancel : ∀ a b : AffineInput,
+      Exception.exceptionalInput phi a = Exception.exceptionalInput phi b → a = b := by
+    intro a b sameInput
+    obtain ⟨x₁, y₁⟩ := a
+    obtain ⟨x₂, y₂⟩ := b
+    simp only [Exception.exceptionalInput, AffineInput.mk.injEq] at sameInput
+    obtain ⟨hx, hy⟩ := sameInput
+    rw [mul_left_cancel₀ (pow_ne_zero 2 nonzero) hx, mul_left_cancel₀ (pow_ne_zero 3 nonzero) hy]
+  cases kind
+  · exact cancel first second same
+  · exact JacobianMixed.doubleOffset_injective first second firstOnCurve secondOnCurve
+      (cancel _ _ same)
+
+/-- **At most one offset point per digit and kind differs from `bits` exactly on `T`.** -/
+theorem differKind_card_le (scalar : NonZeroScalar) (bits : BitInput)
+    (T : Finset EncPRF.PermutationIndex) (o : Fin 91) (kind : Bool) :
+    (differKind scalar bits T o kind).card ≤ 1 := by
   classical
   refine Finset.card_le_one.mpr fun K₁ member₁ K₂ member₂ => ?_
-  simp only [differTargets, Finset.mem_filter, Finset.mem_univ, true_and] at member₁ member₂
+  simp only [differKind, Finset.mem_filter, Finset.mem_univ, true_and] at member₁ member₂
   obtain ⟨coords₁, decode₁, phi₁, digit₁, differ₁⟩ := member₁
   obtain ⟨coords₂, decode₂, phi₂, digit₂, differ₂⟩ := member₂
   rw [digit₁] at digit₂
   cases digit₂
   have sixth := digitEndomorphismBasePowSix _ _ digit₁
-  have nonzero : phi₁ ≠ 0 := by
-    rintro rfl
-    simp at sixth
-  have bitsSame : BitInput.ofAffine (Exception.exceptionalInput phi₁ coords₁) =
-      BitInput.ofAffine (Exception.exceptionalInput phi₁ coords₂) := by
+  have bitsSame : BitInput.ofAffine (kindInput phi₁ coords₁ kind) =
+      BitInput.ofAffine (kindInput phi₁ coords₂ kind) := by
     refine bitInput_ext fun j => ?_
     have h₁ := differ₁ j
     have h₂ := differ₂ j
-    cases a : inputBit (BitInput.ofAffine (Exception.exceptionalInput phi₁ coords₁)) j.1 j.2 <;>
-      cases b : inputBit (BitInput.ofAffine (Exception.exceptionalInput phi₁ coords₂)) j.1 j.2 <;>
+    cases a : inputBit (BitInput.ofAffine (kindInput phi₁ coords₁ kind)) j.1 j.2 <;>
+      cases b : inputBit (BitInput.ofAffine (kindInput phi₁ coords₂ kind)) j.1 j.2 <;>
         cases u : inputBit bits j.1 j.2 <;> simp_all
-  have excSame : Exception.exceptionalInput phi₁ coords₁ =
-      Exception.exceptionalInput phi₁ coords₂ := by
-    rw [← BitInput.toAffineOfAffine (Exception.exceptionalInput phi₁ coords₁), bitsSame,
+  have kindSame : kindInput phi₁ coords₁ kind = kindInput phi₁ coords₂ kind := by
+    rw [← BitInput.toAffineOfAffine (kindInput phi₁ coords₁ kind), bitsSame,
       BitInput.toAffineOfAffine]
-  have coordsSame : coords₁ = coords₂ := by
-    obtain ⟨x₁, y₁⟩ := coords₁
-    obtain ⟨x₂, y₂⟩ := coords₂
-    simp only [Exception.exceptionalInput, AffineInput.mk.injEq] at excSame
-    obtain ⟨hx, hy⟩ := excSame
-    rw [mul_left_cancel₀ (pow_ne_zero 2 nonzero) hx, mul_left_cancel₀ (pow_ne_zero 3 nonzero) hy]
+  have onCurve₁ : OnCurve coords₁ := (decodePoint_defined coords₁).mp (by simp [decode₁])
+  have onCurve₂ : OnCurve coords₂ := (decodePoint_defined coords₂).mp (by simp [decode₂])
+  have coordsSame := kindInput_injective phi₁ sixth kind coords₁ coords₂ onCurve₁ onCurve₂ kindSame
   subst coordsSame
   rw [decode₁] at decode₂
   exact Option.some.inj decode₂
+
+/-- **At most two offset points per digit differ from `bits` exactly on `T`**, one per kind. -/
+theorem differTargets_card_le (scalar : NonZeroScalar) (bits : BitInput)
+    (T : Finset EncPRF.PermutationIndex) (o : Fin 91) :
+    (differTargets scalar bits T o).card ≤ 2 :=
+  le_trans (Finset.card_union_le _ _)
+    (add_le_add (differKind_card_le scalar bits T o false) (differKind_card_le scalar bits T o true))
 
 /-- **A digit differing on `T` puts the coins' clamped offset into its targets.** -/
 theorem differsOn_target (scalar : NonZeroScalar) (coins : Coins) (bits : BitInput)
@@ -110,14 +139,21 @@ theorem differsOn_target (scalar : NonZeroScalar) (coins : Coins) (bits : BitInp
     (differs : DiffersOn scalar coins.offsets bits T o) :
     clampOffsets radixMap (tailPoints coins.offsets) o ∈ differTargets scalar bits T o := by
   classical
-  obtain ⟨phi, digit, differ⟩ := differs
+  obtain ⟨phi, digit, kind, differ⟩ := differs
   have key := outputKeys_get scalar coins.offsets o
   simp only [outputKeyOf] at digit differ
   rw [key] at digit differ
-  simp only [differTargets, Finset.mem_filter, Finset.mem_univ, true_and]
-  refine ⟨(coins.offsets.values.get o).coordinates, ?_, phi, digit, differ⟩
-  rw [← values_point coins.offsets coins.offsetsClamped o]
-  simp only [FieldMacToECMac.AffineOffset.point, Option.some_get]
+  have decoded : decodePoint (coins.offsets.values.get o).coordinates =
+      some (clampOffsets radixMap (tailPoints coins.offsets) o) := by
+    rw [← values_point coins.offsets coins.offsetsClamped o]
+    simp only [FieldMacToECMac.AffineOffset.point, Option.some_get]
+  have member : clampOffsets radixMap (tailPoints coins.offsets) o ∈ differKind scalar bits T o kind := by
+    simp only [differKind, Finset.mem_filter, Finset.mem_univ, true_and]
+    exact ⟨(coins.offsets.values.get o).coordinates, decoded, phi, digit, differ⟩
+  simp only [differTargets, Finset.mem_union]
+  cases kind
+  · exact Or.inl member
+  · exact Or.inr member
 
 theorem tsum_mul_ind_eq_outer {X : Type} (μ : PMF X) (S : Set X) :
     ∑' x, μ x * ind (x ∈ S) = μ.toOuterMeasure S := by
@@ -127,12 +163,12 @@ theorem tsum_mul_ind_eq_outer {X : Type} (μ : PMF X) (S : Set X) :
   · rw [ind_pos h, mul_one, Set.indicator_of_mem h]
   · rw [ind_neg h, mul_zero, Set.indicator_of_notMem h]
 
-/-- **The coins differ on `T` with mass `≤ 91/(#Point − 91)`** (in multiplicative form). -/
+/-- **The coins differ on `T` with mass `≤ 182/(#Point − 91)`** (in multiplicative form). -/
 theorem coins_differ_mul_le (scalar : NonZeroScalar) (bits : BitInput)
     (T : Finset EncPRF.PermutationIndex) :
     letI : Fintype Coins := Fintype.ofFinite Coins
     (∑' coins, PMF.uniformOfFintype Coins coins * ind (∃ o, DiffersOn scalar coins.offsets bits T o))
-        * (1 - 91 * (Fintype.card Point : ℝ≥0∞)⁻¹) ≤ 91 * (Fintype.card Point : ℝ≥0∞)⁻¹ := by
+        * (1 - 91 * (Fintype.card Point : ℝ≥0∞)⁻¹) ≤ 182 * (Fintype.card Point : ℝ≥0∞)⁻¹ := by
   let : Fintype Coins := Fintype.ofFinite Coins
   classical
   set event : GoodTails → Prop := fun tail =>
@@ -151,8 +187,8 @@ theorem coins_differ_mul_le (scalar : NonZeroScalar) (bits : BitInput)
         {tail | ∃ digit, clampOffsets radixMap tail.1 digit ∈ differTargets scalar bits T digit} :=
     tsum_mul_ind_eq_outer _ _
   have hit := goodTails_hit_mul_le (differTargets scalar bits T)
-  have cards : ((∑ digit : Fin 91, (differTargets scalar bits T digit).card : ℕ) : ℝ≥0∞) ≤ 91 := by
-    have : (∑ digit : Fin 91, (differTargets scalar bits T digit).card) ≤ 91 :=
+  have cards : ((∑ digit : Fin 91, (differTargets scalar bits T digit).card : ℕ) : ℝ≥0∞) ≤ 182 := by
+    have : (∑ digit : Fin 91, (differTargets scalar bits T digit).card) ≤ 182 :=
       le_trans (Finset.sum_le_sum fun digit _ => differTargets_card_le scalar bits T digit)
         (by simp)
     exact_mod_cast this
@@ -202,10 +238,10 @@ theorem onePlusEps_pow_le :
     (1 + 1 / ((2 : ℝ) ^ 128 - 1)) ^ 508 ≤ 3 / 2 :=
   onePlus_pow_le _ (by norm_num) (by norm_num)
 
-/-- The real core of the budget: `E · 91/n ≤ 182/(r − 1) · (1 − 91/n)` for `E ≤ 3/2`,
+/-- The real core of the budget: `E · 182/n ≤ 364/(r − 1) · (1 − 91/n)` for `E ≤ 3/2`,
 `1000 ≤ r ≤ n`. -/
 theorem numeric_core (E r n : ℝ) (E1 : E ≤ 3 / 2) (rBig : 1000 ≤ r) (hn : r ≤ n) :
-    E * (91 * n⁻¹) ≤ 182 / (r - 1) * (1 - 91 * n⁻¹) := by
+    E * (182 * n⁻¹) ≤ 364 / (r - 1) * (1 - 91 * n⁻¹) := by
   have npos : 0 < n := by linarith
   have rpos : 0 < r - 1 := by linarith
   set m : ℝ := n⁻¹ with mDef
@@ -216,13 +252,13 @@ theorem numeric_core (E r n : ℝ) (E1 : E ≤ 3 / 2) (rBig : 1000 ≤ r) (hn : 
       _ = 1 := mn
   have m1000 : m * 1000 ≤ 1 := le_trans (mul_le_mul_of_nonneg_left rBig mpos.le) mr
   rw [div_mul_eq_mul_div, le_div_iff₀ rpos]
-  have step : E * (91 * m) * (r - 1) ≤ 3 / 2 * (91 * m) * (r - 1) :=
+  have step : E * (182 * m) * (r - 1) ≤ 3 / 2 * (182 * m) * (r - 1) :=
     mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_right E1 (by positivity)) rpos.le
   nlinarith
 
 /-- **The reveal budget closes from `#Point ≥ r`.** -/
 theorem reveal_numeric :
-    (epsPad + 1) ^ 508 * (91 * (Fintype.card Point : ℝ≥0∞)⁻¹) ≤
+    (epsPad + 1) ^ 508 * (182 * (Fintype.card Point : ℝ≥0∞)⁻¹) ≤
       ENNReal.ofReal Kriterion.ArgoMAC.Phase3.Glue.exceptionalError *
         (1 - 91 * (Fintype.card Point : ℝ≥0∞)⁻¹) := by
   have order := Kriterion.ArgoMAC.Security.Phase3.scalarFieldModulus_le_card_point
@@ -242,7 +278,7 @@ theorem reveal_numeric :
   have epsReal : epsPad.toReal = 1 / ((2 : ℝ) ^ 128 - 1) := by
     rw [ENNReal.toReal_inv, ENNReal.toReal_natCast]
     norm_num
-  have lhsTop : (epsPad + 1) ^ 508 * (91 * (N : ℝ≥0∞)⁻¹) ≠ ⊤ :=
+  have lhsTop : (epsPad + 1) ^ 508 * (182 * (N : ℝ≥0∞)⁻¹) ≠ ⊤ :=
     ENNReal.mul_ne_top (ENNReal.pow_ne_top (ENNReal.add_ne_top.mpr
       ⟨ENNReal.inv_ne_top.mpr (by norm_num), ENNReal.one_ne_top⟩))
       (ENNReal.mul_ne_top (by norm_num) (ENNReal.inv_ne_top.mpr Nne))
@@ -257,7 +293,8 @@ theorem reveal_numeric :
     ENNReal.toReal_sub_of_le smallFrac ENNReal.one_ne_top, ENNReal.toReal_one, ENNReal.toReal_mul,
     ENNReal.toReal_inv, ENNReal.toReal_natCast]
   have ninetyOne : (ENNReal.toReal 91) = 91 := by norm_num
-  rw [ninetyOne]
+  have twiceNinetyOne : (ENNReal.toReal 182) = 182 := by norm_num
+  rw [ninetyOne, twiceNinetyOne]
   unfold Kriterion.ArgoMAC.Phase3.Glue.exceptionalError
   have rBig' : (1000 : ℝ) ≤ (scalarFieldModulus : ℝ) := by norm_num [scalarFieldModulus]
   have hN : (scalarFieldModulus : ℝ) ≤ (N : ℝ) := by exact_mod_cast order
@@ -392,6 +429,7 @@ theorem onCurve_reveal_bound (scalar : NonZeroScalar) (off : OffShadow) (source 
         revealWeight o ≤ ENNReal.ofReal Kriterion.ArgoMAC.Phase3.Glue.exceptionalError := by
   let : Fintype Coins := Fintype.ofFinite Coins
   set a : ℝ≥0∞ := 91 * (Fintype.card Point : ℝ≥0∞)⁻¹ with aDef
+  set b : ℝ≥0∞ := 182 * (Fintype.card Point : ℝ≥0∞)⁻¹ with bDef
   have bound := onCurve_reveal_le scalar off source input target
   -- swap the coins and the collision sets
   have swap : ∑' coins, PMF.uniformOfFintype Coins coins *
@@ -423,16 +461,16 @@ theorem onCurve_reveal_bound (scalar : NonZeroScalar) (off : OffShadow) (source 
   have product : (∑ T ∈ (Finset.univ : Finset EncPRF.PermutationIndex).powerset, epsPad ^ T.card *
         ∑' coins, PMF.uniformOfFintype Coins coins *
           ind (∃ o, DiffersOn scalar coins.offsets (restoredBits source input) T o)) * (1 - a)
-      ≤ (epsPad + 1) ^ 508 * a := by
+      ≤ (epsPad + 1) ^ 508 * b := by
     rw [Finset.sum_mul]
     calc ∑ T ∈ (Finset.univ : Finset EncPRF.PermutationIndex).powerset, epsPad ^ T.card *
           (∑' coins, PMF.uniformOfFintype Coins coins *
             ind (∃ o, DiffersOn scalar coins.offsets (restoredBits source input) T o)) * (1 - a)
-        ≤ ∑ T ∈ (Finset.univ : Finset EncPRF.PermutationIndex).powerset, epsPad ^ T.card * a :=
+        ≤ ∑ T ∈ (Finset.univ : Finset EncPRF.PermutationIndex).powerset, epsPad ^ T.card * b :=
           Finset.sum_le_sum fun T _ => by
             rw [mul_assoc]
             exact mul_le_mul' le_rfl (coins_differ_mul_le scalar (restoredBits source input) T)
-      _ = (epsPad + 1) ^ 508 * a := by
+      _ = (epsPad + 1) ^ 508 * b := by
           rw [← Finset.sum_mul]
           congr 1
           have := Finset.sum_pow_mul_eq_add_pow epsPad 1
@@ -444,7 +482,7 @@ theorem onCurve_reveal_bound (scalar : NonZeroScalar) (off : OffShadow) (source 
   exact (ENNReal.mul_le_mul_iff_left factorPos factorTop).mp final
 
 open Classical in
-/-- **(B2) for `planBShadow`**: the reveal mass is `≤ 182/(r − 1)` on the curve, for every
+/-- **(B2) for `planBShadow`**: the reveal mass is `≤ 364/(r − 1)` on the curve, for every
 off-curve part within the same budget off the curve. -/
 theorem revealBound_planBShadow (scalar : NonZeroScalar) (off : OffShadow)
     (offBound : OffRevealBound off (ENNReal.ofReal Kriterion.ArgoMAC.Phase3.Glue.exceptionalError)) :

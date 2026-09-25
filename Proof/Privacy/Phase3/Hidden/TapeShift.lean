@@ -157,17 +157,26 @@ def exceptionalBit (scalar : NonZeroScalar) (offsets : FieldMacToECMac.Successfu
   | some phi => (coordinateBits (coordValue' κ
       (Exception.exceptionalInput phi (digitKey scalar offsets o).offset.coordinates))).getLsb position
 
-/-- The shift of the label the gadget reads at `(o, κ, position)`. -/
+/-- The bit of digit `o`'s sign-zero input (`Exception.tripleInput`, the input with `Q = 2K`) at
+`(κ, position)` (`false` for a digit without exception). -/
+def tripleBit (scalar : NonZeroScalar) (offsets : FieldMacToECMac.SuccessfulOffsets)
+    (o : Fin digitCount) (κ : Coord) (position : Fin PlanB.coordinateBits) : Bool :=
+  match digitEndomorphismBase (digitKey scalar offsets o).digit with
+  | none => false
+  | some phi => (coordinateBits (coordValue' κ
+      (Exception.tripleInput phi (digitKey scalar offsets o).offset.coordinates))).getLsb position
+
+/-- The shift of the label the gadget reads at `(o, κ, position, bit)`: the index names the
+label's bit. -/
 def gadgetShift (T : TapeShift) (scalar : NonZeroScalar) (coins : Coins) (o : Fin digitCount)
-    (κ : Coord) (position : Fin PlanB.coordinateBits) : Block :=
-  T.key2 ^^^ T.zero κ position ^^^
-    (if exceptionalBit scalar coins.offsets o κ position then T.delta κ else 0)
+    (κ : Coord) (position : Fin PlanB.coordinateBits) (bit : Bool) : Block :=
+  T.key2 ^^^ T.zero κ position ^^^ (if bit then T.delta κ else 0)
 
 /-- **The shift of every fixed-key permutation.** -/
 def indexShift (T : TapeShift) (scalar : NonZeroScalar) (coins : Coins) : FixedIndex → Block × Block
   | .hot ℓ c fold entry half => ((T.lane ℓ).fold c).hot fold.val entry.val half
-  | .gadget o κ position =>
-      (gadgetShift T scalar coins o κ position, gadgetShift T scalar coins o κ position)
+  | .gadget o κ position bit =>
+      (gadgetShift T scalar coins o κ position bit, gadgetShift T scalar coins o κ position bit)
 
 /-- The shifted coins. -/
 def shiftCoins (T : TapeShift) (coins : Coins) : Coins :=
@@ -220,16 +229,15 @@ def garblerLabelOf (tape : Coins × Oracle) (site : VectorSite) : Block :=
 
 /-- The label the gadget of digit `o` reads at `(κ, position)`. -/
 def gadgetLabel (scalar : NonZeroScalar) (tape : Coins × Oracle) (o : Fin digitCount) (κ : Coord)
-    (position : Fin PlanB.coordinateBits) : Block :=
+    (position : Fin PlanB.coordinateBits) (bit : Bool) : Block :=
   match digitEndomorphismBase (digitKey scalar tape.1.offsets o).digit with
   | none => 0
-  | some phi =>
-      let mac := (EncPRF.transformKey tape.2.2.1 (EncPRF.whiteningKeys tape.2.2.2 tape.1.bridgeKey)
-        tape.1.inputMacKey).encodeAffine
-          (Exception.exceptionalInput phi (digitKey scalar tape.1.offsets o).offset.coordinates)
+  | some _ =>
+      let key := EncPRF.transformKey tape.2.2.1 (EncPRF.whiteningKeys tape.2.2.2 tape.1.bridgeKey)
+        tape.1.inputMacKey
       match κ with
-      | .x => mac.x.get position
-      | .y => mac.y.get position
+      | .x => BitAdaptor.encode key.x[position.val] bit
+      | .y => BitAdaptor.encode key.y[position.val] bit
 
 /-- **The garbler's point at each fixed-key index.** -/
 def garblerPointOf (scalar : NonZeroScalar) (tape : Coins × Oracle) : FixedIndex → Block
@@ -237,7 +245,7 @@ def garblerPointOf (scalar : NonZeroScalar) (tape : Coins × Oracle) : FixedInde
       (garbleFold tape.2.1 ℓ c ((laneKeys tape).1 ℓ)
         (labelAt fun p => (chunkKey ((laneKeys tape).2 ℓ) c p).1) fold.val).1
         ⟨entry.val % 2 ^ fold.val, Nat.mod_lt _ (Nat.two_pow_pos _)⟩
-  | .gadget o κ position => gadgetLabel scalar tape o κ position
+  | .gadget o κ position bit => gadgetLabel scalar tape o κ position bit
 
 /-- **The shape of a garbler entry.** -/
 def Good (scalar : NonZeroScalar) (tape : Coins × Oracle) :

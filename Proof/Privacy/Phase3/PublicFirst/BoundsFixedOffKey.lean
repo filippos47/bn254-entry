@@ -47,9 +47,9 @@ theorem designed_fixedIn_off (scalar : NonZeroScalar) (pub : PubPart) (input : A
             lt) delta_le_two
     · exact tsum_le_of_support _ _ _ fun key _ => le_trans
         (offHotAbsent_le scalar (joinSource pub key) input lane c f e h x present) zero_le
-  | gadget d κ pos =>
+  | gadget d κ pos b =>
     exact tsum_le_of_support _ _ _ fun key _ => le_trans
-      (offGadget_le scalar (joinSource pub key) input d κ pos x) zero_le
+      (offGadget_le scalar (joinSource pub key) input d κ pos b x) zero_le
 
 /-- **The output half off the curve**: `≤ 1/2^128 ≤ 2/2^128`. -/
 theorem designed_fixedOut_off (scalar : NonZeroScalar) (pub : PubPart) (input : AffineInput)

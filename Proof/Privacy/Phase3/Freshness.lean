@@ -6,7 +6,7 @@ adversary chooses `j* = α₀ xor 1` through its input `u` *after* stage 1, so "
 is selected by the view. The fix is a union over the candidate switches.
 
 Phase 4: a designated program is a **hash** program `hash (scaleInput pointX 0 j* i E*) := …`, one
-per limb `i < 452` of the designated vector. A hash program needs only a fresh *input*
+per limb `i < 362` of the designated vector. A hash program needs only a fresh *input*
 (`LazyOracle.program (.hash _)`), so the bound is on the input side only: the program of limb `i`
 fails exactly when the adversary's stage 1 stored the input `scaleInput pointX 0 j* i E*`, i.e.
 when `E*` is one of the stage-1 labels at the candidate site `(i, j*)` (`Glue.CandidateSite`).
@@ -22,13 +22,13 @@ when `E*` is one of the stage-1 labels at the candidate site `(i, j*)` (`Glue.Ca
 * `designatedSwitch_bijective` — **the candidate count is `2 ^ firstChunkBits = 4`, not `3`.** As
   the adversary's `α₀` ranges over the four switches of chunk 0, `j* = α₀ xor 1` ranges over all
   four. The review's `3` counts the inactive switches of one *fixed* `α₀`.
-* `Glue.candidateIndex_injective` — the `4 · 452 = 1808` candidate sites (limb × chunk-0 switch)
+* `Glue.candidateIndex_injective` — the `4 · 362 = 1448` candidate sites (limb × chunk-0 switch)
   name pairwise distinct hash inputs at every label: a hash input decodes to at most one
   (site, label) (`sum_siteDomain_le`).
 * `aggregate_hit_le` — **the honest constant.** If each (limb, candidate) hit has mass at most
   `ε · E[n_s]` at its own site `s` (`n_s` = stage-1 labels stored at `s`, `ε = 1/(2^128 − q₁)` from
   the candidate label's min-entropy), and the entries total at most `q₁`, then the input-freshness
-  abort mass over **all** 452 designated programs is at most `ε · q₁`. The per-limb union costs a
+  abort mass over **all** 362 designated programs is at most `ε · q₁`. The per-limb union costs a
   factor `4` only against a per-limb maximum; summed over the distinct candidate sites it costs
   nothing. So:
 
@@ -189,10 +189,10 @@ theorem sum_siteDomain_le {Ω : Type} (stored : Ω → Finset BaseField) (ω : �
     exact Sigma.ext pairEq.1 (heq_of_eq pairEq.2)
 
 /-- **§2.3 fixed, at Plan B, on the hash inputs.** Whatever switch `j*` the adversary's input
-selects for each of the `452` limbs, if every (limb, candidate switch) label hits the stage-1 hash
+selects for each of the `362` limbs, if every (limb, candidate switch) label hits the stage-1 hash
 domain at its own candidate input with mass at most `ε` times the expected number of stage-1 labels
 at that candidate site, and stage 1 stores at most `q₁` inputs, then the input-freshness failures
-of all `452` programs have total mass at most `ε · q₁` — with `ε = 1 / (2^128 − q₁)` this is
+of all `362` programs have total mass at most `ε · q₁` — with `ε = 1 / (2^128 − q₁)` this is
 `q₁ / (2^128 − q₁)`. -/
 theorem planB_inputFreshness_le {Ω : Type} (law : PMF Ω)
     (select : Fin (limbCount .pointX) → Ω → Fin (2 ^ chunkWidth chunkZero))
@@ -257,7 +257,7 @@ theorem perQuery_hit_le {Ω Slot K Index A : Type} (law : PMF Ω) (select : Slot
   refine le_trans (Finset.sum_le_sum fun t _ => perQuery t) (le_of_eq ?_)
   rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
 
-/-- **§2.3 at Plan B, per query.** The 452 designated programs' input-freshness failures have total
+/-- **§2.3 at Plan B, per query.** The 362 designated programs' input-freshness failures have total
 mass at most `q₁ · ε` (`ε = 1/(2^128 − q₁)` from the candidate label's min-entropy before each
 query): coefficient `1` per stage-1 hash query, whatever switch `j*` the adversary's input
 selects. The per-query hypothesis concerns one input against all candidate labels; by

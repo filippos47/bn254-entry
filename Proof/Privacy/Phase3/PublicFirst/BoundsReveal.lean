@@ -15,11 +15,11 @@ outside the collision set `S = {j | pad₀(j) ⊕ pad₁(j) = Δ}`.
 * **The union over `T`** (`reveal_indicator_le`): a revealing digit differs from `u` exactly on a
   set `T ⊆ S` (`DiffersOn`), so `1[reveal] ≤ Σ_T 1[T ⊆ S] · 1[∃ o, DiffersOn o T]`
   (`shadow_reveal_le`).
-* **The coins** (`coins_differ_mul_le`): for a fixed `T` each digit has at most one offset whose
-  exceptional input differs from `u` exactly on `T` (`differTargets_card_le`: `exc` is injective
-  off `φ = 0`, the bit encoding is injective), so P1e's `goodTails_hit_mul_le` gives
-  `Pr[∃ o, DiffersOn o T] · (1 − 91/#Point) ≤ 91/#Point`.
-* Hence the reveal mass is at most `91 · (1 + 1/(2^128 − 1))^508 / (#Point − 91) ≤ 182/(r − 1)`,
+* **The coins** (`coins_differ_mul_le`): for a fixed `T` each digit has at most two offsets one of
+  whose exceptional inputs differs from `u` exactly on `T`, one per kind (`differTargets_card_le`:
+  `exc` is injective off `φ = 0`, doubling is injective on the curve, the bit encoding is injective),
+  so P1e's `goodTails_hit_mul_le` gives `Pr[∃ o, DiffersOn o T] · (1 − 91/#Point) ≤ 182/#Point`.
+* Hence the reveal mass is at most `182 · (1 + 1/(2^128 − 1))^508 / (#Point − 91) ≤ 364/(r − 1)`,
   using only `#Point ≥ r` (`reveal_numeric`).
 -/
 
@@ -346,13 +346,13 @@ section Union
 
 variable [FieldCertificate] [GroupCertificate]
 
-/-- **Digit `o`'s exceptional input differs from `bits` exactly on `T`.** -/
+/-- **One of digit `o`'s exceptional inputs differs from `bits` exactly on `T`.** -/
 def DiffersOn (scalar : NonZeroScalar) (offsets : FieldMacToECMac.SuccessfulOffsets)
     (bits : BitInput) (T : Finset EncPRF.PermutationIndex) (o : Fin digitCount) : Prop :=
   ∃ phi, digitEndomorphismBase (outputKeyOf scalar offsets o).digit = some phi ∧
-    ∀ j : EncPRF.PermutationIndex,
-      (inputBit (BitInput.ofAffine (Exception.exceptionalInput phi
-          (outputKeyOf scalar offsets o).offset.coordinates)) j.1 j.2 ≠ inputBit bits j.1 j.2 ↔
+    ∃ kind, ∀ j : EncPRF.PermutationIndex,
+      (inputBit (BitInput.ofAffine (kindInput phi
+          (outputKeyOf scalar offsets o).offset.coordinates kind)) j.1 j.2 ≠ inputBit bits j.1 j.2 ↔
         j ∈ T)
 
 /-- **A revealing digit differs from `u` on a set of colliding positions.** -/
@@ -362,11 +362,11 @@ theorem revealsAt_differs (scalar : NonZeroScalar) (offsets : FieldMacToECMac.Su
     ∃ T : Finset EncPRF.PermutationIndex,
       (∀ j ∈ T, collide j.1 j.2) ∧ DiffersOn scalar offsets bits T o := by
   classical
-  obtain ⟨phi, digit, agree⟩ := reveals
+  obtain ⟨phi, digit, kind, agree⟩ := reveals
   refine ⟨Finset.univ.filter fun j : EncPRF.PermutationIndex =>
-      inputBit (BitInput.ofAffine (Exception.exceptionalInput phi
-        (outputKeyOf scalar offsets o).offset.coordinates)) j.1 j.2 ≠ inputBit bits j.1 j.2,
-    ?_, phi, digit, ?_⟩
+      inputBit (BitInput.ofAffine (kindInput phi
+        (outputKeyOf scalar offsets o).offset.coordinates kind)) j.1 j.2 ≠ inputBit bits j.1 j.2,
+    ?_, phi, digit, kind, ?_⟩
   · intro j member
     rw [Finset.mem_filter] at member
     exact (agree j.1 j.2).resolve_left member.2
@@ -460,8 +460,8 @@ theorem pads_reveal_le (scalar : NonZeroScalar) (source : Stage1Source) (input :
   unfold revealOnPred at reveals
   dsimp only at reveals
   rw [keysSame] at reveals
-  obtain ⟨o, phi, digit, agree⟩ := reveals
-  refine ⟨o, phi, digit, fun c i => (agree c i).imp_right fun collide => ?_⟩
+  obtain ⟨o, phi, digit, kind, agree⟩ := reveals
+  refine ⟨o, phi, digit, kind, fun c i => (agree c i).imp_right fun collide => ?_⟩
   obtain ⟨v, hv⟩ := both (c, i)
   have hv' : padXor padsState c i (prefixKeysOn state source.publicValue
       (restoredBits source input) (restoredMac source input)).1 = some v := hv

@@ -125,7 +125,7 @@ instance xRandomnessFinite : Finite Biquadratic.XRandomness :=
 
 instance yRandomnessFinite : Finite Biquadratic.YRandomness :=
   Finite.of_injective
-    (fun value : Biquadratic.YRandomness => (value.r2, value.r3, value.r4, value.r5)) (by
+    (fun value : Biquadratic.YRandomness => (value.r2, value.r4, value.r5)) (by
       intro first second equal
       cases first
       cases second
@@ -140,7 +140,7 @@ instance zRandomnessFinite : Finite Biquadratic.ZRandomness :=
 
 instance rowRandomnessFinite : Finite FieldMacToECMac.RowRandomness :=
   Finite.of_injective
-    (fun value : FieldMacToECMac.RowRandomness => (value.rho, value.x, value.y, value.z)) (by
+    (fun value : FieldMacToECMac.RowRandomness => (value.rho, value.tau, value.x, value.y, value.z)) (by
       intro first second equal
       cases first
       cases second

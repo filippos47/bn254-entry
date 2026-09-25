@@ -220,9 +220,9 @@ theorem designed_fixedIn_onCurve (scalar : NonZeroScalar) (pub : PubPart) (input
     · exact tsum_le_of_support _ _ _ fun key _ => le_trans
         (hotAbsent_le scalar designedOff (joinSource pub key) input target lane c f e h x present)
         zero_le
-  | gadget d κ pos =>
+  | gadget d κ pos b =>
     exact tsum_le_of_support _ _ _ fun key _ => le_trans
-      (gadgetIn_le scalar designedOff (joinSource pub key) input target d κ pos x) epsOne_le
+      (gadgetIn_le scalar designedOff (joinSource pub key) input target d κ pos b x) epsOne_le
 
 /-- **The output half on the curve**: `≤ 1/2^128 ≤ 2/2^128`. -/
 theorem designed_fixedOut_onCurve (scalar : NonZeroScalar) (pub : PubPart) (input : AffineInput)

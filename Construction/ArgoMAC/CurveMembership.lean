@@ -4,7 +4,7 @@ This file defines the curve-membership check.
 Plan B keeps DFB section 7.2's bridge polynomial `q(x, y) = (y² − x³ − 3) · Δ + ν` and its
 masking algebra unchanged; only the delivery of the five affine element values changes. The
 check therefore publishes three field constants (96 bytes) and consumes five element slots --
-three x-type and two y-type -- which live inside the same 733-element vector the row layer
+three x-type and two y-type -- which live inside the same 642-element vector the row layer
 uses, so they cost no separate switch system.
 The plan source is `2026-09-17-planB.md`, sections D.4 and Task 17.
 -/

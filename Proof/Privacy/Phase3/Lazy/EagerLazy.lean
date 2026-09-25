@@ -4,7 +4,7 @@
 Two exact or data-processing steps on the refill runner, for an arbitrary query computation:
 
 * `uniformMaskTape_etvDist_le` — **the per-vector bias, `Σ_v δ_{lane v}`**: the `I^U` tape (the
-  `5,584` vectors uniform on `F_p^n`, the tape uniform on the `sampleLane` fibre) is within
+  `6,352` vectors uniform on `F_p^n`, the tape uniform on the `sampleLane` fibre) is within
   `Σ_{v : VectorSite} laneDelta (lane v)` of a uniform tape. Both are the same fibre kernel behind
   two vector laws (P1's `uniform_eq_bind_fibreLaw`), so the distance is the vectors'
   (`masksOf_etvDist_le`).

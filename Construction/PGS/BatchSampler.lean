@@ -10,7 +10,7 @@ are read as the mixed-radix number `V = limbsToNat k h < 2 ^ (256 k)`; and `Y` i
 **The hash inputs.** Hash input `i` of the vector of `(lane, chunk, switch)` at `label` is
 `scaleInput lane chunk switch i label`, a number below `2 ^ 150` whose fields are the label
 (bits `0..127`), the limb `i` (`128..136`), the switch (`137..141`, radix `2 ^ chunkBits = 32` for
-every chunk), and the pair (lane, chunk) as the mixed-radix digit `laneCode · 56 + chunk < 224`
+every chunk), and the pair (lane, chunk) as the mixed-radix digit `laneCode · 52 + chunk < 208`
 (`142..149`). The bridge hash input `bridgeInput t` is moved to `[2 ^ 150, p)`, so it never meets
 a scale input.
 
@@ -41,7 +41,7 @@ def sampleLane (n k : Nat) (h : Fin k → Block × Block) : Fin n → BaseField 
 def limbCount : Lane → Nat
   | .curveX => 4
   | .curveY => 3
-  | .pointX => 452
+  | .pointX => 362
   | .pointY => 272
 
 /-- Every lane's limb count fits the scale tag's `512`-limb radix, so the `limb % 512` clamp of
@@ -72,7 +72,7 @@ def scaleInput (lane : Lane) (chunk : Fin chunkCount) (switch limb : Nat) (label
     BaseField)
 
 /-- Every scale input lies below `2 ^ 150 = 2 ^ 128 * 2 ^ 22`: its tag is below
-`4 * 56 * 32 * 512 = 3,670,016 < 2 ^ 22`. -/
+`4 * 52 * 32 * 512 = 3,407,872 < 2 ^ 22`. -/
 def scaleRange : Nat := 2 ^ 150
 
 /-- The bridge hash input: `t` moved out of the scale range `[0, 2 ^ 150)`. -/

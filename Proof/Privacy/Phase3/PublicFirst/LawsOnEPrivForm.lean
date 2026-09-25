@@ -230,7 +230,7 @@ theorem privSrc_cells (Ψ : Public → LamportSignature → LState → ℝ≥0�
         ∑' bdn, piPMF (fun s : VSiteN input =>
             siteFibreLaw s.1.1.lane (siteVector input (Sum.elim (visEquiv input vis) 0) s.1)) bdn *
           ∑' K, PMF.uniformOfFintype ClampedOffsets K *
-            ∑' ρ, PMF.uniformOfFintype (Fin digitCount → NonZeroBase) ρ *
+            ∑' ρ, PMF.uniformOfFintype (Fin digitCount → NonZeroBase × NonZeroBase) ρ *
               ∑' limbs, siteFibreLaw .pointX (siteVector input (Sum.elim (visEquiv input vis)
                   (desK scalar input K ρ cells vis)) (dsiteV input)) limbs *
                 (if Exact0 scalar input K.1 then 0 else
@@ -278,7 +278,7 @@ theorem priv_le_core (Ψ : Public → LamportSignature → LState → ℝ≥0∞
     (PMF.uniformOfFintype (VisibleCells (offShape input)))
     (fun vis bdn => piPMF (fun s : VSiteN input =>
       siteFibreLaw s.1.1.lane (siteVector input (Sum.elim (visEquiv input vis) 0) s.1)) bdn)
-    (PMF.uniformOfFintype ClampedOffsets) (PMF.uniformOfFintype (Fin digitCount → NonZeroBase))
+    (PMF.uniformOfFintype ClampedOffsets) (PMF.uniformOfFintype (Fin digitCount → NonZeroBase × NonZeroBase))
     (fun K ρ cells vis limbs => siteFibreLaw .pointX (siteVector input (Sum.elim (visEquiv input vis)
       (desK scalar input K ρ cells vis)) (dsiteV input)) limbs)
     (PMF.uniformOfFintype (PermutationOracle EncPRF.PermutationIndex Block))

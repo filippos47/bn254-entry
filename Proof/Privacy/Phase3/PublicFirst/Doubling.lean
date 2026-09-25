@@ -1,10 +1,10 @@
 /-
 **Phase 3, P1e — a sharper doubling bound: the offsets' hit mass under the good-tail law.**
 
-P1's `doubling_mass_le` bounds the doubling mass by `182/#Point` (the uniform-tail clamp, `91/#Point`,
-plus the good-tail restriction as a distance, `91/#Point`). The corrected middle game of `G1U → HW`
-must also flag the **collision extension** of the exceptional event (root `PublicFirst` §4), so it needs
-room below `exceptionalError = 182/(r−1)`, and `182/#Point` leaves only `≈ 2^-500` when `#Point = r`.
+A plain union bound charges the good-tail restriction as a distance (`91/#Point`) on top of the
+uniform-tail clamp. The corrected middle game of `G1U → HW` must also flag the **collision
+extension** of the exceptional event (root `PublicFirst` §4), so it needs room below
+`exceptionalError = 364/(r−1)`, and the additive charge leaves only `≈ 2^-500`.
 
 Here the restriction is charged **multiplicatively** instead: conditioning the uniform tail on the
 good tails costs a factor `1/Pr[good] ≤ 1/(1 − 91/#Point)` (`goodTails_mass_mul_le`,
@@ -13,9 +13,10 @@ good tails costs a factor `1/Pr[good] ≤ 1/(1 − 91/#Point)` (`goodTails_mass_
   `Pr_good[∃ d, K_d ∈ A d] · (1 − 91/#Point) ≤ (Σ_d |A d|) / #Point`   (`goodTails_hit_mul_le`)
 
 with `K = clampOffsets radixMap tail` the construction's offsets. At singletons (the doubling event,
-`K_d = T_d`) this is `≈ 91/#Point` (`doubling_mass_mul_le`): half of `exceptionalError`, leaving
-`≈ 91/#Point` for the collision extension (whose targets are the `≤ 2^{|S|}` inputs agreeing with `u`
-off the collision set `S`).
+`K_d = T_d`) this is `≈ 91/#Point` (`doubling_mass_mul_le`). The reveal bound
+(`BoundsRevealBound`) uses it at two targets per digit (both exceptional kinds), `≈ 182/#Point`: half
+of `exceptionalError`, leaving the other half for the collision extension (whose targets are the
+`≤ 2^{|S|}` inputs agreeing with `u` off the collision set `S`).
 -/
 
 import Proof.Privacy.Phase3.OpeningBound
@@ -119,8 +120,7 @@ theorem goodTails_hit_mul_le (targets : Fin 91 → Finset Point) :
       {tail | ∃ digit, clampOffsets radixMap tail digit ∈ targets digit})
       (uniform_hit_le targets))
 
-/-- **The doubling mass, sharply**: `Pr[∃ d, T_d = K_d] · (1 − 91/#Point) ≤ 91/#Point` (P1's
-`doubling_mass_le` gives `182/#Point`). -/
+/-- **The doubling mass, sharply**: `Pr[∃ d, T_d = K_d] · (1 − 91/#Point) ≤ 91/#Point`. -/
 theorem doubling_mass_mul_le (multiples : Fin 91 → Point) :
     (PMF.uniformOfFintype GoodTails).toOuterMeasure
         {tail | ∃ digit, multiples digit = clampOffsets radixMap tail.1 digit}

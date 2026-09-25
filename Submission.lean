@@ -2,17 +2,17 @@
 The Plan B entry at the query-gated challenge library (`aaf2789`).
 
 * `FixedIndex` is the fixed-key index of `Construction/PGS/Index.lean`: the `bin-to-hot` fold
-  gates and the doubling-exception gadget (`117,908` indices), at the ragged-first profile (chunk
-  widths `[2, 5 × 32, 4 × 23]`, `chunkCount = 56`). The switch masks are not fixed-key gates:
+  gates and the exception gadget (`159,016` indices), at the ragged-first profile (chunk
+  widths `[2, 5 × 48, 4 × 3]`, `chunkCount = 52`). The switch masks are not fixed-key gates:
   each switch mask vector is drawn from one batch of hash queries
   (`Construction/PGS/BatchSampler.lean`);
 * `Randomness` is `Scheme.Coins`: a Plan B tape without its three public tables, which the
   library now supplies as a separate oracle;
-* `Public` is the eight-field, tag-free public value of design D.5, `1,348,634` bytes (`733`
-  elements per chunk word, with the four-element `Y` row);
+* `Public` is the eight-field, tag-free public value of design D.5, `1,103,204` bytes (`642`
+  elements per chunk word: seven per digit, with the three-element sign row);
 * `scheme` is `Scheme.scheme`, the Plan B garbler and evaluator on `coins.withOracle oracle`;
 * `garbleProgram`/`evaluateProgram` are the query programs of `Construction/OraclePrograms.lean`
-  at their exact budgets, `1,077,993` and `1,035,473` queries.
+  at their budgets, `1,123,253` and `1,042,077` queries.
 
 Every field is proved outright. `adaptivePrivacy` is `Phase3.Glue.planB_oracleAdaptivePrivacy_of`
 applied to `planB_publicFirst` and `MachineBound.of_law machineLaw_planB`. The hybrid chain
@@ -70,7 +70,7 @@ theorem evaluateProgramCorrect (field : FieldCertificate) (group : @GroupCertifi
       (@Scheme.scheme field group).evaluate oracle table input labels :=
   @Programs.evaluateProgram_correct field group table input labels oracle
 
-/-- The Plan B submission at `1,348,634` bytes. -/
+/-- The Plan B submission at `1,103,204` bytes. -/
 def solution : Kriterion.Solution := {
   FixedIndex := PlanB.FixedIndex
   EncIndex := EncPRF.PermutationIndex
@@ -82,7 +82,7 @@ def solution : Kriterion.Solution := {
   Public := PlanB.Public
   EncodingKey := InputMacKey
   encoding := PlanB.Wire.encoding
-  ciphertextBytes := 1348634
+  ciphertextBytes := 1103204
   garbleQueries := Programs.garbleQueries
   evaluateQueries := Programs.evaluateQueries
   scheme := @Scheme.scheme

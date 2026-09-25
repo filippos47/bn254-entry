@@ -193,10 +193,10 @@ theorem deltaU_fixed (κ : Coord) (c : Block) (scalar : NonZeroScalar) (tape : C
         simp only [designedIndex, Bool.and_eq_true, decide_eq_true_eq] at designed
         rw [indexShift_hot]
         exact deltaU_hot_off κ input c ℓ k fold.val r.val half small rSmall designed.1
-    | gadget o κ' position =>
+    | gadget o κ' position bit =>
         simp only [designedIndex, Bool.and_eq_true, decide_eq_true_eq] at designed
-        show (gadgetShift _ scalar tape.1 o κ' position, gadgetShift _ scalar tape.1 o κ' position)
-            = _
+        show (gadgetShift _ scalar tape.1 o κ' position bit,
+          gadgetShift _ scalar tape.1 o κ' position bit) = _
         rw [deltaU_gadget, if_neg (fun h => h.2 designed.2)]
   · simp only [designedSite, Bool.and_eq_true, decide_eq_true_eq] at designed
     exact deltaU_level_off κ input c site designed.1
@@ -221,7 +221,7 @@ theorem key2_fixed (t : Nat) (c : Block) (scalar : NonZeroScalar) (tape : Coins 
         rw [indexShift_hot]
         exact key2_hot_curve t c ℓ k (curve_of_designed ℓ input invalid designed.2) _ _ half small
           rSmall
-    | gadget o κ position =>
+    | gadget o κ position bit =>
         simp only [designedIndex, invalid, Bool.false_and] at designed
         cases designed
   · simp only [designedSite, Bool.and_eq_true] at designed
@@ -247,8 +247,9 @@ theorem hotOut_fixed (ℓ : Lane) (k : Fin chunkCount) (n r : Nat) (c : Block)
         rw [hidden fold r' half hn hr] at designed
         cases designed
       · rw [if_neg same]
-  | gadget o κ position =>
-      show (gadgetShift _ scalar tape.1 o κ position, gadgetShift _ scalar tape.1 o κ position) = _
+  | gadget o κ position bit =>
+      show (gadgetShift _ scalar tape.1 o κ position bit,
+        gadgetShift _ scalar tape.1 o κ position bit) = _
       rw [hotOut_gadget]
 
 /-! ### The families at a hidden index and at a hidden site -/
@@ -257,7 +258,7 @@ theorem hotOut_fixed (ℓ : Lane) (k : Fin chunkCount) (n r : Nat) (c : Block)
 def inFamily (input : AffineInput) : FixedIndex → Block → TapeShift
   | .hot ℓ _ _ r _, c =>
       if laneIsCurve ℓ || validate input then familyDeltaU ℓ.coord input c else familyKey2 r.val c
-  | .gadget _ κ _, c => if validate input then familyDeltaU κ input c else familyKey2 0 c
+  | .gadget _ κ _ _, c => if validate input then familyDeltaU κ input c else familyKey2 0 c
 
 /-- **The family moving the garbler's output at `i`.** -/
 def outFamily (input : AffineInput) : FixedIndex → Block → TapeShift
@@ -278,7 +279,7 @@ theorem inFamily_valid (input : AffineInput) (index : FixedIndex) (c : Block) :
       split
       · exact familyDeltaU_valid _ _ _
       · exact familyKey2_valid _ _
-  | gadget o κ position =>
+  | gadget o κ position bit =>
       show TapeShift.Valid (if validate input = true then familyDeltaU κ input c else familyKey2 0
           c)
       split
@@ -289,7 +290,7 @@ theorem outFamily_valid (input : AffineInput) (index : FixedIndex) (c : Block) :
     (outFamily input index c).Valid := by
   cases index with
   | hot ℓ k fold r half => exact familyHotOut_valid _ _ _ _ _
-  | gadget o κ position => exact inFamily_valid _ _ _
+  | gadget o κ position bit => exact inFamily_valid _ _ _
 
 theorem hiddenSiteFamily_valid (input : AffineInput) (site : VectorSite) (c : Block) :
     (hiddenSiteFamily input site c).Valid := by
@@ -314,7 +315,7 @@ theorem inFamily_coins (input : AffineInput) (index : FixedIndex) (c : Block) (c
       Scheme.scheme.encode coins.inputMacKey input := by
   cases index with
   | hot ℓ k fold r half => exact choice_coins _ _ _ _ _ _
-  | gadget o κ position => exact choice_coins _ _ _ _ _ _
+  | gadget o κ position bit => exact choice_coins _ _ _ _ _ _
 
 theorem outFamily_coins (input : AffineInput) (index : FixedIndex) (c : Block) (coins : Coins) :
     Scheme.scheme.encode (shiftCoins (outFamily input index c) coins).inputMacKey input =
@@ -324,7 +325,7 @@ theorem outFamily_coins (input : AffineInput) (index : FixedIndex) (c : Block) (
       show Scheme.scheme.encode (shiftCoins (familyHotOut ℓ k fold.val r.val c) coins).inputMacKey
         input = _
       rw [hotOut_coins]
-  | gadget o κ position => exact inFamily_coins _ _ _ _
+  | gadget o κ position bit => exact inFamily_coins _ _ _ _
 
 theorem not_or_valid (ℓ : Lane) (input : AffineInput) (h : ¬ (laneIsCurve ℓ || validate input) = true) :
     validate input = false := by
@@ -359,7 +360,7 @@ theorem inFamily_view (parameter : ℕ) (scalar : NonZeroScalar) (input : Affine
     (inFamily_coins input index c tape.1) ?_
   cases index with
   | hot ℓ k fold r half => exact choice_fixed ℓ input r.val c scalar tape
-  | gadget o κ position =>
+  | gadget o κ position bit =>
       show ∀ entry ∈ garblerTranscript scalar tape, entry.IsEnc = false →
         designedRule scalar tape input entry = true →
           shiftEntry (if validate input = true then familyDeltaU κ input c else familyKey2 0 c)
@@ -405,23 +406,22 @@ theorem inFamily_moves (scalar : NonZeroScalar) (tape : Coins × Oracle) (input 
         have level := key2_level_point r.val c ℓ k (point_of_not_curve ℓ input h) fold.val one
           small.le
         rwa [Nat.mod_eq_of_lt rSmall] at level
-  | gadget o κ position =>
-      show gadgetShift (inFamily input (.gadget o κ position) c) scalar tape.1 o κ position = c
+  | gadget o κ position bit =>
+      show gadgetShift (inFamily input (.gadget o κ position bit) c) scalar tape.1 o κ position bit = c
       show gadgetShift (if validate input = true then familyDeltaU κ input c else familyKey2 0 c)
-        scalar tape.1 o κ position = c
+        scalar tape.1 o κ position bit = c
       by_cases h : validate input = true
       · rw [if_pos h, deltaU_gadget]
-        have differ : (inputBits input κ).getLsb position ≠
-            exceptionalBit scalar tape.1.offsets o κ position := by
+        have differ : (inputBits input κ).getLsb position ≠ bit := by
           intro same
-          have designed : designedIndex scalar tape input (.gadget o κ position) = true := by
+          have designed : designedIndex scalar tape input (.gadget o κ position bit) = true := by
             simp only [designedIndex, Bool.and_eq_true, decide_eq_true_eq]
             exact ⟨h, same⟩
           rw [hidden] at designed
           cases designed
         rw [if_pos ⟨rfl, differ⟩]
       · rw [if_neg h]
-        exact key2_gadget 0 c scalar tape.1 o κ position
+        exact key2_gadget 0 c scalar tape.1 o κ position bit
 
 /-- **`hiddenSiteFamily` moves the garbler's label at a hidden site by `c`.** -/
 theorem hiddenSiteFamily_moves (input : AffineInput) (site : VectorSite) (c : Block)
@@ -460,7 +460,7 @@ theorem outFamily_view (parameter : ℕ) (scalar : NonZeroScalar) (input : Affin
         simp only [designedIndex, same, same']
       rw [eq]
       exact hidden
-  | gadget o κ position => exact inFamily_view parameter scalar input _ c tape
+  | gadget o κ position bit => exact inFamily_view parameter scalar input _ c tape
 
 theorem outFamily_moves (scalar : NonZeroScalar) (tape : Coins × Oracle) (input : AffineInput)
     (index : FixedIndex) (c : Block) (shape : IndexShape scalar tape.1 index)
@@ -472,8 +472,8 @@ theorem outFamily_moves (scalar : NonZeroScalar) (tape : Coins × Oracle) (input
       show ((((familyHotOut ℓ k fold.val r.val c).lane ℓ).fold k).hot fold.val r.val half).2 = c
       rw [hotOut_hot ℓ k fold.val r.val c ℓ k fold.val r.val half small rSmall]
       simp
-  | gadget o κ position =>
-      exact inFamily_moves scalar tape input (.gadget o κ position) c shape hidden
+  | gadget o κ position bit =>
+      exact inFamily_moves scalar tape input (.gadget o κ position bit) c shape hidden
 
 /-! ### Touches of the stage-2 extra entries -/
 

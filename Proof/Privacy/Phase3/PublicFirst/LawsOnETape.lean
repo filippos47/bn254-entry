@@ -251,19 +251,6 @@ theorem siteVector_dsite (m : MaskCoord → BaseField) (des : DSite → BaseFiel
       show (maskSiteEquiv m).1 d (.inl .rowX_x7) (offShape input).designated = _
       rw [maskSiteEquiv_pointX]
       rfl
-  | rowY_mixed =>
-      have visible : (offShape input).DigitVisibleAt (.inl .rowY_mixed) (offShape input).designated :=
-        ⟨(offShape input).designated_inactive', fun both => by
-          rcases both.1 with h | h | h <;> cases h⟩
-      have w : coordW input ⟨(dsiteV input).1, xElementIndex d .rowY_mixed⟩
-          (dsiteV input).2 = .inl (.inl (d, ⟨.inl .rowY_mixed, ⟨_, visible⟩⟩)) :=
-        coordW_wSite input (.inl (.inl (d, ⟨.inl .rowY_mixed, ⟨_, visible⟩⟩))) (designatedSite_inact input)
-      unfold siteVector
-      simp only [w, Sum.elim_inl]
-      refine Eq.trans ?_ (Kriterion.ArgoMAC.Phase3.Glue.designatedVector_free _ des d 1).symm
-      show (maskSiteEquiv m).1 d (.inl .rowY_mixed) (offShape input).designated = _
-      rw [maskSiteEquiv_pointX]
-      rfl
   | rowX_x9 =>
       have w : coordW input ⟨(dsiteV input).1, xElementIndex d .rowX_x9⟩
           (dsiteV input).2 = .inr (d, 0) :=

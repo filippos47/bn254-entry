@@ -9,14 +9,14 @@ questions are already planted. This file proves the classification on the curve
 (`onCurve_reach_classified`): every question of the evaluator on `u`'s labels, run on the tape, is
 
 * the question of one of the garbler's EncPRF or designed entries (`upperEntries`), or
-* a gadget question at an index where the garbler has no designed entry (a position where `u`
-  differs from the digit's exceptional input, or a digit without exceptional input): the only
-  fresh questions.
+* a gadget question of a digit without exceptional input: the only fresh questions (the garbler
+  asks both bits of every position of every other digit, at the transformed labels, and the reach
+  asks the index of `u`'s bit at the same label).
 
 The garbler side (`asks_garbleM_*`: the garbler asks every gate of every paid fold level of every
 chunk, at every chunk width, every limb of every switch, the bridge hash at `bridgeInput t`, both
-EncPRF pads of every position and the gadget of every digit with an exceptional input, at its own
-points) is the converse of `garblerTranscript_good`; the reach side is `onCurveM_asks`
+EncPRF pads of every position and both bits of every gadget position of every digit with an
+exceptional input, at its own points) is the converse of `garblerTranscript_good`; the reach side is `onCurveM_asks`
 (`LawsGuessReach`) with the evaluator-correctness lemmas of the hidden hop (`evalFold_off`: at every
 level the evaluator's labels off the active parent are the garbler's).
 -/
@@ -138,32 +138,34 @@ theorem asks_padsM (O : Oracle) (keys : WhiteningKeys) (coordinate : EncPRF.Coor
   · exact Asks.bind_left row
   · exact Asks.bind_right (Asks.bind_left row)
 
-/-- A digest asks every position at the given label. -/
-theorem asks_gadgetDigestM (ans : ∀ q : PublicQuery FixedIndex EncPRF.PermutationIndex, q.Answer)
-    (o : Fin digitCount) (coordinate : EncPRF.Coordinate) (mac : CoordinateMac)
-    (position : Fin PlanB.coordinateBits) :
-    Asks ans (Programs.gadgetDigestM o coordinate mac)
-      (.fixedForward (.gadget o (Pipeline.gadgetCoord coordinate) position) (mac.get position)) := by
-  unfold Programs.gadgetDigestM
-  exact Asks.bind_left (Asks.vector _ position (Asks.hashM _ _))
+/-- The garbler's pairs ask both bits of every position, at the bits' labels. -/
+theorem asks_gadgetPairsM (ans : ∀ q : PublicQuery FixedIndex EncPRF.PermutationIndex, q.Answer)
+    (o : Fin digitCount) (coordinate : EncPRF.Coordinate) (key : CoordinateMacKey)
+    (position : Fin PlanB.coordinateBits) (bit : Bool) :
+    Asks ans (Programs.gadgetPairsM o coordinate key)
+      (.fixedForward (.gadget o (Pipeline.gadgetCoord coordinate) position bit)
+        (BitAdaptor.encode key[position.val] bit)) := by
+  unfold Programs.gadgetPairsM
+  refine Asks.vector _ position ?_
+  cases bit
+  · exact Asks.bind_left (Asks.hashM _ _)
+  · exact Asks.bind_right (Asks.bind_left (Asks.hashM _ _))
 
-/-- The gadget of a digit with an exceptional input asks every position at its label. -/
+/-- The gadget of a digit with an exceptional input asks both bits of every position, at their
+labels. -/
 theorem asks_gadgetM (ans : ∀ q : PublicQuery FixedIndex EncPRF.PermutationIndex, q.Answer)
     (keys : FieldMacToECMac.OutputKeys) (inputKey : InputMacKey)
     (pads : FieldMacToECMac.ExceptionPad) (o : Fin digitCount) (κ : Coord) (position : Fin PlanB.coordinateBits)
-    (phi : BaseField) (found : digitEndomorphismBase (keys.get o).digit = some phi) :
+    (bit : Bool) (phi : BaseField) (found : digitEndomorphismBase (keys.get o).digit = some phi) :
     Asks ans (Programs.gadgetM keys inputKey pads)
-      (.fixedForward (.gadget o κ position)
-        (macAt (inputKey.encodeAffine (Exception.exceptionalInput phi (keys.get o).offset.coordinates)) κ position)) := by
+      (.fixedForward (.gadget o κ position bit) (BitAdaptor.encode (keyAt inputKey κ position) bit)) := by
   unfold Programs.gadgetM
   refine Asks.vector _ o ?_
   unfold Programs.garbleEntryM
   rw [found]
-  refine Asks.bind_left ?_
-  unfold Programs.gadgetMaskM
   cases κ
-  · exact Asks.bind_left (asks_gadgetDigestM ans o .x _ position)
-  · exact Asks.bind_right (Asks.bind_left (asks_gadgetDigestM ans o .y _ position))
+  · exact Asks.bind_left (asks_gadgetPairsM ans o .x _ position bit)
+  · exact Asks.bind_right (Asks.bind_left (asks_gadgetPairsM ans o .y _ position bit))
 
 /-- **The garbler asks every question of each of its lanes.** -/
 theorem asks_garbleM_lane (scalar : NonZeroScalar) (tape : Coins × Oracle) (lane : Lane)
@@ -196,29 +198,26 @@ theorem asks_garbleM_enc (scalar : NonZeroScalar) (tape : Coins × Oracle) (coor
   exact asks_padsM tape.2 ⟨(tape.2.2.2 (bridgeInput tape.1.bridgeKey)).1,
     (tape.2.2.2 (bridgeInput tape.1.bridgeKey)).2⟩ coordinate index bit
 
-/-- **The garbler asks the gadget of every digit with an exceptional input** at its label. -/
+/-- **The garbler asks both bits of every gadget position of every digit with an exceptional
+input**, at their labels. -/
 theorem asks_garbleM_gadget (scalar : NonZeroScalar) (tape : Coins × Oracle) (o : Fin digitCount) (κ : Coord)
-    (position : Fin PlanB.coordinateBits)
+    (position : Fin PlanB.coordinateBits) (bit : Bool)
     (some : (digitEndomorphismBase (Hidden.digitKey scalar tape.1.offsets o).digit).isSome = true) :
     Asks (publicAnswer tape.2) (Programs.garbleM scalar tape.1)
-      (.fixedForward (.gadget o κ position) (Hidden.gadgetLabel scalar tape o κ position)) := by
+      (.fixedForward (.gadget o κ position bit) (Hidden.gadgetLabel scalar tape o κ position bit)) := by
   obtain ⟨phi, found⟩ := Option.isSome_iff_exists.mp some
   have asks := asks_gadgetM (publicAnswer tape.2) (FieldMacToECMac.outputKeys construction scalar.value tape.1.offsets)
     (Programs.transformKeyOf (Programs.realPads tape.2.2.1
       ⟨(tape.2.2.2 (bridgeInput tape.1.bridgeKey)).1, (tape.2.2.2 (bridgeInput tape.1.bridgeKey)).2⟩)
         tape.1.inputMacKey)
-    tape.1.exceptionPad o κ position phi found
-  have label : Hidden.gadgetLabel scalar tape o κ position =
-      macAt ((Programs.transformKeyOf (Programs.realPads tape.2.2.1
+    tape.1.exceptionPad o κ position bit phi found
+  have label : Hidden.gadgetLabel scalar tape o κ position bit =
+      BitAdaptor.encode (keyAt (Programs.transformKeyOf (Programs.realPads tape.2.2.1
         ⟨(tape.2.2.2 (bridgeInput tape.1.bridgeKey)).1, (tape.2.2.2 (bridgeInput tape.1.bridgeKey)).2⟩)
-          tape.1.inputMacKey).encodeAffine
-          (Exception.exceptionalInput phi
-            ((FieldMacToECMac.outputKeys construction scalar.value tape.1.offsets).get o).offset.coordinates))
-        κ position := by
+          tape.1.inputMacKey) κ position) bit := by
     unfold Hidden.gadgetLabel
     rw [found]
     dsimp only
-    unfold Hidden.digitKey
     rw [← Programs.transformKeyOf_realPads]
     cases κ
     · exact rfl
@@ -393,8 +392,10 @@ theorem onCurve_reach_classified (parameter : ℕ) (scalar : NonZeroScalar) (tap
         (macOf tape input))).map Sigma.fst) :
     (∃ e ∈ upperEntries parameter scalar tape input, e.1 = q) ∨
     (∃ (o : Fin digitCount) (κ : Coord) (position : Fin PlanB.coordinateBits),
-      q = .fixedForward (.gadget o κ position) (reachGadget tape input κ position) ∧
-      ∀ e ∈ upperEntries parameter scalar tape input, ∀ x, e.1 ≠ .fixedForward (.gadget o κ position) x) := by
+      q = .fixedForward (.gadget o κ position ((inputBits input κ).getLsb position))
+        (reachGadget tape input κ position) ∧
+      ∀ e ∈ upperEntries parameter scalar tape input, ∀ x,
+        e.1 ≠ .fixedForward (.gadget o κ position ((inputBits input κ).getLsb position)) x) := by
   obtain ⟨entry, entryMember, rfl⟩ := List.mem_map.mp reached
   have ask := onCurveM_asks tape.2 _ _ _ entry entryMember
   have pads := reachPads_eq parameter scalar tape input
@@ -427,22 +428,22 @@ theorem onCurve_reach_classified (parameter : ℕ) (scalar : NonZeroScalar) (tap
   · exact Or.inl (lane_planted parameter scalar tape input valid .pointX _ a)
   · exact Or.inl (lane_planted parameter scalar tape input valid .pointY _ a)
   · obtain ⟨o, κ, position, eq⟩ := a
+    rw [BitInput.toAffineOfAffine] at eq
     rw [eq]
-    by_cases planted : (digitEndomorphismBase (Hidden.digitKey scalar tape.1.offsets o).digit).isSome = true ∧
-        (inputBits input κ).getLsb position = Hidden.exceptionalBit scalar tape.1.offsets o κ position
+    by_cases planted : (digitEndomorphismBase (Hidden.digitKey scalar tape.1.offsets o).digit).isSome = true
     · left
-      obtain ⟨some, agree⟩ := planted
       have label : macAt (Programs.transformMacOf (padsOf tape input) (macOf tape input)) κ position =
-          Hidden.gadgetLabel scalar tape o κ position := by
+          Hidden.gadgetLabel scalar tape o κ position ((inputBits input κ).getLsb position) := by
         have onCurve := reachGadget_onCurve tape input valid κ position
         unfold reachGadget at onCurve
-        rw [onCurve, gadgetLabel_eq scalar tape o κ position some, agree]
+        rw [onCurve, gadgetLabel_eq scalar tape o κ position _ planted]
       rw [label]
-      refine upper_of_fixed parameter scalar tape input _ _ (asks_garbleM_gadget scalar tape o κ position some) ?_
+      refine upper_of_fixed parameter scalar tape input _ _
+        (asks_garbleM_gadget scalar tape o κ position _ planted) ?_
       show (validate input && decide ((inputBits input κ).getLsb position =
-        Hidden.exceptionalBit scalar tape.1.offsets o κ position)) = true
-      rw [valid, decide_eq_true agree]
-      rfl
+        (inputBits input κ).getLsb position)) = true
+      rw [valid]
+      simp
     · right
       refine ⟨o, κ, position, rfl, fun e member x same => ?_⟩
       unfold upperEntries at member
@@ -461,17 +462,7 @@ theorem onCurve_reach_classified (parameter : ℕ) (scalar : NonZeroScalar) (tap
         subst same
         have some : (digitEndomorphismBase (Hidden.digitKey scalar tape.1.offsets o).digit).isSome = true :=
           shape
-        have ruleTrue : designedIndex scalar tape input (.gadget o κ position) = true := by
-          simp only [Bool.and_eq_true, Bool.not_eq_true'] at rule
-          exact rule.2
-        have agree : (inputBits input κ).getLsb position =
-            Hidden.exceptionalBit scalar tape.1.offsets o κ position := by
-          have shown : designedIndex scalar tape input (.gadget o κ position) =
-              (validate input && decide ((inputBits input κ).getLsb position =
-                Hidden.exceptionalBit scalar tape.1.offsets o κ position)) := rfl
-          rw [shown, valid, Bool.true_and, decide_eq_true_iff] at ruleTrue
-          exact ruleTrue
-        exact planted ⟨some, agree⟩
+        exact planted some
 
 end Garbler
 

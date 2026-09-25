@@ -68,7 +68,7 @@ the step's active parent, either half), or a gadget position. -/
 def ViewIdx : FixedIndex → Prop
   | .hot lane c fold entry _ => 0 < fold.val ∧ fold.val < chunkWidth c ∧ entry.val < 2 ^ fold.val ∧
       entry.val ≠ activeEntry input lane c fold.val
-  | .gadget _ _ _ => True
+  | .gadget _ _ _ _ => True
 
 /-- **The view's fixed-key indices.** -/
 abbrev VO := {i : FixedIndex // ViewIdx input i}
@@ -121,8 +121,8 @@ theorem onQ_bridge (t : BaseField) : OnQ input (.hash (bridgeInput t)) := by
   rw [cellOf_of_not_lt _ (bridgeInput_not_lt t)]
   exact bridgeInput_not_lt t
 
-theorem onQ_gadget (o : Fin digitCount) (κ : Coord) (p : Fin PlanB.coordinateBits) (x : Block) :
-    OnQ input (.fixedForward (.gadget o κ p) x) := trivial
+theorem onQ_gadget (o : Fin digitCount) (κ : Coord) (p : Fin PlanB.coordinateBits) (b : Bool)
+    (x : Block) : OnQ input (.fixedForward (.gadget o κ p b) x) := trivial
 
 theorem evalStepM_onQ (lane : Lane) (c : Fin chunkCount) (n : Nat) (small : n < chunkWidth c)
     (bitLabel join : Block) (parent : Fin (2 ^ n) → Block) :
@@ -212,9 +212,9 @@ theorem shadow_onQ (P : Public) (mac : InputMac) :
     · exact OnLaw.queryOnly_mono (Guess.evalPadsM_encOnly _ _) fun q ⟨_, _, _, same⟩ => by
         subst same
         trivial
-    · exact OnLaw.queryOnly_mono (Guess.unlockM_asks _ _ _) fun q ⟨o, κ, p, same⟩ => by
+    · exact OnLaw.queryOnly_mono (Guess.masksM_asks _ _) fun q ⟨o, κ, p, same⟩ => by
         subst same
-        exact onQ_gadget input o κ p _
+        exact onQ_gadget input o κ p _ _
 
 /-! ### 3. The view of a table -/
 

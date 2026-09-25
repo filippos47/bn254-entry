@@ -1,5 +1,5 @@
 /-
-**Stage 2, the program batch** (`rsem_programs`): the `452` machine programs of
+**Stage 2, the program batch** (`rsem_programs`): the `362` machine programs of
 `Opening.programs` (limb `i`: `hash (E* + 2^128 · scaleTag pointX 0 j* i) := (V_i mod 2^128,
 V_i / 2^128)`, the halves read from the preimage sampler's half cells) are P3's
 `programAll (programRequests bits (fun _ => some E*) …)`, from any memory holding `E*`, `j*` and
@@ -122,7 +122,7 @@ theorem designatedInput_nat (bits : BitInput) (limb : Fin (limbCount .pointX)) (
         star.toNat : Nat) : BaseField) := by
   have jSmall : (designatedSwitch bits).val < 4 :=
     lt_of_lt_of_eq (designatedSwitch bits).isLt twoPow_chunkWidth_chunkZero
-  have limbSmall : limb.val < 452 := limb.isLt
+  have limbSmall : limb.val < 362 := limb.isLt
   unfold designatedInput scaleInput
   congr 1
   unfold scaleTag scaleTagWith chunkBits
@@ -161,7 +161,7 @@ theorem rsem_programOne (bits : BitInput) (limb : Fin (limbCount .pointX)) (memo
           oracle).map fun updated => (after, updated)) := by
   have jSmall : (designatedSwitch bits).val < 4 :=
     lt_of_lt_of_eq (designatedSwitch bits).isLt twoPow_chunkWidth_chunkZero
-  have limbSmall : limb.val < 452 := limb.isLt
+  have limbSmall : limb.val < 362 := limb.isLt
   have tagSmall : scaleTag .pointX 0 0 limb.val < 2 ^ 21 := by
     unfold scaleTag scaleTagWith chunkCount chunkBits
     rw [show laneCode .pointX = 2 from rfl]
@@ -274,7 +274,7 @@ theorem limbHalf_high (answers : DesignatedLimbs) (limb : Nat) (bound : limb < l
   rw [if_neg (show ¬ (2 * limb + 1) % 2 = 0 by omega)]
   exact congrArg (fun index => (answers index).2) (Fin.ext (by dsimp only; omega))
 
-/-- **The `452` programs.** -/
+/-- **The `362` programs.** -/
 theorem rsem_programs (bits : BitInput) (answers : DesignatedLimbs) (star : Block) (memory : Memory)
     (starCell : memory.ram (word designatedLabel) = blockWord star)
     (halves : ∀ half : Fin (2 * limbCount .pointX),
@@ -356,31 +356,25 @@ theorem openingFree_noOracle : openingFree.NoOracle := by
         ⟨⟨rfl, rfl⟩, ⟨rfl, rfl⟩, ⟨rfl, rfl⟩, trivial⟩, noOracle_zeroRegs _, trivial⟩, trivial⟩,
         trivial⟩, trivial⟩
   · exact noOracle_rep _ _ fun _ _ =>
-      ⟨noOracle_bounded _ _ _ _ ⟨rfl, rfl, rfl, rfl⟩ ⟨rfl, rfl⟩, noOracle_zeroRegs _⟩
+      ⟨⟨noOracle_bounded _ _ _ _ ⟨rfl, rfl, rfl, rfl⟩ ⟨rfl, rfl⟩, noOracle_zeroRegs _⟩,
+        ⟨noOracle_bounded _ _ _ _ ⟨rfl, rfl, rfl, rfl⟩ ⟨rfl, rfl⟩, noOracle_zeroRegs _⟩⟩
   · exact noOracle_rep _ _ fun _ _ => by
       unfold Opening.liftOne Opening.loadPoint
       simp only [Prog.seqList]
-      exact ⟨⟨rfl, rfl⟩, rfl, rfl, ⟨⟨rfl, rfl⟩, ⟨rfl, rfl⟩, ⟨rfl, rfl⟩, trivial⟩, rfl, rfl, rfl,
-        rfl, rfl, rfl, rfl, rfl, rfl, rfl, ⟨rfl, rfl⟩, ⟨rfl, rfl⟩, ⟨rfl, rfl⟩,
+      exact ⟨⟨rfl, rfl⟩, rfl, ⟨rfl, rfl⟩, rfl, ⟨⟨rfl, rfl⟩, ⟨rfl, rfl⟩, ⟨rfl, rfl⟩, trivial⟩, rfl,
+        rfl, rfl, rfl, rfl, rfl, rfl, ⟨rfl, rfl⟩, ⟨rfl, rfl⟩, ⟨rfl, rfl⟩,
         noOracle_zeroRegs _, trivial⟩
   · exact noOracle_rep _ _ fun _ _ =>
-      ⟨⟨noOracle_bounded _ _ _ _ ⟨rfl, rfl⟩ (plain_storeNonCollector _).noOracle, noOracle_zeroRegs _⟩,
-        ⟨noOracle_bounded _ _ _ _ ⟨rfl, rfl⟩ (plain_storeNonCollector _).noOracle, noOracle_zeroRegs _⟩⟩
+      ⟨noOracle_bounded _ _ _ _ ⟨rfl, rfl⟩ (plain_storeNonCollector _).noOracle, noOracle_zeroRegs _⟩
   · exact noOracle_rep _ _ fun _ _ => by
       unfold Opening.solveDigit Opening.addScaled Opening.addCell Opening.finishTarget
         Opening.finishScaled
       simp only [Prog.seqList]
-      exact ⟨⟨rfl, rfl⟩, ⟨rfl, rfl⟩, rfl, rfl, rfl, ⟨rfl, rfl⟩,
-        ⟨rfl, rfl⟩, ⟨⟨rfl, rfl⟩, rfl, rfl, trivial⟩, ⟨⟨rfl, rfl⟩, rfl, rfl, trivial⟩,
-        ⟨⟨rfl, rfl⟩, rfl, rfl, trivial⟩, ⟨⟨rfl, rfl⟩, rfl, rfl, trivial⟩, ⟨⟨rfl, rfl⟩, rfl, trivial⟩,
-        ⟨⟨rfl, rfl⟩, rfl, trivial⟩, ⟨⟨rfl, rfl⟩, rfl, rfl, ⟨rfl, rfl⟩, trivial⟩,
-        ⟨rfl, rfl⟩, ⟨⟨rfl, rfl⟩, rfl, rfl, trivial⟩, ⟨⟨rfl, rfl⟩, rfl, rfl, trivial⟩,
-        ⟨⟨rfl, rfl⟩, rfl, rfl, trivial⟩, ⟨⟨rfl, rfl⟩, rfl, rfl, trivial⟩,
-        ⟨⟨rfl, rfl⟩, rfl, rfl, trivial⟩, ⟨⟨rfl, rfl⟩, rfl, rfl, trivial⟩,
-        ⟨⟨rfl, rfl⟩, rfl, rfl, trivial⟩, ⟨⟨rfl, rfl⟩, rfl, trivial⟩,
-        ⟨⟨rfl, rfl⟩, rfl, rfl, rfl, rfl, ⟨rfl, rfl⟩, trivial⟩,
-        ⟨rfl, rfl⟩, ⟨⟨rfl, rfl⟩, rfl, rfl, trivial⟩, ⟨⟨rfl, rfl⟩, rfl, trivial⟩,
-        ⟨⟨rfl, rfl⟩, rfl, rfl, ⟨rfl, rfl⟩, trivial⟩, noOracle_zeroRegs _, trivial⟩
+      repeat' (first
+        | exact trivial
+        | exact rfl
+        | exact noOracle_zeroRegs _
+        | refine ⟨?_, ?_⟩)
 
 omit [DecidableEq PlanB.FixedIndex] [DecidableEq EncPRF.PermutationIndex] in
 theorem rtree_zeroRegs (registers : List Register) (memory : Memory) :

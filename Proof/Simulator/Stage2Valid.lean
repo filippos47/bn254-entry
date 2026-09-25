@@ -259,7 +259,7 @@ theorem valid_agree [GroupCertificate] (law : OpeningLaw) (source : Stage1Source
     (start : ReplayStart source input labels middle)
     (outputs : (middle.ram (word reqTag0), middle.ram (word reqQX), middle.ram (word reqQY)) =
       outputWords target)
-    (rows : ∀ (digit : Fin digitCount) (slot : Nat), slot < 11 →
+    (rows : ∀ (digit : Fin digitCount) (slot : Nat), slot < 10 →
       middle.ram (word (Opening.rowCell digit.val slot)) =
         fieldWord (rowField (source.rows.get digit) slot))
     (empty : middle.bits 3 = [])
@@ -372,7 +372,7 @@ theorem valid_law [GroupCertificate] (law : OpeningLaw) (source : Stage1Source)
     (start : ReplayStart source input labels middle)
     (outputs : (middle.ram (word reqTag0), middle.ram (word reqQX), middle.ram (word reqQY)) =
       outputWords target)
-    (rows : ∀ (digit : Fin digitCount) (slot : Nat), slot < 11 →
+    (rows : ∀ (digit : Fin digitCount) (slot : Nat), slot < 10 →
       middle.ram (word (Opening.rowCell digit.val slot)) =
         fieldWord (rowField (source.rows.get digit) slot))
     (empty : middle.bits 3 = []) (oracle : OState PlanB.FixedIndex EncPRF.PermutationIndex) :
@@ -423,7 +423,7 @@ theorem machine_stage2_some [FieldCertificate] (initial : Configuration (planBSi
     cases SimulatorProtocol.words 128 508 (last.bits 3) <;> rfl
 
 /-- **`Stage2Law`, modulo the opening law** (`OpeningLaw`, `Stage2Spec.lean`): the invalid arm is
-`stage2Law_none`; the valid arm is the prefix, the replay, the opening, the `452` programs and the
+`stage2Law_none`; the valid arm is the prefix, the replay, the opening, the `362` programs and the
 emission. -/
 theorem stage2Law_of_opening (law : OpeningLaw) : Stage2Law := by
   intro field group parameter result member input output oracle

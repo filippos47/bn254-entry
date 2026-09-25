@@ -33,7 +33,7 @@ def DesFrame (address : Word) : Prop :=
   ChunkFrame Replay.pointXSpec address ∧ address ≠ word designatedLabel ∧
     address ≠ word tmpJStar ∧ address ≠ word tmpKappa
 
-/-- The RAM a lane reads: its coordinate, its `254` labels, its `198` fold joins, and its scale
+/-- The RAM a lane reads: its coordinate, its `254` labels, its `202` fold joins, and its scale
 joins of every chunk. -/
 structure LaneCells (spec : Replay.LaneSpec) (coord : Nat)
     (labels : Fin coordinateBitCount → Block) (joins : Vector Block foldStepCount)

@@ -7,13 +7,13 @@ lambdas, lifts, nonCollectors, solve, preimage`) read through `openView` is P3's
 
 1. the tail is `optionProduct 90 curvePointLaw` (`memSem_tail`), and Horner's head clamp aborts
    exactly on `tailLaw`'s check (`memSem_horner`), so tail + head is `boundedSamplers.tail`;
-2. the randomisers are `boundedSamplers.lift` (`memSem_lambdas`), and the lifts are `targetRows`
-   (`memSem_lifts`);
-3. the non-collectors are `boundedSamplers.free` (`memSem_nonCollectors`; draw `2d + s` is the
-   free coordinate `(d, s)`, `freeLaw`'s `finProdFinEquiv` order), and leave the accumulators at
+2. the randomiser pairs are `boundedSamplers.lift` (`memSem_lambdas`), and the lifts are
+   `targetRows` (`memSem_lifts`);
+3. the non-collectors are `boundedSamplers.free` (`memSem_nonCollectors`; draw `d` is the
+   free coordinate `(d, 0)`, `freeLaw`'s `finProdFinEquiv` order), and leave the accumulators at
    `freeFill` (`nc_value`);
 4. the solve on the free-filled rows stores `collectorTargets` of `freeRows` in the collector
-   cells (the `Y` collector's target times `(x · x)⁻¹`, the machine's `finishScaled` and the
+   cells (the sign row's collector target times `(x · x)⁻¹`, the machine's `finishScaled` and the
    Glue's `collectorScale` alike), so the designated cells hold `solvedVector`
    (`designated_cells`, from T10a's `designatedVector_free` and `designatedVector_collector`);
 5. the preimage sampler is `boundedSamplers.preimage (solvedVector …)` (`memSem_preimage`), and
@@ -47,8 +47,7 @@ theorem gammaConst_eq_rowField (row : RowGamma) : ∀ slot, gammaConst row slot 
   | 7 => rfl
   | 8 => rfl
   | 9 => rfl
-  | 10 => rfl
-  | _ + 11 => rfl
+  | _ + 10 => rfl
 
 theorem readWords_outputWords (target : Point) : readWords (outputWords target) = some target := by
   cases target with
@@ -85,7 +84,7 @@ theorem solveWords_component (kappaValue : BaseField) (bits : BitInput)
 /-! ### Across the non-collectors -/
 
 /-- A cell below the accumulators is away from every non-collector. -/
-theorem ncAway_low (index : Nat) (small : index < digitCount * 2) (address : Nat)
+theorem ncAway_low (index : Nat) (small : index < digitCount * 1) (address : Nat)
     (below : address < accBase) : NcAway (ncElement index) (word address) := by
   have element := ncElement_lt index small
   unfold accBase at below
@@ -94,8 +93,8 @@ theorem ncAway_low (index : Nat) (small : index < digitCount * 2) (address : Nat
 
 /-- A cell between the `pointX` accumulators and the designated cells is away from every
 non-collector. -/
-theorem ncAway_mid (index : Nat) (small : index < digitCount * 2) (address : Nat)
-    (above : accBase + 455 ≤ address) (below : address < designatedBase) :
+theorem ncAway_mid (index : Nat) (small : index < digitCount * 1) (address : Nat)
+    (above : accBase + 364 ≤ address) (below : address < designatedBase) :
     NcAway (ncElement index) (word address) := by
   have element := ncElement_lt index small
   unfold accBase at above
@@ -103,7 +102,7 @@ theorem ncAway_mid (index : Nat) (small : index < digitCount * 2) (address : Nat
   exact ⟨word_ne (by omega) (by addr_arith) (by addr_arith),
     word_ne (by omega) (by addr_arith) (by addr_arith)⟩
 
-theorem labelVector_nc (count : Nat) (fits : count ≤ digitCount * 2) (memory : Memory)
+theorem labelVector_nc (count : Nat) (fits : count ≤ digitCount * 1) (memory : Memory)
     (values : Fin count → BaseField) :
     labelVector (foldStore (ncStep 0) count memory values).ram = labelVector memory.ram := by
   unfold labelVector
@@ -113,78 +112,71 @@ theorem labelVector_nc (count : Nat) (fits : count ≤ digitCount * 2) (memory :
     ncAway_low (later + 0) (by omega) _ (by unfold labelBase accBase; omega))]
 
 /-- The free coordinates of the draws, in `freeLaw`'s order. -/
-def freeOf (draws : Fin (digitCount * 2) → BaseField) : FreeSite → BaseField :=
+def freeOf (draws : Fin (digitCount * 1) → BaseField) : FreeSite → BaseField :=
   fun site => draws (finProdFinEquiv site)
 
 omit [FieldCertificate] in
-theorem finProdFinEquiv_free (digit : Fin digitCount) (slot : Fin 2) :
-    (finProdFinEquiv (digit, slot)).val = 2 * digit.val + slot.val := by
+theorem finProdFinEquiv_free (digit : Fin digitCount) (slot : Fin 1) :
+    (finProdFinEquiv (digit, slot)).val = digit.val := by
+  have slotSmall := slot.isLt
   rw [finProdFinEquiv_apply_val]
   dsimp only
   omega
 
 /-- **The accumulators after the non-collectors**: each `pointX` value plus `κ` times the
 designated vector's free part. -/
-theorem nc_value (memory : Memory) (draws : Fin (digitCount * 2) → BaseField)
+theorem nc_value (memory : Memory) (draws : Fin (digitCount * 1) → BaseField)
     (digit : Fin digitCount) (element : XElement) :
-    wordField ((foldStore (ncStep 0) (digitCount * 2) memory draws).ram
-        (word (Opening.xCell (5 * digit.val + element.slot.val)))) =
-      wordField (memory.ram (word (Opening.xCell (5 * digit.val + element.slot.val)))) +
+    wordField ((foldStore (ncStep 0) (digitCount * 1) memory draws).ram
+        (word (Opening.xCell (4 * digit.val + element.slot.val)))) =
+      wordField (memory.ram (word (Opening.xCell (4 * digit.val + element.slot.val)))) +
         wordField (memory.ram (word tmpKappa)) *
           designatedVector (freeOf draws) 0 (xElementIndex digit element) := by
   have digitSmall := digit.isLt
   unfold digitCount at digitSmall
-  have freeCase : ∀ slot : Fin 2,
-      wordField ((foldStore (ncStep 0) (digitCount * 2) memory draws).ram
-          (word (Opening.xCell (5 * digit.val + 2 * slot.val)))) =
-        wordField (memory.ram (word (Opening.xCell (5 * digit.val + 2 * slot.val)))) +
+  have freeCase : ∀ slot : Fin 1,
+      wordField ((foldStore (ncStep 0) (digitCount * 1) memory draws).ram
+          (word (Opening.xCell (4 * digit.val + 0)))) =
+        wordField (memory.ram (word (Opening.xCell (4 * digit.val + 0)))) +
           wordField (memory.ram (word tmpKappa)) * freeOf draws (digit, slot) := by
     intro slot
-    have slotSmall := slot.isLt
-    have acc := ncFold_acc (digitCount * 2) 0 (by omega) memory draws (finProdFinEquiv (digit, slot))
-    have element : ncElement ((finProdFinEquiv (digit, slot)).val + 0) =
-        5 * digit.val + 2 * slot.val := by
+    have acc := ncFold_acc (digitCount * 1) 0 (by omega) memory draws (finProdFinEquiv (digit, slot))
+    have element : ncElement ((finProdFinEquiv (digit, slot)).val + 0) = 4 * digit.val + 0 := by
       rw [finProdFinEquiv_free]
       unfold ncElement
       omega
     rw [element] at acc
     rw [acc, wordField_fieldWord]
     rfl
-  have collectorCase : ∀ slot, slot = 1 ∨ slot = 3 ∨ slot = 4 →
-      (foldStore (ncStep 0) (digitCount * 2) memory draws).ram
-          (word (Opening.xCell (5 * digit.val + slot))) =
-        memory.ram (word (Opening.xCell (5 * digit.val + slot))) := by
+  have collectorCase : ∀ slot, slot = 1 ∨ slot = 2 ∨ slot = 3 →
+      (foldStore (ncStep 0) (digitCount * 1) memory draws).ram
+          (word (Opening.xCell (4 * digit.val + slot))) =
+        memory.ram (word (Opening.xCell (4 * digit.val + slot))) := by
     intro slot kind
     refine ncFold_off _ 0 memory draws _ (fun index bound => ⟨?_, ?_⟩)
     · have element := ncElement_lt (index + 0) bound
       exact word_ne (by addr_arith) (by addr_arith) (by addr_arith)
     · have element := ncElement_lt (index + 0) bound
       exact word_ne (by addr_arith) (by addr_arith) (by unfold Opening.xCell ncElement; omega)
-  set final := foldStore (ncStep 0) (digitCount * 2) memory draws with finalDef
+  set final := foldStore (ncStep 0) (digitCount * 1) memory draws with finalDef
   set kappaValue := wordField (memory.ram (word tmpKappa)) with kappaDef
-  have collectorGoal : ∀ (slot : Nat) (collector : Fin 3), slot = 1 ∨ slot = 3 ∨ slot = 4 →
-      wordField (final.ram (word (Opening.xCell (5 * digit.val + slot)))) =
-        wordField (memory.ram (word (Opening.xCell (5 * digit.val + slot)))) +
+  have collectorGoal : ∀ (slot : Nat) (collector : Fin 3), slot = 1 ∨ slot = 2 ∨ slot = 3 →
+      wordField (final.ram (word (Opening.xCell (4 * digit.val + slot)))) =
+        wordField (memory.ram (word (Opening.xCell (4 * digit.val + slot)))) +
           kappaValue * designatedVector (freeOf draws) 0
             (xElementIndex digit (collectorElement collector)) := by
     intro slot collector kind
     rw [collectorCase slot kind, designatedVector_collector, Pi.zero_apply, mul_zero, add_zero]
   cases element with
   | rowX_x7 =>
-      show wordField (final.ram (word (Opening.xCell (5 * digit.val + 2 * (0 : Fin 2).val)))) =
-        wordField (memory.ram (word (Opening.xCell (5 * digit.val + 2 * (0 : Fin 2).val)))) +
+      show wordField (final.ram (word (Opening.xCell (4 * digit.val + 0)))) =
+        wordField (memory.ram (word (Opening.xCell (4 * digit.val + 0)))) +
           kappaValue * designatedVector (freeOf draws) 0 (xElementIndex digit (freeElement 0))
       rw [designatedVector_free]
       exact freeCase 0
-  | rowY_mixed =>
-      show wordField (final.ram (word (Opening.xCell (5 * digit.val + 2 * (1 : Fin 2).val)))) =
-        wordField (memory.ram (word (Opening.xCell (5 * digit.val + 2 * (1 : Fin 2).val)))) +
-          kappaValue * designatedVector (freeOf draws) 0 (xElementIndex digit (freeElement 1))
-      rw [designatedVector_free]
-      exact freeCase 1
   | rowX_x9 => exact collectorGoal 1 0 (by omega)
-  | rowY_cubic => exact collectorGoal 3 1 (by omega)
-  | rowZ_x9 => exact collectorGoal 4 2 (by omega)
+  | rowY_cubic => exact collectorGoal 2 1 (by omega)
+  | rowZ_x9 => exact collectorGoal 3 2 (by omega)
 
 
 /-! ### From the lifts to the view -/
@@ -230,10 +222,13 @@ theorem view_eq (memory0 final : Memory) (limbs : DesignatedLimbs)
 theorem rest_law (source : Stage1Source) (input : AffineInput) (target : Point)
     (pointX : Fin pointElementCountX → BaseField) (pointY : Fin pointElementCountY → BaseField)
     (memory0 : Memory) (pre : OpeningPre source input target pointX pointY memory0)
-    (tail : Vector FieldMacToECMac.AffineOffset 90) (lift : Fin digitCount → NonZeroBase)
+    (tail : Vector FieldMacToECMac.AffineOffset 90)
+    (lift : Fin digitCount → NonZeroBase × NonZeroBase)
     (memory : Memory) (same : SameOff memory0.ram memory.ram) (bitsSame : memory.bits = memory0.bits)
     (lamCells : ∀ digit : Fin digitCount,
-      memory.ram (word (openLambda digit)) = fieldWord (lift digit).value)
+      memory.ram (word (openLambda digit)) = fieldWord (lift digit).1.value)
+    (tauCells : ∀ digit : Fin digitCount,
+      memory.ram (word (openTau digit)) = fieldWord (lift digit).2.value)
     (pointCells : ∀ digit : Fin digitCount, (memory.ram (word (openPoint digit)),
       memory.ram (word (openPoint digit + 1)), memory.ram (word (openPoint digit + 2))) =
         pointWords (digitPoints target tail digit)) :
@@ -246,12 +241,17 @@ theorem rest_law (source : Stage1Source) (input : AffineInput) (target : Point)
     if inside : digit < digitCount then digitPoints target tail ⟨digit, inside⟩ else 0
     with pointsDef
   set lams : Nat → BaseField := fun digit =>
-    if inside : digit < digitCount then (lift ⟨digit, inside⟩).value else 0 with lamsDef
+    if inside : digit < digitCount then (lift ⟨digit, inside⟩).1.value else 0 with lamsDef
+  set taus : Nat → BaseField := fun digit =>
+    if inside : digit < digitCount then (lift ⟨digit, inside⟩).2.value else 0 with tausDef
   obtain ⟨lifted, runLifts, bitsLifted, sameLifted, rowsLifted, _⟩ :=
-    memSem_lifts memory points lams
+    memSem_lifts memory points lams taus
       (fun digit inside => by
         simp only [lamsDef, dif_pos (show digit < digitCount from inside)]
         exact lamCells ⟨digit, inside⟩)
+      (fun digit inside => by
+        simp only [tausDef, dif_pos (show digit < digitCount from inside)]
+        exact tauCells ⟨digit, inside⟩)
       (fun digit inside => by
         simp only [pointsDef, dif_pos (show digit < digitCount from inside)]
         exact pointCells ⟨digit, inside⟩) 91 le_rfl
@@ -275,8 +275,8 @@ theorem rest_law (source : Stage1Source) (input : AffineInput) (target : Point)
   rw [Function.comp_apply, Function.comp_apply, Option.map_some, Option.map_some, kleisli_some,
     Option.elim_some, preimageIs,
     show (fun site => draws (finProdFinEquiv site)) = freeOf draws from rfl]
-  set ncd := foldStore (ncStep 0) (digitCount * 2) lifted draws with ncdDef
-  have throughNc : ∀ address, (address < accBase ∨ (accBase + 455 ≤ address ∧
+  set ncd := foldStore (ncStep 0) (digitCount * 1) lifted draws with ncdDef
+  have throughNc : ∀ address, (address < accBase ∨ (accBase + 364 ≤ address ∧
       address < designatedBase)) → ncd.ram (word address) = lifted.ram (word address) := by
     intro address where_
     refine ncFold_off _ 0 lifted draws _ (fun index bound => ?_)
@@ -306,11 +306,11 @@ theorem rest_law (source : Stage1Source) (input : AffineInput) (target : Point)
         pre.rowCells digit slot inside, wordField_fieldWord, gammaConst_eq_rowField])
     (fun digit element => by
       have digitSmall := digit.isLt
-      have slotSmall : element.slot.val < 5 := element.slot.isLt
+      have slotSmall : element.slot.val < 4 := element.slot.isLt
       rw [nc_value lifted draws digit element, sameToLifted _ (not_openCell _ (by addr_arith)),
         sameToLifted _ (not_openCell _ (by addr_arith)), pre.kappaCell]
       have cell := pre.accXCells (xElementIndex digit element)
-      rw [show Opening.xCell (5 * digit.val + element.slot.val) =
+      rw [show Opening.xCell (4 * digit.val + element.slot.val) =
         accBase + (xElementIndex digit element).val from rfl, cell, wordField_fieldWord,
         wordField_fieldWord]
       rfl)
@@ -321,21 +321,21 @@ theorem rest_law (source : Stage1Source) (input : AffineInput) (target : Point)
         sameToLifted _ (not_openCell _ (by addr_arith))]
       have cell := pre.accYCells (yElementIndex digit element)
       rw [show Opening.yCell (3 * digit.val + element.slot.val) =
-        accBase + 458 + (yElementIndex digit element).val from rfl, cell, wordField_fieldWord]
+        accBase + 367 + (yElementIndex digit element).val from rfl, cell, wordField_fieldWord]
       rfl)
     (fun digit position inside => by
       have digitSmall := digit.isLt
       rw [throughNc _ (Or.inr ⟨by addr_arith, by addr_arith⟩), rowsLifted digit.val digit.isLt
         position inside]
-      simp only [pointsDef, lamsDef, dif_pos (show digit.val < digitCount from digit.isLt)]
+      simp only [pointsDef, lamsDef, tausDef, dif_pos (show digit.val < digitCount from digit.isLt)]
       rfl) 91 le_rfl
   have runSolve' : Opening.solve.memSem ncd = PMF.pure (some solved) := runSolve
   rw [memSem_pure_seq runSolve']
   -- the designated cells hold the solved vector
   set vector := solvedVector source.publicValue (BitInput.ofAffine input) pointX pointY
     (freeOf draws) (targetRows target tail lift) with vectorDef
-  have freeCell : ∀ (digit : Fin digitCount) (slot : Fin 2),
-      solved.ram (word (designatedCell (5 * digit.val + 2 * slot.val))) =
+  have freeCell : ∀ (digit : Fin digitCount) (slot : Fin 1),
+      solved.ram (word (designatedCell (4 * digit.val + 0))) =
         fieldWord (freeOf draws (digit, slot)) := by
     intro digit slot
     have digitSmall := digit.isLt
@@ -343,13 +343,11 @@ theorem rest_law (source : Stage1Source) (input : AffineInput) (target : Point)
     unfold digitCount at digitSmall
     rw [offSolved _ (fun digit' below collector inside => word_ne (by addr_arith) (by addr_arith)
       (by
-        unfold collectorCell designatedCell
-        rcases (show collector = 0 ∨ collector = 1 ∨ collector = 2 by omega) with h | h | h <;>
-          subst h <;> simp only [collectorSlot] <;> omega))]
-    have cell := ncFold_designated (digitCount * 2) 0 (by omega) lifted draws
+        unfold collectorCell designatedCell collectorSlot
+        omega))]
+    have cell := ncFold_designated (digitCount * 1) 0 (by omega) lifted draws
       (finProdFinEquiv (digit, slot))
-    have element : ncElement ((finProdFinEquiv (digit, slot)).val + 0) =
-        5 * digit.val + 2 * slot.val := by
+    have element : ncElement ((finProdFinEquiv (digit, slot)).val + 0) = 4 * digit.val + 0 := by
       rw [finProdFinEquiv_free]
       unfold ncElement
       omega
@@ -382,10 +380,6 @@ theorem rest_law (source : Stage1Source) (input : AffineInput) (target : Point)
           rw [show xElementIndex digit .rowX_x7 = xElementIndex digit (freeElement 0) from rfl,
             designatedVector_free]
           exact freeCell digit 0
-      | rowY_mixed =>
-          rw [show xElementIndex digit .rowY_mixed = xElementIndex digit (freeElement 1) from rfl,
-            designatedVector_free]
-          exact freeCell digit 1
       | rowX_x9 =>
           rw [show xElementIndex digit .rowX_x9 = xElementIndex digit (collectorElement 0) from rfl,
             designatedVector_collector]
@@ -450,7 +444,8 @@ theorem wordAt_eq_triple (words : Word × Word × Word) (first second third : Wo
 
 /-- The digit points sit at `openPoint d` after the tail, the head and the randomisers. -/
 theorem pointCells_after (memory : Memory) (target : Point)
-    (points : Fin 90 → FieldMacToECMac.AffineOffset) (lams : Fin digitCount → NonZeroBase)
+    (points : Fin 90 → FieldMacToECMac.AffineOffset)
+    (lams : Fin digitCount → NonZeroBase × NonZeroBase)
     (digit : Fin digitCount) :
     ((foldStore lamMem 91 (headMem memory target points) lams).ram (word (openPoint digit)),
       (foldStore lamMem 91 (headMem memory target points) lams).ram (word (openPoint digit + 1)),
@@ -463,8 +458,10 @@ theorem pointCells_after (memory : Memory) (target : Point)
           (word (openPoint digit + position)) := by
     intro position inside
     refine (lamFold_off (headMem memory target points) lams (word (openPoint digit + position))
-      (fun index bound => word_ne (by unfold openPoint openBase; omega)
-        (by unfold openLambda openBase; omega) (by unfold openPoint openLambda; omega))).trans ?_
+      (fun index bound => ⟨word_ne (by unfold openPoint openBase; omega)
+          (by unfold openLambda openBase; omega) (by unfold openPoint openLambda; omega),
+        word_ne (by unfold openPoint openBase; omega)
+          (by unfold openTau openBase; omega) (by unfold openPoint openTau; omega)⟩)).trans ?_
     unfold headMem
     rw [(clearRegs_other _ _).1, withRam_ram]
   have atCell : ∀ position, position < 3 →
@@ -513,7 +510,8 @@ omit [GroupCertificate] in
 /-- `memSem_lambdas` with the randomisers indexed by `Fin digitCount` (as `liftLaw` draws them). -/
 theorem memSem_lambdas_digit (memory : Memory) :
     Opening.lambdas.memSem memory =
-      liftLaw.map (Option.map fun lams : Fin digitCount → NonZeroBase => foldStore lamMem 91 memory lams) :=
+      liftLaw.map (Option.map fun lams : Fin digitCount → NonZeroBase × NonZeroBase =>
+        foldStore lamMem 91 memory lams) :=
   memSem_lambdas memory
 
 /-- **The randomisers onward**: the machine after the head clamp against P3's lift step. -/
@@ -543,7 +541,8 @@ theorem lift_law (source : Stage1Source) (input : AffineInput) (target : Point)
         (((tailFold_sameOff memory points).trans sameHead).trans
           (lamFold_sameOff (headMem memory target points) lams))
         ((lamFold_bits (headMem memory target points) lams).trans (headMem_bits memory target points))
-        (fun digit => lamFold_at (headMem memory target points) lams digit)
+        (fun digit => (lamFold_at (headMem memory target points) lams digit).1)
+        (fun digit => (lamFold_at (headMem memory target points) lams digit).2)
         (fun digit => pointCells_after memory target points lams digit)
 
 omit [FieldCertificate] [GroupCertificate] in

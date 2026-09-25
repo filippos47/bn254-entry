@@ -3,7 +3,7 @@
 
 Event (a) of the abort analysis: a designated request with a missing input. In `I^U` it aborts; in
 `H` it is skipped. It never happens: the honest evaluation `openingQueriesM` asks, **on every
-path**, the hash query of each of the `452` limbs of switch `j* = α₀ xor 1` of chunk `0` of lane
+path**, the hash query of each of the `362` limbs of switch `j* = α₀ xor 1` of chunk `0` of lane
 `pointX` (at that switch's one-hot label), because `j*` is inactive, so `evalMasksM` evaluates its
 `switchMaskM`. The refill runner intercepts each such query and records its label at its limb
 (`runRefill_records`).

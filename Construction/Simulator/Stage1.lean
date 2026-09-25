@@ -2,13 +2,14 @@
 Stage 1 of the Plan B simulator: sample the complete public value with every scale mask
 uniform, keep it in RAM, and emit its canonical `Wire.encoding` bytes.
 
-* `42,052` field cells (curve, rows, the `56 · 733` scale joins), each by constant-time bounded
+* `34,297` field cells (curve, rows, the `52 · 642` scale joins), each by constant-time bounded
   rejection over 254 coins with `attempts = 256` tries, aborting on exhaustion;
-* `546` exception bytes, `792` fold-join blocks and the `1016`-block Lamport key, each from fair
+* `1,092` exception bytes, `808` fold-join blocks and the `1016`-block Lamport key, each from fair
   coins (the key is retained for stage 2, which selects one label per input bit);
-* the serializer pushes the `10,789,072` wire bits in reverse, most significant bit of each cell
-  first, so the response stack reads the encoding least significant bit first; the last cell of
-  each chunk word is pushed as `256` bits, whose two top bits are the word's two zero bits;
+* the serializer pushes the `8,825,632` wire bits in reverse, most significant bit of each cell
+  first, so the response stack reads the encoding least significant bit first; each chunk word's
+  four zero bits are two explicit zeros and the two top bits of its last cell, pushed as `256`
+  bits;
 * every register is zeroed at the end, so the retained state is a function of RAM and stacks.
 
 Stage 1 contains no oracle instruction at all.
@@ -43,17 +44,19 @@ def blocks : Prog := Prog.rep hotBlockCount fun index => wordCell 128 (hotBase +
 def key : Prog := Prog.rep keyBlockCount fun index => wordCell 128 (keyBase + index)
 
 /-- The scale cells of one chunk word, counted from the top (`chunk = 0` is the last word): the
-word's last slot as `256` bits (a field cell is below `2 ^ 254`, so its two top bits are the
-word's zero bits), then its other `732` slots as `254` bits each. -/
+word's two top zero bits, its last slot as `256` bits (a field cell is below `2 ^ 254`, so its
+two top bits are the word's other two zero bits), then its other `641` slots as `254` bits
+each. -/
 def serializeChunk (chunk : Nat) : Prog :=
-  .seq (emitWord (fieldBase + fieldCellCount - 1 - 733 * chunk) 256)
-    (Prog.rep 732 fun index =>
-      emitWord (fieldBase + fieldCellCount - 1 - 733 * chunk - 1 - index) 254)
+  .seq (.op (.push 3 false)) (.seq (.op (.push 3 false))
+    (.seq (emitWord (fieldBase + fieldCellCount - 1 - 642 * chunk) 256)
+      (Prog.rep 641 fun index =>
+        emitWord (fieldBase + fieldCellCount - 1 - 642 * chunk - 1 - index) 254)))
 
-/-- The serializer, in reverse wire order: the `56` scale words, fold joins (128), exception
+/-- The serializer, in reverse wire order: the `52` scale words, fold joins (128), exception
 bytes (8), then rows and curve (256 bits each). -/
 def serialize : Prog :=
-  .seq (Prog.rep 56 serializeChunk)
+  .seq (Prog.rep 52 serializeChunk)
     (.seq (Prog.rep hotBlockCount fun index => emitWord (hotBase + hotBlockCount - 1 - index) 128)
       (.seq (Prog.rep exceptionByteCount fun index =>
           emitWord (exceptionBase + exceptionByteCount - 1 - index) 8)
@@ -112,18 +115,22 @@ theorem cost_key : key.cost = keyBlockCount * 646 :=
 
 /-- The serializer's size equals its cost: it is straight-line code. -/
 def serializeCount : Nat :=
-  56 * ((2 + 3 * 256) + 732 * (2 + 3 * 254)) + hotBlockCount * (2 + 3 * 128) +
+  52 * (2 + (2 + 3 * 256) + 641 * (2 + 3 * 254)) + hotBlockCount * (2 + 3 * 128) +
     exceptionByteCount * (2 + 3 * 8) + (curveCellCount + rowCellCount) * (2 + 3 * 256)
 
 theorem size_serializeChunk (chunk : Nat) :
-    (serializeChunk chunk).size = (2 + 3 * 256) + 732 * (2 + 3 * 254) := by
+    (serializeChunk chunk).size = 2 + (2 + 3 * 256) + 641 * (2 + 3 * 254) := by
   unfold serializeChunk
-  rw [Prog.size_seq, size_emitWord, Prog.size_rep _ _ _ fun _ _ => size_emitWord _ _]
+  rw [Prog.size_seq, Prog.size_seq, Prog.size_seq, size_emitWord,
+    Prog.size_rep _ _ _ fun _ _ => size_emitWord _ _]
+  rfl
 
 theorem cost_serializeChunk (chunk : Nat) :
-    (serializeChunk chunk).cost = (2 + 3 * 256) + 732 * (2 + 3 * 254) := by
+    (serializeChunk chunk).cost = 2 + (2 + 3 * 256) + 641 * (2 + 3 * 254) := by
   unfold serializeChunk
-  rw [Prog.cost_seq, cost_emitWord, Prog.cost_rep _ _ _ fun _ _ => cost_emitWord _ _]
+  rw [Prog.cost_seq, Prog.cost_seq, Prog.cost_seq, cost_emitWord,
+    Prog.cost_rep _ _ _ fun _ _ => cost_emitWord _ _]
+  rfl
 
 theorem size_serialize : serialize.size = serializeCount := by
   unfold serialize serializeCount

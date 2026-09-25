@@ -163,7 +163,7 @@ theorem hot_reduce (lane : Lane) (c : Fin chunkCount) (f : Fin chunkBits) (e : F
   rcases hit with inside | never
   · obtain ⟨y, found⟩ := Option.ne_none_iff_exists'.mp inside
     rcases final_fixed source input tape ran member answers result resultMember _ _ y found with
-      ⟨lane', c', s, small, e', inactive, h', iEq, xEq⟩ | ⟨d, κ, pos, same⟩
+      ⟨lane', c', s, small, e', inactive, h', iEq, xEq⟩ | ⟨d, κ, pos, bit, same⟩
     · rw [hotIndexNat_eq _ _ _ _ _ (step_lt_chunkBits small) (entry_lt_chunkBits small e')] at iEq
       injection iEq with laneEq chunkEq stepEq entryEq _
       subst laneEq
@@ -188,9 +188,10 @@ theorem hot_reduce (lane : Lane) (c : Fin chunkCount) (f : Fin chunkBits) (e : F
   · exact never.elim
 
 /-- **A pair at a gadget index is at the transformed label.** -/
-theorem gadget_reduce (d : Fin digitCount) (κ : Coord) (pos : Fin coordinateBitCount) (x : Block)
+theorem gadget_reduce (d : Fin digitCount) (κ : Coord) (pos : Fin coordinateBitCount) (b : Bool)
+    (x : Block)
     (hit : ((pointsOf result.2).union (requestPoints (programRequests (restoredBits source input)
-      ran.2.2 answers))).fixedIn (.gadget d κ pos) x) :
+      ran.2.2 answers))).fixedIn (.gadget d κ pos b) x) :
     encAns (answerOf result.2) (encCoord κ, pos)
         (encodeBit ((encWord (restoredBits source input) (encCoord κ)).getLsb pos) ^^^
           (kOf source.publicValue (restoredBits source input) (restoredMac source input)
@@ -201,11 +202,11 @@ theorem gadget_reduce (d : Fin digitCount) (κ : Coord) (pos : Fin coordinateBit
   rcases hit with inside | never
   · obtain ⟨y, found⟩ := Option.ne_none_iff_exists'.mp inside
     rcases final_fixed source input tape ran member answers result resultMember _ _ y found with
-      ⟨lane', c', s, small, e', _, h', iEq, _⟩ | ⟨d', κ', pos', same⟩
+      ⟨lane', c', s, small, e', _, h', iEq, _⟩ | ⟨d', κ', pos', bit', same⟩
     · rw [hotIndexNat_eq _ _ _ _ _ (step_lt_chunkBits small) (entry_lt_chunkBits small e')] at iEq
       cases iEq
     · injection same with iEq xEq
-      injection iEq with _ κEq posEq
+      injection iEq with _ κEq posEq _
       subst posEq
       have κSame : κ = Pipeline.gadgetCoord κ' := κEq
       subst κSame
@@ -360,14 +361,14 @@ theorem hotPointIn_le (scalar : NonZeroScalar) (off : OffShadow) (source : Stage
 /-- **A gadget input**: `≤ 1/(2^128 − 1)` (its evaluation pad). -/
 theorem gadgetIn_le (scalar : NonZeroScalar) (off : OffShadow) (source : Stage1Source)
     (input : AffineInput) (target : Point) (d : Fin digitCount) (κ : Coord)
-    (pos : Fin coordinateBitCount) (x : Block) :
+    (pos : Fin coordinateBitCount) (b : Bool) (x : Block) :
     ∑' o, privateStage2U uniformMaskTape (planBShadow scalar off) scalar source input (some target)
-        o * ind ((outcomePoints o).fixedIn (.gadget d κ pos) x) ≤ epsOne :=
-  pad_le scalar off source input target (fun p => p.fixedIn (.gadget d κ pos) x) (encCoord κ, pos)
+        o * ind ((outcomePoints o).fixedIn (.gadget d κ pos b) x) ≤ epsOne :=
+  pad_le scalar off source input target (fun p => p.fixedIn (.gadget d κ pos b) x) (encCoord κ, pos)
     ((encWord (restoredBits source input) (encCoord κ)).getLsb pos)
     (fun k => x ^^^ Pipeline.macLabels (restoredMac source input) κ pos ^^^ k.2)
     fun tape ran member answers result resultMember hit =>
-      gadget_reduce source input tape ran member answers result resultMember d κ pos x hit
+      gadget_reduce source input tape ran member answers result resultMember d κ pos b x hit
 
 end Bounds
 

@@ -405,7 +405,7 @@ theorem stepAt_indexAt {lane : Lane} {c : Fin chunkCount} {t : ℕ} {i : FixedIn
     (atStep : StepAt lane c t i) : IndexAt lane c i := by
   cases i with
   | hot l cc f e h => exact ⟨atStep.1, atStep.2.1⟩
-  | gadget _ _ _ => exact atStep.elim
+  | gadget _ _ _ _ => exact atStep.elim
 
 theorem awayFrom_not_stepAt {lane : Lane} {c : Fin chunkCount} {t : ℕ} {q : Request}
     (away : AwayFrom lane q) : ¬ FixedAt (StepAt lane c t) q := by

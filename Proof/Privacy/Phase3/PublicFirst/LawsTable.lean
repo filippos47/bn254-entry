@@ -271,17 +271,24 @@ theorem laneM_once (lane : Lane) (delta : Block) (bitKey : Fin coordinateBitCoun
   · exact ⟨c, hi⟩
   · exact hi.elim
 
-/-- The gadget positions of one digit. -/
+/-- The gadget indices of one digit. -/
 def digitSet (output : Fin FieldMacToECMac.outputMacCount) : Set FixedIndex :=
-  {index | ∃ κ position, index = .gadget output κ position}
+  {index | ∃ κ position bit, index = .gadget output κ position bit}
 
+/-- The gadget indices of one coordinate of one digit. -/
+def coordSet (output : Fin FieldMacToECMac.outputMacCount) (coordinate : EncPRF.Coordinate) :
+    Set FixedIndex :=
+  {index | ∃ position bit, index = .gadget output (Pipeline.gadgetCoord coordinate) position bit}
+
+/-- A digest asks one index per position, at the position's bit. -/
 theorem gadgetDigestM_once (output : Fin FieldMacToECMac.outputMacCount)
-    (coordinate : EncPRF.Coordinate) (mac : CoordinateMac) :
-    FixedOnce {index | ∃ position, index = .gadget output (Pipeline.gadgetCoord coordinate) position}
-      (Programs.gadgetDigestM output coordinate mac) := by
+    (coordinate : EncPRF.Coordinate) (bits : CoordinateBits) (mac : CoordinateMac) :
+    FixedOnce (coordSet output coordinate) (Programs.gadgetDigestM output coordinate bits mac) := by
   have positions := FixedOnce.vector coordinateBitCount
-    (fun position => {FixedIndex.gadget output (Pipeline.gadgetCoord coordinate) position})
-    (fun position => Programs.hashM (.gadget output (Pipeline.gadgetCoord coordinate) position)
+    (fun position =>
+      {FixedIndex.gadget output (Pipeline.gadgetCoord coordinate) position (bits.getLsb position)})
+    (fun position => Programs.hashM
+      (.gadget output (Pipeline.gadgetCoord coordinate) position (bits.getLsb position))
       (mac.get position)) (fun position => hashM_once _ _) (fun p p' ne => by
         rw [Set.disjoint_singleton]
         intro same
@@ -289,8 +296,39 @@ theorem gadgetDigestM_once (output : Fin FieldMacToECMac.outputMacCount)
         exact ne samePosition)
   refine (positions.bind (fun _ => .pure ∅ _) (Set.disjoint_empty _)).mono ?_
   rintro i (⟨_, ⟨p, rfl⟩, hi⟩ | hi)
-  · exact ⟨p, hi⟩
+  · exact ⟨p, _, hi⟩
   · exact hi.elim
+
+/-- The garbler's pairs ask both indices of every position, each once. -/
+theorem gadgetPairsM_once (output : Fin FieldMacToECMac.outputMacCount)
+    (coordinate : EncPRF.Coordinate) (key : CoordinateMacKey) :
+    FixedOnce (coordSet output coordinate) (Programs.gadgetPairsM output coordinate key) := by
+  have positions := FixedOnce.vector coordinateBitCount
+    (fun position =>
+      {index | ∃ bit, index = FixedIndex.gadget output (Pipeline.gadgetCoord coordinate) position bit})
+    (fun position => Programs.hashM (.gadget output (Pipeline.gadgetCoord coordinate) position false)
+        (BitAdaptor.encode key[position.val] false) >>= fun zero =>
+      Programs.hashM (.gadget output (Pipeline.gadgetCoord coordinate) position true)
+          (BitAdaptor.encode key[position.val] true) >>= fun one => Pure.pure (zero, one))
+    (fun position => ((hashM_once _ _).bind (fun _ => (hashM_once _ _).bind (fun _ => .pure ∅ _)
+        (Set.disjoint_empty _)) (by
+          rw [Set.union_empty, Set.disjoint_singleton]
+          intro same
+          injection same with sameOutput sameCoord samePosition sameBit
+          exact Bool.false_ne_true sameBit)).mono (by
+        rintro i (hi | hi | hi)
+        · exact ⟨false, hi⟩
+        · exact ⟨true, hi⟩
+        · exact hi.elim))
+    (fun p p' ne => by
+      rw [Set.disjoint_left]
+      rintro i ⟨bit, rfl⟩ ⟨bit', same⟩
+      injection same with sameOutput sameCoord samePosition
+      exact ne samePosition)
+  unfold Programs.gadgetPairsM
+  refine positions.mono ?_
+  rintro i ⟨_, ⟨p, rfl⟩, ⟨bit, rfl⟩⟩
+  exact ⟨p, bit, rfl⟩
 
 theorem garbleEntryM_once (output : Fin FieldMacToECMac.outputMacCount)
     (key : FieldMacToECMac.OutputKey) (inputKey : InputMacKey) (pad : Exception.Entry) :
@@ -298,26 +336,17 @@ theorem garbleEntryM_once (output : Fin FieldMacToECMac.outputMacCount)
   unfold Programs.garbleEntryM
   split
   · exact .pure _ _
-  · have apart : ∀ first second : EncPRF.Coordinate, first ≠ second →
-        Disjoint {index | ∃ position, index = FixedIndex.gadget output
-            (Pipeline.gadgetCoord first) position}
-          {index | ∃ position, index = FixedIndex.gadget output
-            (Pipeline.gadgetCoord second) position} := by
-      intro first second ne
-      rw [Set.disjoint_left]
-      rintro i ⟨p, rfl⟩ ⟨p', same⟩
+  · have apart : Disjoint (coordSet output .x) (coordSet output .y ∪ ∅) := by
+      rw [Set.union_empty, Set.disjoint_left]
+      rintro i ⟨p, b, rfl⟩ ⟨p', b', same⟩
       injection same with sameOutput sameCoord
-      cases first <;> cases second <;> first | exact ne rfl | cases sameCoord
-    refine ((((gadgetDigestM_once output .x _).bind (fun _ => (gadgetDigestM_once output .y _).bind
-      (fun _ => .pure ∅ _) (Set.disjoint_empty _)) ?_).bind (fun _ => .pure ∅ _)
-        (Set.disjoint_empty _))).mono ?_
-    · rw [Set.union_empty]
-      exact apart .x .y (by decide)
-    · rintro i ((⟨p, rfl⟩ | ⟨p, rfl⟩ | hi) | hi)
-      · exact ⟨_, p, rfl⟩
-      · exact ⟨_, p, rfl⟩
-      · exact hi.elim
-      · exact hi.elim
+      cases sameCoord
+    refine ((gadgetPairsM_once output .x _).bind (fun _ => (gadgetPairsM_once output .y _).bind
+      (fun _ => .pure ∅ _) (Set.disjoint_empty _)) apart).mono ?_
+    rintro i (⟨p, b, rfl⟩ | ⟨p, b, rfl⟩ | hi)
+    · exact ⟨_, p, b, rfl⟩
+    · exact ⟨_, p, b, rfl⟩
+    · exact hi.elim
 
 theorem gadgetM_once (keys : FieldMacToECMac.OutputKeys) (inputKey : InputMacKey)
     (pads : FieldMacToECMac.ExceptionPad) :
@@ -325,7 +354,7 @@ theorem gadgetM_once (keys : FieldMacToECMac.OutputKeys) (inputKey : InputMacKey
   refine (FixedOnce.vector FieldMacToECMac.outputMacCount digitSet _
     (fun output => garbleEntryM_once output _ _ _) (fun o o' ne => by
       rw [Set.disjoint_left]
-      rintro i ⟨κ, p, rfl⟩ ⟨κ', p', same⟩
+      rintro i ⟨κ, p, b, rfl⟩ ⟨κ', p', b', same⟩
       injection same with sameOutput
       exact ne sameOutput)).mono ?_
   rintro i ⟨_, ⟨o, rfl⟩, hi⟩
@@ -349,7 +378,7 @@ theorem fixedOnce_garbleM (scalar : NonZeroScalar) (coins : Coins) :
       Disjoint (laneSet lane) {index | ∃ output, index ∈ digitSet output} := by
     intro lane
     rw [Set.disjoint_left]
-    rintro i ⟨c, hc⟩ ⟨o, κ, p, same⟩
+    rintro i ⟨c, hc⟩ ⟨o, κ, p, b, same⟩
     obtain ⟨f, e, h, rfl⟩ := hot_of_foldSet hc
     cases same
   unfold Programs.garbleM

@@ -3,9 +3,9 @@
 
 On the curve the upper side of `LawOn` runs the shadow lazily on `σ` (the garbler's EncPRF and
 designed entries planted on the empty oracle). Along the tape the shadow asks only planted
-questions or **fresh gadget questions** — at the positions `k = (o, κ, i)` where the garbler has no
-designed entry (`freshPos`: the digit has no exceptional input, or its exceptional bit differs from
-the input's), each at most once (`sOn_shadow`). Hence (`sOn_eager`) the lazy run is the eager run
+questions or **fresh gadget questions** — at the indices `k = (o, κ, i, b)` where the garbler has
+no designed entry (`freshPos`: the digit has no exceptional input, or `b` is not the input's bit),
+each at most once (`sOn_shadow`). Hence (`sOn_eager`) the lazy run is the eager run
 on the tape overridden at the fresh positions by uniform translations `x ↦ x ⊕ v k`; the planted
 entries are among its questions (`upper_covers`), and the planted questions are the garbler's, so
 the tape reads as any table answering the garbler's questions as it does (`garbler_tape`). The
@@ -46,17 +46,18 @@ section Positions
 variable [FieldCertificate] [GroupCertificate]
 
 /-- **A fresh gadget position**: the garbler has no designed entry there (the digit has no
-exceptional input, or its exceptional bit differs from the input's). -/
+exceptional input, or the index's bit is not the input's: the garbler asks both bits of every
+position of a digit with an exceptional input, and the input's is the designed one). -/
 def freshPos (scalar : NonZeroScalar) (offsets : FieldMacToECMac.SuccessfulOffsets) (input : AffineInput)
     (k : GPos) : Bool :=
   !((digitEndomorphismBase (Hidden.digitKey scalar offsets k.1).digit).isSome &&
-    decide ((inputBits input k.2.1).getLsb k.2.2 = Hidden.exceptionalBit scalar offsets k.1 k.2.1 k.2.2))
+    decide ((inputBits input k.2.1).getLsb k.2.2.1 = k.2.2.2))
 
 theorem freshPos_false (scalar : NonZeroScalar) (offsets : FieldMacToECMac.SuccessfulOffsets)
     (input : AffineInput) (k : GPos) :
     freshPos scalar offsets input k = false ↔
       (digitEndomorphismBase (Hidden.digitKey scalar offsets k.1).digit).isSome = true ∧
-        (inputBits input k.2.1).getLsb k.2.2 = Hidden.exceptionalBit scalar offsets k.1 k.2.1 k.2.2 := by
+        (inputBits input k.2.1).getLsb k.2.2.1 = k.2.2.2 := by
   unfold freshPos
   simp
 
@@ -66,8 +67,9 @@ variable [DecidableEq FixedIndex] [DecidableEq EncPRF.PermutationIndex]
 /-- **A planted gadget entry is at a non-fresh position.** -/
 theorem upper_gadget_planted (e : Entry FixedIndex EncPRF.PermutationIndex)
     (member : e ∈ upperEntries parameter scalar tape input) (o : Fin digitCount) (κ : Coord)
-    (p : Fin PlanB.coordinateBits) (x : Block) (same : e.1 = .fixedForward (.gadget o κ p) x) :
-    freshPos scalar tape.1.offsets input (o, κ, p) = false := by
+    (p : Fin PlanB.coordinateBits) (b : Bool) (x : Block)
+    (same : e.1 = .fixedForward (.gadget o κ p b) x) :
+    freshPos scalar tape.1.offsets input (o, κ, p, b) = false := by
   unfold upperEntries at member
   rcases List.mem_append.mp member with enc | designed
   · unfold encEntries at enc
@@ -84,26 +86,25 @@ theorem upper_gadget_planted (e : Entry FixedIndex EncPRF.PermutationIndex)
     subst same
     have some : (digitEndomorphismBase (Hidden.digitKey scalar tape.1.offsets o).digit).isSome = true :=
       shape
-    have ruleTrue : designedIndex scalar tape input (.gadget o κ p) = true := by
+    have ruleTrue : designedIndex scalar tape input (.gadget o κ p b) = true := by
       simp only [Bool.and_eq_true, Bool.not_eq_true'] at rule
       exact rule.2
-    have agree : (inputBits input κ).getLsb p = Hidden.exceptionalBit scalar tape.1.offsets o κ p := by
-      have shown : designedIndex scalar tape input (.gadget o κ p) =
-          (validate input && decide ((inputBits input κ).getLsb p =
-            Hidden.exceptionalBit scalar tape.1.offsets o κ p)) := rfl
+    have agree : (inputBits input κ).getLsb p = b := by
+      have shown : designedIndex scalar tape input (.gadget o κ p b) =
+          (validate input && decide ((inputBits input κ).getLsb p = b)) := rfl
       rw [shown, Bool.and_eq_true, decide_eq_true_iff] at ruleTrue
       exact ruleTrue.2
-    exact (freshPos_false scalar tape.1.offsets input (o, κ, p)).mpr ⟨some, agree⟩
+    exact (freshPos_false scalar tape.1.offsets input (o, κ, p, b)).mpr ⟨some, agree⟩
 
 /-- **At a non-fresh position the garbler's designed entry is planted.** -/
 theorem planted_upper (valid : validate input = true) (o : Fin digitCount) (κ : Coord)
-    (p : Fin PlanB.coordinateBits) (planted : freshPos scalar tape.1.offsets input (o, κ, p) = false) :
-    ∃ e ∈ upperEntries parameter scalar tape input, ∃ x, e.1 = .fixedForward (.gadget o κ p) x := by
-  obtain ⟨some, agree⟩ := (freshPos_false scalar tape.1.offsets input (o, κ, p)).mp planted
+    (p : Fin PlanB.coordinateBits) (b : Bool)
+    (planted : freshPos scalar tape.1.offsets input (o, κ, p, b) = false) :
+    ∃ e ∈ upperEntries parameter scalar tape input, ∃ x, e.1 = .fixedForward (.gadget o κ p b) x := by
+  obtain ⟨some, agree⟩ := (freshPos_false scalar tape.1.offsets input (o, κ, p, b)).mp planted
   obtain ⟨e, member, same⟩ := OnReach.upper_of_fixed parameter scalar tape input _ _
-    (OnReach.asks_garbleM_gadget scalar tape o κ p some) (by
-      show (validate input && decide ((inputBits input κ).getLsb p =
-        Hidden.exceptionalBit scalar tape.1.offsets o κ p)) = true
+    (OnReach.asks_garbleM_gadget scalar tape o κ p b some) (by
+      show (validate input && decide ((inputBits input κ).getLsb p = b)) = true
       rw [valid, decide_eq_true agree]
       rfl)
   exact ⟨e, member, _, same⟩
@@ -129,8 +130,8 @@ theorem upper_fresh_empty (k : GPos) (fresh : freshPos scalar tape.1.offsets inp
   | fixedForward index z =>
       simp only [Hidden.fixedPair, Option.some.injEq, Prod.mk.injEq] at pair
       obtain ⟨same, -, -⟩ := pair
-      obtain ⟨o, κ, p⟩ := k
-      have notFresh := upper_gadget_planted parameter scalar tape input _ member o κ p z (by
+      obtain ⟨o, κ, p, b⟩ := k
+      have notFresh := upper_gadget_planted parameter scalar tape input _ member o κ p b z (by
         show PublicQuery.fixedForward index z = _
         rw [same]
         rfl)
@@ -239,8 +240,8 @@ theorem stored_of_onCurve (valid : validate input = true) (q : PublicQuery Fixed
     ⟨u, uUpper, uEq⟩ | ⟨o, κ, p, qEq, noEntry⟩
   · exact stored_of_upper parameter scalar tape input q ⟨u, uUpper, uEq⟩
   · exfalso
-    have planted := notFresh (o, κ, p) _ qEq
-    obtain ⟨e, member, x, same⟩ := planted_upper parameter scalar tape input valid o κ p planted
+    have planted := notFresh (o, κ, p, _) _ qEq
+    obtain ⟨e, member, x, same⟩ := planted_upper parameter scalar tape input valid o κ p _ planted
     exact noEntry e member x same
 
 /-- The shadow's pre-gadget evaluator on the tape is planted. -/
@@ -256,7 +257,7 @@ theorem preM_stored (valid : validate input = true) :
     rw [onCurveM_split]
     exact Asks.bind_left (asks_of_mem _ _ member)
   have stored := stored_of_onCurve parameter scalar tape input valid e.1 inOn fun k x same =>
-    absurd same ((notGadget_preM _ _ _).mem _ e member k.1 k.2.1 k.2.2 x)
+    absurd same ((notGadget_preM _ _ _).mem _ e member k.1 k.2.1 k.2.2.1 k.2.2.2 x)
   obtain ⟨q, a⟩ := e
   simp only at answer stored ⊢
   subst answer
@@ -307,29 +308,31 @@ theorem truePads_stored (key : Block × Block) (keyEq : key = tape.2.2.2 (bridge
   exact stored
 
 /-- **The gadget at planted-or-fresh labels is planted or fresh.** -/
-theorem sOn_unlock (valid : validate input = true) (m : InputMac)
+theorem sOn_masks (valid : validate input = true) (m : InputMac)
     (asksAll : ∀ (o : Fin digitCount) (κ : Coord) (p : Fin PlanB.coordinateBits),
       Asks (publicAnswer tape.2) (Programs.onCurveM (Scheme.scheme.garble parameter scalar tape).1
         (BitInput.ofAffine input) (tape.1.inputMacKey.encode (BitInput.ofAffine input)))
-        (.fixedForward (.gadget o κ p) (macAt m κ p))) :
+        (.fixedForward (.gadget o κ p ((inputBits input κ).getLsb p)) (macAt m κ p))) :
     SOn (plantAll (upperEntries parameter scalar tape input) LazyOracle.empty) tape.2
       {k | freshPos scalar tape.1.offsets input k = true}
-      (Programs.unlockM (Pipeline.pointTable (Scheme.scheme.garble parameter scalar tape).1)
-        (BitInput.ofAffine input).toAffine m) := by
+      (Programs.masksM (BitInput.ofAffine input).toAffine m) := by
+  rw [BitInput.toAffineOfAffine]
   let F : Set GPos := {k | freshPos scalar tape.1.offsets input k = true}
   -- one gadget question
   have one : ∀ (o : Fin digitCount) (κ : Coord) (p : Fin PlanB.coordinateBits),
       SOn (plantAll (upperEntries parameter scalar tape input) LazyOracle.empty) tape.2
-        ({k | k = (o, κ, p)} ∩ F) (Programs.hashM (.gadget o κ p) (macAt m κ p)) := by
+        ({k | k = (o, κ, p, (inputBits input κ).getLsb p)} ∩ F)
+        (Programs.hashM (.gadget o κ p ((inputBits input κ).getLsb p)) (macAt m κ p)) := by
     intro o κ p
-    by_cases fresh : freshPos scalar tape.1.offsets input (o, κ, p) = true
-    · exact .fresh _ (o, κ, p) (macAt m κ p) _ ⟨rfl, fresh⟩ fun _ => .pure _ _
+    by_cases fresh : freshPos scalar tape.1.offsets input (o, κ, p, (inputBits input κ).getLsb p) = true
+    · exact .fresh _ (o, κ, p, _) (macAt m κ p) _ ⟨rfl, fresh⟩ fun _ => .pure _ _
     · have notFresh : ∀ (k : GPos) (x : Block),
-          (PublicQuery.fixedForward (.gadget o κ p) (macAt m κ p) :
+          (PublicQuery.fixedForward (.gadget o κ p ((inputBits input κ).getLsb p)) (macAt m κ p) :
             PublicQuery FixedIndex EncPRF.PermutationIndex) = .fixedForward (gIdx k) x →
           freshPos scalar tape.1.offsets input k = false := by
         intro k x same
-        have kEq : k = (o, κ, p) := gIdx_injective (PublicQuery.fixedForward.inj same).1.symm
+        have kEq : k = (o, κ, p, (inputBits input κ).getLsb p) :=
+          gIdx_injective (PublicQuery.fixedForward.inj same).1.symm
         rw [kEq]
         exact Bool.eq_false_iff.mpr fresh
       have stored := stored_of_onCurve parameter scalar tape input valid _ (asksAll o κ p) notFresh
@@ -338,10 +341,12 @@ theorem sOn_unlock (valid : validate input = true) (m : InputMac)
   have digest : ∀ (o : Fin digitCount) (κ : EncPRF.Coordinate),
       SOn (plantAll (upperEntries parameter scalar tape input) LazyOracle.empty) tape.2
         {k | k.1 = o ∧ k.2.1 = Pipeline.gadgetCoord κ ∧ k ∈ F}
-        (Programs.gadgetDigestM o κ (match κ with | .x => m.x | .y => m.y)) := by
+        (Programs.gadgetDigestM o κ (inputBits input (Pipeline.gadgetCoord κ))
+          (match κ with | .x => m.x | .y => m.y)) := by
     intro o κ
     unfold Programs.gadgetDigestM
-    refine (sOn_bind (sOn_vector _ (fun i => {k | k = (o, Pipeline.gadgetCoord κ, i)} ∩ F) _
+    refine (sOn_bind (sOn_vector _ (fun i => {k | k = (o, Pipeline.gadgetCoord κ, i,
+        (inputBits input (Pipeline.gadgetCoord κ)).getLsb i)} ∩ F) _
       (fun i => ?_) ?_) (fun _ => sOn_pure' ∅ _) (Set.disjoint_empty _)).mono ?_
     · cases κ
       · exact one o .x i
@@ -349,12 +354,12 @@ theorem sOn_unlock (valid : validate input = true) (m : InputMac)
     · intro i i' ne
       rw [Set.disjoint_left]
       rintro k ⟨rfl, -⟩ ⟨same, -⟩
-      exact ne (congrArg (fun k : GPos => k.2.2) same)
+      exact ne (congrArg (fun k : GPos => k.2.2.1) same)
     · rintro k (hk | hk)
       · obtain ⟨i, ⟨rfl, hF⟩⟩ := Set.mem_iUnion.mp hk
         exact ⟨rfl, rfl, hF⟩
       · exact hk.elim
-  unfold Programs.unlockM
+  unfold Programs.masksM
   refine (sOn_vector _ (fun o => {k | k.1 = o ∧ k ∈ F}) _ (fun o => ?_) ?_).mono ?_
   · unfold Programs.gadgetMaskM
     refine (sOn_bind (sOn_bind (digest o .x) (fun _ => sOn_bind (digest o .y)
@@ -392,12 +397,12 @@ theorem sOn_shadow (valid : validate input = true) :
   refine sOn_stored_bind _ _ (preM_stored parameter scalar tape input valid) ?_
   unfold gadgetPart
   rw [fq_bind_assoc]
-  refine (sOn_bind (sOn_unlock parameter scalar tape input valid _ fun o κ p => ?_)
+  refine (sOn_bind (sOn_masks parameter scalar tape input valid _ fun o κ p => ?_)
     (fun _ => sOn_pure' ∅ _) (Set.disjoint_empty _)).mono ?_
   · rw [onCurveM_split]
     refine Asks.bind_right ?_
     unfold gadgetPart
-    exact Asks.bind_left (asks_unlock _ _ _ o κ p _ rfl)
+    exact Asks.bind_left (asks_masks_of _ _ o κ p _ _ (by rw [BitInput.toAffineOfAffine]) rfl)
   · rintro k (hk | hk)
     · exact hk
     · exact hk.elim
@@ -418,7 +423,8 @@ theorem consistent_ovr (parameter : ℕ) (scalar : NonZeroScalar) (tape : Coins 
       (upperEntries parameter scalar tape input) := by
   intro e member
   rw [ovr_other _ v tape.2 e.1 (upperEntries_noInverse parameter scalar tape input e member)
-    fun k x same => upper_gadget_planted parameter scalar tape input e member k.1 k.2.1 k.2.2 x same]
+    fun k x same => upper_gadget_planted parameter scalar tape input e member k.1 k.2.1 k.2.2.1 k.2.2.2 x
+      same]
   exact upper_consistent parameter scalar tape input e member
 
 /-- **The upper side at one tape**: the lazy shadow run on the planted entries is the shadow's view

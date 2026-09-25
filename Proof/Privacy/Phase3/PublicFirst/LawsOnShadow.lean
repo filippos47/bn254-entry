@@ -250,7 +250,7 @@ theorem shadow_cell_opening (cell : Cell) (x : Block)
   · exfalso
     unfold gadgetPart at gadgetQ
     rw [queriesAlong_bind, queriesAlong_pure, List.append_nil] at gadgetQ
-    obtain ⟨o, κ, p, same⟩ := queries_of_queryOnly ans (Guess.unlockM_asks _ _ _) _ gadgetQ
+    obtain ⟨o, κ, p, same⟩ := queries_of_queryOnly ans (Guess.masksM_asks _ _) _ gadgetQ
     cases same
 
 end Shadow
@@ -285,7 +285,7 @@ theorem shadow_forward (ans : (r : Request) → r.Answer) (r : Request)
   · exact noInverse_of_laneAt (queries_of_allQ ans (evalLaneM_laneAt _ _ _ _ _) r yQ)
   · unfold gadgetPart at gadgetQ
     rw [queriesAlong_bind, queriesAlong_pure, List.append_nil] at gadgetQ
-    obtain ⟨o, κ, p, rfl⟩ := queries_of_queryOnly ans (Guess.unlockM_asks _ _ _) _ gadgetQ
+    obtain ⟨o, κ, p, rfl⟩ := queries_of_queryOnly ans (Guess.masksM_asks _ _) _ gadgetQ
     trivial
 
 /-- **The shadow over the installed state is the view of the installed overlay.** For an oracle

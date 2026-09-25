@@ -11,22 +11,24 @@ programs below ask every *distinct* question once and keep the answer in a table
 
 * the fold of one (lane, chunk) is run level by level; level `j ≥ 1` asks both halves of each of
   its `2 ^ j` gates (the evaluator skips its active entry, whose value it recovers from the join);
-* one switch's mask vector is asked once -- its `limbCount lane` hash limbs (`452`, `272`, `4`, `3`
+* one switch's mask vector is asked once -- its `limbCount lane` hash limbs (`362`, `272`, `4`, `3`
   for `pointX`, `pointY`, `curveX`, `curveY`), turned into the lane's `laneCount lane` base-`p`
   digits by `sampleLane` and kept as a `Vector` -- and read by the offsets, the aggregate and (on
   the evaluator side) the recovery of the active switch, whose own limbs the evaluator never asks;
 * the bridge key `t` is hashed once, at `bridgeInput t`, the input `EncPRF.whiteningKeys` reads;
 * the whitening pad of a position is the bit-`false` EncPRF pad, asked once;
-* the gadget asks its `508` labels per nonzero digit.
+* the gadget asks `508` labels per digit on the evaluator side (one digest unlocks both exceptional
+  slots); the garbler asks both labels of every position of a nonzero digit once (`1,016` per
+  digit, `gadgetPairsM`) and reads the digests of both exceptional inputs from them.
 
 Each table has a *real* counterpart built from the oracle (`laneTables`, `realPads`, ...), the
 table-driven assembly on the real tables is the pure definition by `rfl`, and each program's
-`eval` is its real table. The query bounds are exact. Per lane, with `k = limbCount lane` and the
-chunk widths `[2, 5 × 32, 4 × 23]`, garbling asks
-`(4 + 4k) + 32 (60 + 32k) + 23 (28 + 16k) = 2,568 + 1,396k` and evaluation
-`(2 + 3k) + 32 (52 + 31k) + 23 (22 + 15k) = 2,172 + 1,340k` (`laneGarbleBudget_closed`,
-`laneEvalBudget_closed`); in total garbling asks `1,077,993` and evaluation `1,035,473`
-(`garbleBudget_eq`, `evaluateBudget_eq`).
+`eval` is its real table. The query bounds are exact up to the gadget of a zero digit, which
+asks nothing. Per lane, with `k = limbCount lane` and the chunk widths
+`[2, 5 × 48, 4 × 3]`, garbling asks `(4 + 4k) + 48 (60 + 32k) + 3 (28 + 16k) = 2,968 + 1,588k`
+and evaluation `(2 + 3k) + 48 (52 + 31k) + 3 (22 + 15k) = 2,564 + 1,536k`
+(`laneGarbleBudget_closed`, `laneEvalBudget_closed`); in total garbling asks at most `1,123,253`
+and evaluation at most `1,042,077` (`garbleBudget_eq`, `evaluateBudget_eq`).
 -/
 
 import Construction.QueryMonad
@@ -415,57 +417,141 @@ theorem transformKeyOf_realPads (encOracle : PermutationOracle EncPRF.Permutatio
 
 /-! ## The exception gadget -/
 
-/-- The digest of one coordinate's labels: one fixed-key hash per label, XOR-folded. -/
+/-- The digest of one coordinate's labels: one fixed-key hash per label, through the permutation
+of the label's position and bit, XOR-folded. -/
 def gadgetDigestM (output : Fin FieldMacToECMac.outputMacCount) (coordinate : EncPRF.Coordinate)
-    (mac : CoordinateMac) : M Block :=
+    (bits : CoordinateBits) (mac : CoordinateMac) : M Block :=
   FreeQuery.vector coordinateBitCount (fun index =>
-    hashM (.gadget output (Pipeline.gadgetCoord coordinate) index) (mac.get index)) >>= fun values =>
+    hashM (.gadget output (Pipeline.gadgetCoord coordinate) index (bits.getLsb index))
+      (mac.get index)) >>= fun values =>
       pure (Fin.foldl coordinateBitCount (fun acc index => acc ^^^ values.get index) 0)
 
 theorem eval_gadgetDigestM (oracle : Oracle) (output : Fin FieldMacToECMac.outputMacCount)
-    (coordinate : EncPRF.Coordinate) (mac : CoordinateMac) :
-    (gadgetDigestM output coordinate mac).eval (publicAnswer oracle) =
-      FieldMacToECMac.gadgetDigest (Pipeline.gadgetPermutations oracle.1 output coordinate) mac := by
+    (coordinate : EncPRF.Coordinate) (bits : CoordinateBits) (mac : CoordinateMac) :
+    (gadgetDigestM output coordinate bits mac).eval (publicAnswer oracle) =
+      FieldMacToECMac.gadgetDigest (Pipeline.gadgetPermutations oracle.1 output coordinate)
+        bits mac := by
   simp only [gadgetDigestM, FreeQuery.eval_bind, FreeQuery.eval_pure, FreeQuery.eval_vector,
     Vector.get_ofFn, eval_hashM]
   rfl
 
 theorem bounded_gadgetDigestM (output : Fin FieldMacToECMac.outputMacCount)
-    (coordinate : EncPRF.Coordinate) (mac : CoordinateMac) :
-    (gadgetDigestM output coordinate mac).Bounded 254 :=
+    (coordinate : EncPRF.Coordinate) (bits : CoordinateBits) (mac : CoordinateMac) :
+    (gadgetDigestM output coordinate bits mac).Bounded 254 :=
   (Bounded.bind (Bounded.vector_const fun _ => bounded_hashM _ _) fun _ =>
     Bounded.pure' _ 0).of_eq (by norm_num)
 
-/-- The gadget mask byte of one digit, over the 508 selected labels. -/
-def gadgetMaskM (output : Fin FieldMacToECMac.outputMacCount) (mac : InputMac) : M (BitVec 8) :=
-  gadgetDigestM output .x mac.x >>= fun first =>
-    gadgetDigestM output .y mac.y >>= fun second =>
+/-- The gadget mask byte of one digit at one input, over the input's 508 selected labels. -/
+def gadgetMaskM (output : Fin FieldMacToECMac.outputMacCount) (input : AffineInput)
+    (mac : InputMac) : M (BitVec 8) :=
+  gadgetDigestM output .x (Kriterion.ArgoMAC.coordinateBits input.x) mac.x >>= fun first =>
+    gadgetDigestM output .y (Kriterion.ArgoMAC.coordinateBits input.y) mac.y >>= fun second =>
       pure (Exception.lowByte (first ^^^ second))
 
 theorem eval_gadgetMaskM (oracle : Oracle) (output : Fin FieldMacToECMac.outputMacCount)
-    (mac : InputMac) :
-    (gadgetMaskM output mac).eval (publicAnswer oracle) =
-      FieldMacToECMac.gadgetMask (Pipeline.gadgetPermutations oracle.1) output mac := by
+    (input : AffineInput) (mac : InputMac) :
+    (gadgetMaskM output input mac).eval (publicAnswer oracle) =
+      FieldMacToECMac.gadgetMask (Pipeline.gadgetPermutations oracle.1) output input mac := by
   simp only [gadgetMaskM, FreeQuery.eval_bind, FreeQuery.eval_pure, eval_gadgetDigestM]
   rfl
 
-theorem bounded_gadgetMaskM (output : Fin FieldMacToECMac.outputMacCount) (mac : InputMac) :
-    (gadgetMaskM output mac).Bounded 508 :=
-  Bounded.bind (bounded_gadgetDigestM _ _ _) fun _ =>
-    Bounded.bind (bounded_gadgetDigestM _ _ _) fun _ => Bounded.pure' _ 0
+theorem bounded_gadgetMaskM (output : Fin FieldMacToECMac.outputMacCount) (input : AffineInput)
+    (mac : InputMac) : (gadgetMaskM output input mac).Bounded 508 :=
+  Bounded.bind (bounded_gadgetDigestM _ _ _ _) fun _ =>
+    Bounded.bind (bounded_gadgetDigestM _ _ _ _) fun _ => Bounded.pure' _ 0
 
-/-- The garbler's gadget entry of one digit: a zero digit publishes its pad and asks nothing. -/
+/-- Both hashes of every position of one coordinate: at the label of bit `false`, then at the
+label of bit `true`. A digest at any bits reads one of them per position (`pairsDigest`), so the
+garbler reads both exceptional inputs of a digit from one run and asks every gadget index once. -/
+def gadgetPairsM (output : Fin FieldMacToECMac.outputMacCount) (coordinate : EncPRF.Coordinate)
+    (key : CoordinateMacKey) : M (Vector (Block × Block) coordinateBitCount) :=
+  FreeQuery.vector coordinateBitCount fun index =>
+    hashM (.gadget output (Pipeline.gadgetCoord coordinate) index false)
+        (BitAdaptor.encode key[index.val] false) >>= fun zero =>
+      hashM (.gadget output (Pipeline.gadgetCoord coordinate) index true)
+          (BitAdaptor.encode key[index.val] true) >>= fun one =>
+        pure (zero, one)
+
+/-- A coordinate's digest at some bits, read from both hashes of every position. -/
+def pairsDigest (pairs : Vector (Block × Block) coordinateBitCount) (bits : CoordinateBits) :
+    Block :=
+  Fin.foldl coordinateBitCount
+    (fun acc index => acc ^^^ if bits.getLsb index then (pairs.get index).2 else (pairs.get index).1)
+    0
+
+/-- An input's mask byte, read from both coordinates' hashes. -/
+def pairsMask (xPairs yPairs : Vector (Block × Block) coordinateBitCount) (input : AffineInput) :
+    BitVec 8 :=
+  Exception.lowByte (pairsDigest xPairs (Kriterion.ArgoMAC.coordinateBits input.x) ^^^
+    pairsDigest yPairs (Kriterion.ArgoMAC.coordinateBits input.y))
+
+theorem eval_gadgetPairsM (oracle : Oracle) (output : Fin FieldMacToECMac.outputMacCount)
+    (coordinate : EncPRF.Coordinate) (key : CoordinateMacKey) :
+    (gadgetPairsM output coordinate key).eval (publicAnswer oracle) =
+      Vector.ofFn fun index =>
+        (hash oracle.1 (.gadget output (Pipeline.gadgetCoord coordinate) index false)
+            (BitAdaptor.encode key[index.val] false),
+          hash oracle.1 (.gadget output (Pipeline.gadgetCoord coordinate) index true)
+            (BitAdaptor.encode key[index.val] true)) := by
+  simp only [gadgetPairsM, FreeQuery.eval_bind, FreeQuery.eval_pure, FreeQuery.eval_vector,
+    eval_hashM]
+  rfl
+
+/-- Reading the hashes at the bits is the digest of the bits' labels. -/
+theorem pairsDigest_eval (oracle : Oracle) (output : Fin FieldMacToECMac.outputMacCount)
+    (coordinate : EncPRF.Coordinate) (key : CoordinateMacKey) (bits : CoordinateBits) :
+    pairsDigest ((gadgetPairsM output coordinate key).eval (publicAnswer oracle)) bits =
+      FieldMacToECMac.gadgetDigest (Pipeline.gadgetPermutations oracle.1 output coordinate) bits
+        (encodeCoordinate key bits) := by
+  rw [eval_gadgetPairsM]
+  unfold pairsDigest FieldMacToECMac.gadgetDigest
+  refine congrArg (fun step => Fin.foldl coordinateBitCount step (0 : Block))
+    (funext fun acc => funext fun index => ?_)
+  simp only [Vector.get_ofFn, encodeCoordinate]
+  split
+  · rename_i bitTrue
+    rw [bitTrue]
+    exact congrArg (fun pair : Block × Block => acc ^^^ pair.2) (Vector.get_ofFn _ index)
+  · rename_i bitFalse
+    rw [Bool.not_eq_true] at bitFalse
+    rw [bitFalse]
+    exact congrArg (fun pair : Block × Block => acc ^^^ pair.1) (Vector.get_ofFn _ index)
+
+theorem bounded_gadgetPairsM (output : Fin FieldMacToECMac.outputMacCount)
+    (coordinate : EncPRF.Coordinate) (key : CoordinateMacKey) :
+    (gadgetPairsM output coordinate key).Bounded 508 :=
+  (Bounded.vector_const fun _ => Bounded.bind (bounded_hashM _ _) fun _ =>
+    Bounded.bind (bounded_hashM _ _) fun _ => Bounded.pure' _ 0).of_eq (by norm_num)
+
+/-- The garbler's gadget entry of one digit: a zero digit publishes its pad and asks nothing; a
+nonzero digit asks both hashes of every position, then writes its doubling slot and its sign-zero
+slot. -/
 def garbleEntryM (output : Fin FieldMacToECMac.outputMacCount) (key : FieldMacToECMac.OutputKey)
     (inputKey : InputMacKey) (pad : Exception.Entry) : M Exception.Entry :=
   match digitEndomorphismBase key.digit with
   | none => pure pad
   | some phi =>
-      gadgetMaskM output
-          (inputKey.encodeAffine (Exception.exceptionalInput phi key.offset.coordinates))
-        >>= fun mask =>
-          pure (Exception.writeEntry pad
-            (Exception.exceptionIndex (Exception.exceptionalInput phi key.offset.coordinates))
-            (mask ^^^ Exception.digitCode key.digit))
+      gadgetPairsM output .x inputKey.x >>= fun xPairs =>
+        gadgetPairsM output .y inputKey.y >>= fun yPairs =>
+          pure (Exception.writeEntry
+            (Exception.writeEntry pad
+              (Exception.slotOf false (Exception.exceptionalInput phi key.offset.coordinates))
+              (pairsMask xPairs yPairs (Exception.exceptionalInput phi key.offset.coordinates) ^^^
+                Exception.digitCode key.digit))
+            (Exception.slotOf true (Exception.tripleInput phi key.offset.coordinates))
+            (pairsMask xPairs yPairs (Exception.tripleInput phi key.offset.coordinates) ^^^
+              Exception.digitCode key.digit))
+
+/-- Reading an input's mask from the hashes is the mask of its labels. -/
+theorem pairsMask_eval (oracle : Oracle) (output : Fin FieldMacToECMac.outputMacCount)
+    (inputKey : InputMacKey) (input : AffineInput) :
+    pairsMask ((gadgetPairsM output .x inputKey.x).eval (publicAnswer oracle))
+        ((gadgetPairsM output .y inputKey.y).eval (publicAnswer oracle)) input =
+      FieldMacToECMac.gadgetMask (Pipeline.gadgetPermutations oracle.1) output input
+        (inputKey.encodeAffine input) := by
+  unfold pairsMask FieldMacToECMac.gadgetMask
+  rw [pairsDigest_eval, pairsDigest_eval]
+  rfl
 
 theorem eval_garbleEntryM (oracle : Oracle) (output : Fin FieldMacToECMac.outputMacCount)
     (key : FieldMacToECMac.OutputKey) (inputKey : InputMacKey) (pad : Exception.Entry) :
@@ -475,15 +561,18 @@ theorem eval_garbleEntryM (oracle : Oracle) (output : Fin FieldMacToECMac.output
   cases digitEndomorphismBase key.digit with
   | none => rfl
   | some phi =>
-      simp only [FreeQuery.eval_bind, FreeQuery.eval_pure, eval_gadgetMaskM]
+      simp only [FreeQuery.eval_bind, FreeQuery.eval_pure, pairsMask_eval,
+        FieldMacToECMac.writeCase]
 
 theorem bounded_garbleEntryM (output : Fin FieldMacToECMac.outputMacCount)
     (key : FieldMacToECMac.OutputKey) (inputKey : InputMacKey) (pad : Exception.Entry) :
-    (garbleEntryM output key inputKey pad).Bounded 508 := by
+    (garbleEntryM output key inputKey pad).Bounded 1016 := by
   unfold garbleEntryM
   cases digitEndomorphismBase key.digit with
   | none => exact Bounded.pure' _ _
-  | some phi => exact Bounded.bind (bounded_gadgetMaskM _ _) fun _ => Bounded.pure' _ 0
+  | some phi =>
+      exact Bounded.bind (bounded_gadgetPairsM _ _ _) fun _ =>
+        Bounded.bind (bounded_gadgetPairsM _ _ _) fun _ => Bounded.pure' _ 0
 
 /-- All 91 gadget entries. -/
 def gadgetM (keys : FieldMacToECMac.OutputKeys) (inputKey : InputMacKey)
@@ -500,7 +589,7 @@ theorem eval_gadgetM (oracle : Oracle) (keys : FieldMacToECMac.OutputKeys)
 
 theorem bounded_gadgetM (keys : FieldMacToECMac.OutputKeys) (inputKey : InputMacKey)
     (pads : FieldMacToECMac.ExceptionPad) :
-    (gadgetM keys inputKey pads).Bounded (FieldMacToECMac.outputMacCount * 508) :=
+    (gadgetM keys inputKey pads).Bounded (FieldMacToECMac.outputMacCount * 1016) :=
   Bounded.vector_const fun _ => bounded_garbleEntryM _ _ _ _
 
 /-! ## The garbler -/
@@ -587,7 +676,7 @@ theorem eval_garbleM (scalar : NonZeroScalar) (coins : Coins) (oracle : Oracle) 
 def garbleBudget : Nat :=
   1 + (1016 + (laneGarbleBudget .curveX + (laneGarbleBudget .curveY +
     (laneGarbleBudget .pointX + (laneGarbleBudget .pointY +
-      (FieldMacToECMac.outputMacCount * 508 + 0))))))
+      (FieldMacToECMac.outputMacCount * 1016 + 0))))))
 
 theorem bounded_garbleM (scalar : NonZeroScalar) (coins : Coins) :
     (garbleM scalar coins).Bounded garbleBudget :=
@@ -858,24 +947,29 @@ theorem transformMacOf_real (encOracle : PermutationOracle EncPRF.PermutationInd
     transformMacOf (realEvalPads encOracle keys bits) mac =
       EncPRF.transformMac encOracle keys bits mac := rfl
 
-/-- The 91 exception digits the gadget unlocks. -/
-def unlockM (table : FieldMacToECMac.Table) (input : AffineInput) (mac : InputMac) :
-    M (Vector Digit FieldMacToECMac.outputMacCount) :=
+/-- The 91 gadget masks at the evaluator's own labels: one digest per digit, which unlocks both of
+the digit's exceptional slots. -/
+def masksM (input : AffineInput) (mac : InputMac) :
+    M (Vector (BitVec 8) FieldMacToECMac.outputMacCount) :=
   FreeQuery.vector FieldMacToECMac.outputMacCount fun index =>
-    gadgetMaskM index mac >>= fun mask => pure (Exception.unlock mask (table.2.get index) input)
+    gadgetMaskM index input mac >>= fun mask => pure mask
 
-theorem eval_unlockM (oracle : Oracle) (table : FieldMacToECMac.Table) (input : AffineInput)
-    (mac : InputMac) :
-    (unlockM table input mac).eval (publicAnswer oracle) =
-      Vector.ofFn fun index => Exception.unlock
-        (FieldMacToECMac.gadgetMask (Pipeline.gadgetPermutations oracle.1) index mac)
-        (table.2.get index) input := by
-  simp only [unlockM, FreeQuery.eval_vector, FreeQuery.eval_bind, FreeQuery.eval_pure,
+theorem eval_masksM (oracle : Oracle) (input : AffineInput) (mac : InputMac) :
+    (masksM input mac).eval (publicAnswer oracle) =
+      Vector.ofFn fun index =>
+        FieldMacToECMac.gadgetMask (Pipeline.gadgetPermutations oracle.1) index input mac := by
+  simp only [masksM, FreeQuery.eval_vector, FreeQuery.eval_bind, FreeQuery.eval_pure,
     eval_gadgetMaskM]
 
-theorem bounded_unlockM (table : FieldMacToECMac.Table) (input : AffineInput) (mac : InputMac) :
-    (unlockM table input mac).Bounded (FieldMacToECMac.outputMacCount * (508 + 0)) :=
-  Bounded.vector_const fun _ => Bounded.bind (bounded_gadgetMaskM _ _) fun _ => Bounded.pure' _ 0
+theorem bounded_masksM (input : AffineInput) (mac : InputMac) :
+    (masksM input mac).Bounded (FieldMacToECMac.outputMacCount * (508 + 0)) :=
+  Bounded.vector_const fun _ => Bounded.bind (bounded_gadgetMaskM _ _ _) fun _ => Bounded.pure' _ 0
+
+/-- The digits one exceptional case unlocks, from the masks. -/
+def unlockDigits (table : FieldMacToECMac.Table) (input : AffineInput)
+    (masks : Vector (BitVec 8) FieldMacToECMac.outputMacCount) (triple : Bool) :
+    Vector Digit FieldMacToECMac.outputMacCount :=
+  Vector.ofFn fun index => Exception.unlock (masks.get index) (table.2.get index) triple input
 
 section Evaluator
 
@@ -901,13 +995,14 @@ def onCurveM (table : Public) (bits : BitInput) (mac : InputMac) : M (Option (Op
               (fun chunk => Pipeline.readPointY (unpack (table.scale.get chunk)))
               (Pipeline.coordBits bits .y) (Pipeline.macLabels (whitenMacOf pads mac) .y)
             >>= fun pointY =>
-          unlockM (Pipeline.pointTable table) bits.toAffine (transformMacOf pads mac)
-            >>= fun digits =>
+          masksM bits.toAffine (transformMacOf pads mac)
+            >>= fun masks =>
           pure (some (Garbling.decodeResult
             { point := bits.toAffine
               pointMacs := FieldMacToECMac.evaluateHomogeneous (Pipeline.pointTable table)
                 (Pipeline.digitValues pointX pointY) bits.toAffine
-              exceptionDigits := digits }))
+              exceptionDigits := unlockDigits (Pipeline.pointTable table) bits.toAffine masks false
+              tripleDigits := unlockDigits (Pipeline.pointTable table) bits.toAffine masks true }))
 
 /-- **The evaluation program.** An off-curve input is refused before any query. -/
 def evaluateM (table : Public) (input : AffineInput) (labels : GarbledCircuit.LamportSignature) :
@@ -924,9 +1019,9 @@ theorem eval_onCurveM (oracle : Oracle) (table : Public) (bits : BitInput) (mac 
         Garbling.decodeResult) := by
   simp only [onCurveM, FreeQuery.eval_bind, FreeQuery.eval_pure, eval_askHash,
     eval_evalLaneM oracle .curveX, eval_evalLaneM oracle .curveY, eval_evalLaneM oracle .pointX,
-    eval_evalLaneM oracle .pointY, eval_evalPadsM, eval_unlockM, whitenMacOf_real,
+    eval_evalLaneM oracle .pointY, eval_evalPadsM, eval_masksM, whitenMacOf_real,
     transformMacOf_real]
-  simp only [Pipeline.evaluate, decoded, Option.bind_some]
+  simp only [Pipeline.evaluate, decoded, Option.bind_some, unlockDigits, Vector.get_ofFn]
   rfl
 
 theorem eval_evaluateM (oracle : Oracle) (table : Public) (input : AffineInput)
@@ -959,7 +1054,7 @@ theorem bounded_evaluateM (table : Public) (input : AffineInput)
           Bounded.bind (bounded_evalPadsM _ _) fun _ =>
             Bounded.bind (bounded_evalLaneM _ _ _ _ _) fun _ =>
               Bounded.bind (bounded_evalLaneM _ _ _ _ _) fun _ =>
-                Bounded.bind (bounded_unlockM _ _ _) fun _ => Bounded.pure' _ 0
+                Bounded.bind (bounded_masksM _ _) fun _ => Bounded.pure' _ 0
 
 end Evaluator
 
@@ -995,39 +1090,40 @@ theorem laneEvalBudget_eq (lane : Lane) :
     sum_chunkWidth (fun width => hotEvalBudget width + (2 ^ width - 1) * limbCount lane)]
 
 /-- **One lane's garbling queries**, `k = limbCount lane`: the `2`-bit first chunk asks
-`4 + 4k`, each of the `32` wide `5`-bit chunks `60 + 32k` and each of the `23` narrow `4`-bit
-chunks `28 + 16k`, so `2,568 + 1,396k` in all. -/
+`4 + 4k`, each of the `48` wide `5`-bit chunks `60 + 32k` and each of the `3` narrow `4`-bit
+chunks `28 + 16k`, so `2,968 + 1,588k` in all. -/
 theorem laneGarbleBudget_closed (lane : Lane) :
-    laneGarbleBudget lane = 2568 + 1396 * limbCount lane := by
+    laneGarbleBudget lane = 2968 + 1588 * limbCount lane := by
   rw [laneGarbleBudget_eq]
   simp only [narrowChunkCount, wideChunkCount, narrowChunkBits, chunkBits, firstChunkBits,
     hotGarbleBudget_two, hotGarbleBudget_four, hotGarbleBudget_five]
   omega
 
 /-- **One lane's evaluation queries**, `k = limbCount lane`: the `2`-bit first chunk asks
-`2 + 3k`, each of the `32` wide `5`-bit chunks `52 + 31k` and each of the `23` narrow `4`-bit
-chunks `22 + 15k`, so `2,172 + 1,340k` in all. -/
+`2 + 3k`, each of the `48` wide `5`-bit chunks `52 + 31k` and each of the `3` narrow `4`-bit
+chunks `22 + 15k`, so `2,564 + 1,536k` in all. -/
 theorem laneEvalBudget_closed (lane : Lane) :
-    laneEvalBudget lane = 2172 + 1340 * limbCount lane := by
+    laneEvalBudget lane = 2564 + 1536 * limbCount lane := by
   rw [laneEvalBudget_eq]
   simp only [narrowChunkCount, wideChunkCount, narrowChunkBits, chunkBits, firstChunkBits,
     hotEvalBudget_two, hotEvalBudget_four, hotEvalBudget_five]
   omega
 
-/-- **Garbling asks `1,077,993` questions**: `1` bridge hash, `1,016` EncPRF pads, `10,272` fold
-hashes (`4 * 2,568`), `1,020,476` switch-mask hash limbs (`1,396 * (4 + 3 + 452 + 272)`) and
-`46,228` gadget hashes. -/
-theorem garbleBudget_eq : garbleBudget = 1077993 := by
+/-- **Garbling asks at most `1,123,253` questions**: `1` bridge hash, `1,016` EncPRF pads,
+`11,872` fold hashes (`4 * 2,968`), `1,017,908` switch-mask hash limbs
+(`1,588 * (4 + 3 + 362 + 272)`) and `92,456` gadget hashes (both labels of every position of
+every digit). -/
+theorem garbleBudget_eq : garbleBudget = 1123253 := by
   unfold garbleBudget
   rw [laneGarbleBudget_closed, laneGarbleBudget_closed, laneGarbleBudget_closed,
     laneGarbleBudget_closed]
   simp only [limbCount]
   norm_num
 
-/-- **Evaluation asks `1,035,473` questions**: `8,688` fold hashes (`4 * 2,172`), `979,540`
-switch-mask hash limbs (`1,340 * (4 + 3 + 452 + 272)`), `1` bridge hash, `≤ 1,016` EncPRF pads
+/-- **Evaluation asks `1,042,077` questions**: `10,256` fold hashes (`4 * 2,564`), `984,576`
+switch-mask hash limbs (`1,536 * (4 + 3 + 362 + 272)`), `1` bridge hash, `≤ 1,016` EncPRF pads
 and `46,228` gadget hashes. -/
-theorem evaluateBudget_eq : evaluateBudget = 1035473 := by
+theorem evaluateBudget_eq : evaluateBudget = 1042077 := by
   unfold evaluateBudget
   rw [laneEvalBudget_closed, laneEvalBudget_closed, laneEvalBudget_closed,
     laneEvalBudget_closed]
@@ -1039,10 +1135,10 @@ theorem evaluateBudget_eq : evaluateBudget = 1035473 := by
 variable [FieldCertificate] [GroupCertificate]
 
 /-- The garbling query bound, which the program's type carries. -/
-def garbleQueries : Nat := 1077993
+def garbleQueries : Nat := 1123253
 
 /-- The evaluation query bound, which the program's type carries. -/
-def evaluateQueries : Nat := 1035473
+def evaluateQueries : Nat := 1042077
 
 /-- **The garbling program**, at its exact budget. -/
 def garbleProgram (_parameter : Nat) (scalar : NonZeroScalar) (coins : Coins) :

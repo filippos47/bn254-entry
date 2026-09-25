@@ -102,7 +102,7 @@ theorem runFillFlag_empty_ne_none (draw : Cell → PMF (Block × Block)) {α : T
       rw [if_neg (not_fullTouch_empty _ _)] at rest
       exact ih _ _ _ rest
 
-/-- **The exact designated draws never abort**: the free coordinates are uniform, the `452` hash
+/-- **The exact designated draws never abort**: the free coordinates are uniform, the `362` hash
 answers a fibre draw. -/
 theorem designatedLimbs_ne_none (table : Public) (bits : BitInput)
     (pointX : Fin pointElementCountX → BaseField) (pointY : Fin pointElementCountY → BaseField)
@@ -416,7 +416,7 @@ theorem middleFill_none_le (shadow : Shadow) (adversary : PlanBAdversary Unit) (
           ring
 
 /-- **(B) at the honest constant, from the two per-shadow bounds**: per-pair mass `4/2^128` and
-reveal mass `182/(r−1)` give `M'`'s flag mass `4q₁/2^128 + 182/(r−1)`. -/
+reveal mass `364/(r−1)` give `M'`'s flag mass `4q₁/2^128 + 364/(r−1)`. -/
 theorem middleFill_mass_le (shadow : Shadow) (adversary : PlanBAdversary Unit) (parameter : ℕ)
     (scalar : NonZeroScalar) (perPair : PerPairBound shadow scalar (4 / 2 ^ 128))
     (reveal : RevealBound shadow scalar

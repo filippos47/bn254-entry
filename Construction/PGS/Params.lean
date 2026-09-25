@@ -7,10 +7,12 @@ The plan source is `2026-09-17-planB.md`, sections D.1 and D.5; the phase-4 prof
 (`≤ 1,759,967`) and evaluation (`≤ 1,055,879`). The `scale-hot` layer draws one switch mask
 *vector* per (lane, chunk, switch) from `limbCount lane` hash queries (`731` per switch of the
 four lanes together), so the chunks can be wide: the profile is **ragged-first, then wide, then
-narrow**, widths `[2, 5 × 32, 4 × 23]`. Chunk `0` is `firstChunkBits = 2` bits wide, chunks
-`1 .. 32` are `chunkBits = 5` bits wide (the widest, so every switch index is below
-`2 ^ chunkBits`), and chunks `33 .. 55` are `narrowChunkBits = 4` bits wide, `chunkCount = 56`
-chunks in all. Garbling then makes `1,077,993` queries and evaluation `1,035,473`, both below
+narrow**, widths `[2, 5 × 48, 4 × 3]`. Chunk `0` is `firstChunkBits = 2` bits wide, chunks
+`1 .. 48` are `chunkBits = 5` bits wide (the widest, so every switch index is below
+`2 ^ chunkBits`), and chunks `49 .. 51` are `narrowChunkBits = 4` bits wide, `chunkCount = 52`
+chunks in all. The sign row (`Construction/ArgoMAC/Biquadratic.lean`) leaves seven elements per
+digit, `642` in all, so a switch costs `641` hash queries and the chunks can be this wide.
+Garbling then makes `1,123,253` queries and evaluation `1,042,077`, both below
 their gates (`Programs.garbleBudget_eq` and `Programs.evaluateBudget_eq` in
 `Construction/OraclePrograms.lean` count every term). Keeping chunk `0` at width `2` keeps its
 four candidate switches, which the privacy proof's chunk-zero analysis reads.
@@ -24,36 +26,36 @@ import ScalarMultiplication
 namespace Kriterion.ArgoMAC.PlanB
 
 /-- The number of chunks one 254-bit coordinate is cut into. -/
-def chunkCount : Nat := 56
+def chunkCount : Nat := 52
 
 /-- The width of the wide chunks `1 .. wideChunkCount`, the widest of all chunks: every switch
 index of every chunk is below `2 ^ chunkBits`, and every fold level below `chunkBits`. -/
 def chunkBits : Nat := 5
 
-/-- The width of the narrow chunks after the wide ones, chunks `wideChunkCount + 1 .. 55`. -/
+/-- The width of the narrow chunks after the wide ones, chunks `wideChunkCount + 1 .. 51`. -/
 def narrowChunkBits : Nat := 4
 
-/-- The width of the first chunk, chunk `0`: `254 - 32 * 5 - 23 * 4`. -/
+/-- The width of the first chunk, chunk `0`: `254 - 48 * 5 - 3 * 4`. -/
 def firstChunkBits : Nat := 2
 
-/-- The number of wide (`chunkBits`-bit) chunks, chunks `1 .. 32`. -/
-def wideChunkCount : Nat := 32
+/-- The number of wide (`chunkBits`-bit) chunks, chunks `1 .. 48`. -/
+def wideChunkCount : Nat := 48
 
-/-- The number of narrow (`narrowChunkBits`-bit) chunks, chunks `33 .. 55`. -/
-def narrowChunkCount : Nat := 23
+/-- The number of narrow (`narrowChunkBits`-bit) chunks, chunks `49 .. 51`. -/
+def narrowChunkCount : Nat := 3
 
 /-- The number of paid `bin-to-hot` fold steps of one coordinate:
-`254 - chunkCount = (2 - 1) + 32 * (5 - 1) + 23 * (4 - 1)`. -/
-def foldStepCount : Nat := 198
+`254 - chunkCount = (2 - 1) + 48 * (5 - 1) + 3 * (4 - 1)`. -/
+def foldStepCount : Nat := 202
 
-/-- The number of x-type elements: `91 * 5 + 3`. -/
-def elementCountX : Nat := 458
+/-- The number of x-type elements: `91 * 4 + 3`. -/
+def elementCountX : Nat := 367
 
 /-- The number of y-type elements: `91 * 3 + 2`. -/
 def elementCountY : Nat := 275
 
-/-- The x-type elements of the point rows, delivered by switch system B: `91 * 5`. -/
-def pointElementCountX : Nat := 455
+/-- The x-type elements of the point rows, delivered by switch system B: `91 * 4`. -/
+def pointElementCountX : Nat := 364
 
 /-- The y-type elements of the point rows, delivered by switch system B: `91 * 3`. -/
 def pointElementCountY : Nat := 273
@@ -65,14 +67,14 @@ def curveElementCountX : Nat := 3
 def curveElementCountY : Nat := 2
 
 /-- The total number of IT-GS elements `S`. -/
-def elementCount : Nat := 733
+def elementCount : Nat := 642
 
-/-- The width in bits of one chunk's published `scale-hot` join word: the `733 * 254 = 186,182`
-value bits and two zero bits, so that the word fills whole bytes. -/
-def chunkJoinBits : Nat := 186184
+/-- The width in bits of one chunk's published `scale-hot` join word: the `642 * 254 = 163,068`
+value bits and four zero bits, so that the word fills whole bytes. -/
+def chunkJoinBits : Nat := 163072
 
 /-- The width in bytes of one chunk's published `scale-hot` join word. -/
-def chunkJoinBytes : Nat := 23273
+def chunkJoinBytes : Nat := 20384
 
 /-- The number of bits of one coordinate. -/
 def coordinateBits : Nat := 254
@@ -95,7 +97,7 @@ theorem card_coord : Fintype.card Coord = 2 := rfl
 Plan B runs **two** switch systems per coordinate, not one. System A (`curveX`, `curveY`) is
 keyed on the raw 508 Lamport labels and delivers the five curve-check elements; its output is
 the bridge key `t`. System B (`pointX`, `pointY`) is keyed on the *EncPRF-whitened* labels,
-whose one-time pads are derived from `t`, and delivers the 728 point-row elements. An
+whose one-time pads are derived from `t`, and delivers the 637 point-row elements. An
 evaluator who cannot produce `t` -- an off-curve input -- holds only garbage labels for system
 B and can compute none of the point rows. The lane is part of every `bin-to-hot` index and of
 every `scale-hot` hash input, so the two systems never share a gate. -/

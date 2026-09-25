@@ -5,7 +5,7 @@
 * `agree_laneG`: a lane's chunk loop with a frame and an extra (record, memory) invariant;
 * `agree_plainLane`: a plain lane (`curveX`, `curveY`, `pointY`) against `evalLaneM`;
 * `agree_desLane`: lane `pointX` (`designatedLane`, chunk `0` designated) against `evalLaneM`,
-  leaving `j*`, `E*`, `κ` and the complete record `fun _ => some E*` of the `452` designated
+  leaving `j*`, `E*`, `κ` and the complete record `fun _ => some E*` of the `362` designated
   inputs.
 -/
 
@@ -25,7 +25,7 @@ variable [FieldCertificate]
 /-- An address outside the accumulators, the fold cells and `E*`, the temporaries and the
 digit-extraction region. -/
 def OffWork (address : Word) : Prop :=
-  (∀ e, e < 733 → address ≠ word (accBase + e)) ∧
+  (∀ e, e < 642 → address ≠ word (accBase + e)) ∧
     (∀ j, j < 49 → address ≠ word (hotLabelBase + j)) ∧
     (∀ k, k < 16 → address ≠ word (tmpBase + k)) ∧ OffVector address
 
@@ -98,7 +98,7 @@ theorem designated_chunkFrame {spec : Replay.LaneSpec} (ok : SpecOK spec) :
       tmp_ne (show 5 < 16 by omega) (show 0 < 16 by omega) (by omega)⟩⟩
 
 /-- An accumulator outside a lane's slots is outside that lane's chunk cells. -/
-theorem acc_chunkFrame {spec : Replay.LaneSpec} (ok : SpecOK spec) (e : Nat) (small : e < 733)
+theorem acc_chunkFrame {spec : Replay.LaneSpec} (ok : SpecOK spec) (e : Nat) (small : e < 642)
     (outside : e < spec.slot ∨ spec.slot + laneCount spec.lane ≤ e) :
     ChunkFrame spec (word (accBase + e)) := by
   have fits := ok.fits
@@ -267,7 +267,7 @@ theorem agree_laneG (bits : BitInput) (spec : Replay.LaneSpec) (bodies : Nat →
 theorem rtree_lane (spec : Replay.LaneSpec) (memory : Memory) :
     rtree (Replay.lane ordF0 spec) memory =
       rtree (Prog.rep chunkCount fun chunk => Replay.chunkBody ordF0 spec false chunk) memory := by
-  rw [show chunkCount = 55 + 1 from rfl, tree_rep_front]
+  rw [show chunkCount = 51 + 1 from rfl, tree_rep_front]
   unfold Replay.lane
   rw [rtree_seq]
   rfl
@@ -307,7 +307,7 @@ def desBodies (chunk : Nat) : Prog :=
 theorem rtree_designatedLane (memory : Memory) :
     rtree (Replay.designatedLane ordF0 Replay.pointXSpec) memory =
       rtree (Prog.rep chunkCount desBodies) memory := by
-  rw [show chunkCount = 55 + 1 from rfl, tree_rep_front]
+  rw [show chunkCount = 51 + 1 from rfl, tree_rep_front]
   unfold Replay.designatedLane
   rw [rtree_seq]
   have first : desBodies 0 = Replay.chunkBody ordF0 Replay.pointXSpec true 0 := if_pos rfl

@@ -8,7 +8,7 @@ reveal); **off the curve** `designedOff`: both pads of every position at a unifo
 evaluator's; exactly the designed entries of `G1U°` off the curve), no reveal flag.
 
 **The refined distance** (`designedShadow_etvDist_le`): the two tape readings of `M'` are within
-the curve lanes' share of the mask swap, `Σ_{v curve site} laneDelta v.lane = 1396·(δ_curveX +
+the curve lanes' share of the mask swap, `Σ_{v curve site} laneDelta v.lane = 1588·(δ_curveX +
 δ_curveY)` (`LiftHop.curveSwapError`), not the whole swap:
 
 * the off-curve fill of the designed shadow asks the hash only at cell inputs of the two curve
@@ -19,7 +19,7 @@ the curve lanes' share of the mask swap, `Σ_{v curve site} laneDelta v.lane = 1
   (`maskTape_restrict`, from `Hidden.fibreLaw_masksOf_split`: given the vectors the two families of
   limbs are independent), and the uniform tape restricts to the uniform one (`uniform_restrict`);
 * so the distance is the batched sampler's bias at the curve sites (`fill_etvDist_le`,
-  `masksOf_etvDist_le`), and the curve sites are `1396` vectors per curve lane
+  `masksOf_etvDist_le`), and the curve sites are `1588` vectors per curve lane
   (`sum_curveSite_laneDelta`).
 
 **`planB_publicFirst_of_lift`**: the Glue's `publicFirst` at its constant
@@ -109,7 +109,7 @@ def curvePart (tape : Tape) : CurveSlot → Block × Block :=
 theorem curvePart_apply (tape : Tape) (slot : CurveSlot) :
     curvePart tape slot = tape ⟨slot.1.1, slot.2⟩ := rfl
 
-/-- **The curve sites carry the curve lanes' share of the swap**: `1396` vectors per curve lane. -/
+/-- **The curve sites carry the curve lanes' share of the swap**: `1588` vectors per curve lane. -/
 theorem sum_curveSite_laneDelta :
     ∑ site : {site : VectorSite // CurveSiteP site}, laneDelta (curveLane site) =
       (laneVectorCount : ℝ≥0∞) * (laneDelta .curveX + laneDelta .curveY) := by
@@ -121,8 +121,8 @@ theorem sum_curveSite_laneDelta :
       (fun site : VectorSite => laneDelta site.lane), Finset.sum_filter]
     rfl
   rw [subtype, sum_vectorSite_lane g]
-  have pair : ∑ lane : Lane, 1396 • g lane =
-      ∑ lane ∈ ({.curveX, .curveY} : Finset Lane), 1396 • g lane := by
+  have pair : ∑ lane : Lane, 1588 • g lane =
+      ∑ lane ∈ ({.curveX, .curveY} : Finset Lane), 1588 • g lane := by
     refine (Finset.sum_subset (Finset.subset_univ _) fun lane _ notPair => ?_).symm
     cases lane
     · exact absurd (by simp) notPair

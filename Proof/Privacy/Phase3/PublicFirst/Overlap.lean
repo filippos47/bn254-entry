@@ -1,7 +1,7 @@
 /-
 **Phase 3, P1d — flagged games and the overlap bound.**
 
-The flag-mass part of `G1U → HW`'s constant (`4q₁/2^128 + 182/(r−1)`) cannot be reached by a
+The flag-mass part of `G1U → HW`'s constant (`4q₁/2^128 + 364/(r−1)`) cannot be reached by a
 triangle of advantage bounds through an intermediate game: `G1U` and `HW` each deviate from any
 middle game on stage-1 touches of the *same* (coupled) stage-2 points, and a triangle charges those
 touches twice.

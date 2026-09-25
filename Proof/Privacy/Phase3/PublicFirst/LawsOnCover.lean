@@ -10,7 +10,7 @@ entries planted on the empty oracle):
   garbler's keys `hash(bridgeInput t)` (`prefix_eval_tape`);
 * **every planted entry is an entry of the shadow's transcript on `O`** (`upper_covers`): the
   bit-`true` pads by `truePadsM`, the bit-`false` pads by `evalPadsM`, the designed entries before
-  the gadget by the pre-gadget evaluator, the designed gadget entries by `unlockM` at the same labels.
+  the gadget by the pre-gadget evaluator, the designed gadget entries by `masksM` at the same labels.
 
 Step (C) (`LawsOnC`) reads the upper side through `upper_covers` and `plantAll_sub`, with the
 garbler's input key read off the tape (`garble_snd`, `restore_garble_input`, `restore_garble_mac`).
@@ -66,7 +66,7 @@ theorem agree_preM (valid : validate input = true) {O : PublicOracle FixedIndex 
     have h3 : publicAnswer tape.2 uq = fa := Hidden.transcriptOf_agrees tape.2 _ _ fMember
     show publicAnswer O uq = fa
     rw [← h1, h2, h3]
-  · exact absurd fEq ((notGadget_preM _ _ _).mem _ f fMember o κ p _)
+  · exact absurd fEq ((notGadget_preM _ _ _).mem _ f fMember o κ p _ _)
 
 /-- The prefix is the pre-gadget evaluator's first stage. -/
 theorem agree_prefix (valid : validate input = true)
@@ -167,9 +167,9 @@ theorem upper_covers (valid : validate input = true)
       rcases asks_bind_cases gadget with unlock | done
       · refine Asks.bind_left ?_
         obtain ⟨f, fMember, fEq⟩ := List.mem_map.mp unlock
-        obtain ⟨o, κ, p, qEq⟩ := (Guess.unlockM_asks _ _ _).mem _ f fMember
+        obtain ⟨o, κ, p, qEq⟩ := (Guess.masksM_asks _ _).mem _ f fMember
         rw [← fEq, qEq]
-        exact asks_unlock _ _ _ o κ p _ rfl
+        exact asks_masks _ _ o κ p _ rfl
       · exact absurd done (fun h => List.not_mem_nil h)
 
 omit [Fintype FixedIndex] [Fintype EncPRF.PermutationIndex] in

@@ -2,7 +2,7 @@
 This file connects `C_1`, `C_23` and `C_45` over the projectivized garbling scheme.
 The active paper shows this pipeline at `fig:garbled_c_with_cm_opt`.
 
-Plan B replaces the 733 `DigitAdaptor` tables by chunked switch systems, and Task 19a runs
+Plan B replaces the 642 `DigitAdaptor` tables by chunked switch systems, and Task 19a runs
 **two** of them per coordinate:
 
 * **system A** (lanes `curveX`, `curveY`) is keyed on the *raw* 508 Lamport labels and delivers
@@ -27,11 +27,11 @@ bit-dependent `EncPRF.transformMac` labels, unchanged from the baseline.
    **not** mention the slopes,
 3. derive the slopes from the offsets (`curveSlopes`, `pointSlopes`),
 4. weight them per chunk (`chunkScalar`, inside `garbleCoord`),
-5. publish the joins (`garbleCoord`), the eleven row constants and the three curve constants,
+5. publish the joins (`garbleCoord`), the ten row constants and the three curve constants,
    each with its element offsets absorbed.
 
-The four lanes' `733` joins of one chunk are still interleaved into a single
-`chunkJoinBits`-wide word (two zero bits round it up to whole bytes), so the chunk stays the
+The four lanes' `642` joins of one chunk are still interleaved into a single
+`chunkJoinBits`-wide word (four zero bits round it up to whole bytes), so the chunk stays the
 byte-aligned publication unit.
 The plan source is `2026-09-17-planB.md`, sections D.3--D.6 and
 Tasks 19 and 19a.
@@ -130,8 +130,7 @@ lane. -/
 def xElementOfSlot : Nat → XElement
   | 0 => .rowX_x7
   | 1 => .rowX_x9
-  | 2 => .rowY_mixed
-  | 3 => .rowY_cubic
+  | 2 => .rowY_cubic
   | _ => .rowZ_x9
 
 /-- The y-type element slot inside a digit. -/
@@ -241,9 +240,9 @@ def curveValues (xValues : Fin curveElementCountX → BaseField)
 /-! ### The chunk word
 
 One chunk publishes a single `chunkJoinBits`-wide word carrying all four lanes' joins: the
-`pointX` lane's `455` values in slots `0 .. 454`, the `curveX` lane's `3` in slots
-`455 .. 457`, the `pointY` lane's `273` in slots `458 .. 730` and the `curveY` lane's `2` in
-slots `731, 732`, then two zero bits. Interleaving the lanes per chunk is what makes the *chunk*
+`pointX` lane's `364` values in slots `0 .. 363`, the `curveX` lane's `3` in slots
+`364 .. 366`, the `pointY` lane's `273` in slots `367 .. 639` and the `curveY` lane's `2` in
+slots `640, 641`, then four zero bits. Interleaving the lanes per chunk is what makes the *chunk*
 the byte-aligned unit. -/
 
 /-- Interleave the two coordinates' joins of one chunk. -/
@@ -418,12 +417,12 @@ def gadgetCoord : EncPRF.Coordinate → Coord
   | .y => .y
 
 /-- The exception gadget reads one dedicated permutation per (digit, coordinate, label
-position). Nothing is tweaked and nothing is shared, so every gadget index carries exactly one
-construction query. -/
+position, label bit). Nothing is tweaked and nothing is shared, and an index is only ever asked
+at the label of its bit, so every gadget index carries exactly one construction query point. -/
 def gadgetPermutations (oracle : PermutationOracle FixedIndex Block) :
     FieldMacToECMac.GadgetPermutations :=
-  fun output coordinate position =>
-    oracle.permutation (.gadget output (gadgetCoord coordinate) position)
+  fun output coordinate position bit =>
+    oracle.permutation (.gadget output (gadgetCoord coordinate) position bit)
 
 /-! ### System A, in plan D.4's order -/
 
@@ -506,7 +505,7 @@ def pointYGarbled (oracle : PermutationOracle FixedIndex Block) (hashOracle : En
   garbleCoord oracle hashOracle .pointY (delta .y) (bitKeyOf whitened .y)
     (pointYAssemble (pointSlopes oracle hashOracle delta whitened randomness))
 
-/-- The point layer's published table: the eleven row constants of each digit and the gadget
+/-- The point layer's published table: the ten row constants of each digit and the gadget
 entries. The gadget keeps reading the bit-dependent `EncPRF.transformKey` labels. -/
 def pointGarble (outputKeys : FieldMacToECMac.OutputKeys)
     (pointRandomness : FieldMacToECMac.Randomness)
@@ -690,9 +689,9 @@ theorem hotIndexNat_lane (lane lane' : Lane) (chunk chunk' : Fin chunkCount)
 
 /-- The gadget family is disjoint from the `bin-to-hot` family. -/
 theorem gadget_ne_hot (digit : Fin digitCount) (coord : Coord) (lane : Lane)
-    (position : Fin PlanB.coordinateBits) (chunk : Fin chunkCount) (fold : Fin chunkBits)
-    (entry : Fin (2 ^ chunkBits)) (half : Bool) :
-    (FixedIndex.gadget digit coord position) ≠ FixedIndex.hot lane chunk fold entry half :=
+    (position : Fin PlanB.coordinateBits) (bit : Bool) (chunk : Fin chunkCount)
+    (fold : Fin chunkBits) (entry : Fin (2 ^ chunkBits)) (half : Bool) :
+    (FixedIndex.gadget digit coord position bit) ≠ FixedIndex.hot lane chunk fold entry half :=
   fun equal => by cases equal
 
 section Encoded

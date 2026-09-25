@@ -139,15 +139,16 @@ theorem laneM_plainOnly (lane : Lane) (delta : Block)
 theorem gadgetM_plainOnly [FieldCertificate] [GroupCertificate] (keys : FieldMacToECMac.OutputKeys)
     (inputKey : InputMacKey) (pads : FieldMacToECMac.ExceptionPad) :
     QueryOnly IsPlain (Programs.gadgetM keys inputKey pads) := by
-  have digest : ∀ output coordinate mac,
-      QueryOnly IsPlain (Programs.gadgetDigestM output coordinate mac) := fun _ _ _ =>
-    QueryOnly.bind (QueryOnly.vector _ fun _ => hashM_plainOnly _ _) fun _ => QueryOnly.pure' _
+  have pairs : ∀ output coordinate key,
+      QueryOnly IsPlain (Programs.gadgetPairsM output coordinate key) := fun _ _ _ =>
+    QueryOnly.vector _ fun _ => QueryOnly.bind (hashM_plainOnly _ _) fun _ =>
+      QueryOnly.bind (hashM_plainOnly _ _) fun _ => QueryOnly.pure' _
   refine QueryOnly.vector _ fun output => ?_
   unfold Programs.garbleEntryM
   split
   · exact QueryOnly.pure' _
-  · exact QueryOnly.bind (QueryOnly.bind (digest _ _ _) fun _ => QueryOnly.bind (digest _ _ _) fun _ =>
-      QueryOnly.pure' _) fun _ => QueryOnly.pure' _
+  · exact QueryOnly.bind (pairs _ _ _) fun _ => QueryOnly.bind (pairs _ _ _) fun _ =>
+      QueryOnly.pure' _
 
 theorem padsM_encOnly (keys : WhiteningKeys) : QueryOnly IsEncForward (Programs.padsM keys) := by
   have pad : ∀ coordinate index bit, QueryOnly IsEncForward (Programs.padM keys coordinate index bit) :=

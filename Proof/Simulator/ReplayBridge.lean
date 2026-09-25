@@ -57,11 +57,11 @@ theorem agree_bridge (memory : Memory) (x y c0 c1 c2 x3 x5 x7 y4 y6 : BaseField)
     (c0Cell : memory.ram (word fieldBase) = fieldWord c0)
     (c1Cell : memory.ram (word (fieldBase + 1)) = fieldWord c1)
     (c2Cell : memory.ram (word (fieldBase + 2)) = fieldWord c2)
-    (x3Cell : memory.ram (word (accBase + 455)) = fieldWord x3)
-    (y4Cell : memory.ram (word (accBase + 731)) = fieldWord y4)
-    (x5Cell : memory.ram (word (accBase + 456)) = fieldWord x5)
-    (y6Cell : memory.ram (word (accBase + 732)) = fieldWord y6)
-    (x7Cell : memory.ram (word (accBase + 457)) = fieldWord x7) :
+    (x3Cell : memory.ram (word (accBase + 364)) = fieldWord x3)
+    (y4Cell : memory.ram (word (accBase + 640)) = fieldWord y4)
+    (x5Cell : memory.ram (word (accBase + 365)) = fieldWord x5)
+    (y6Cell : memory.ram (word (accBase + 641)) = fieldWord y6)
+    (x7Cell : memory.ram (word (accBase + 366)) = fieldWord x7) :
     Agree (BridgePost memory) (rtree Replay.bridge memory)
       (Programs.askHash (bridgeInput
         (c0 + c1 * x ^ 3 + c2 * y ^ 2 + x3 * x ^ 2 + y4 * y + x5 * x + y6 + x7))) := by

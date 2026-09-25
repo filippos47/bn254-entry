@@ -4,7 +4,7 @@
 `I` (`Glue.idealHybrid`) answers the simulator's honest evaluation from the shared lazy oracle
 (`Glue.runIntercept`): a fresh hash query at a scale input is a uniform answer, stored. `I^U`
 differs in exactly one place. At the start of the opening it draws a **mask tape** -- one hash
-answer per (vector site, limb), the `5,584` switch-mask vectors iid uniform on `F_p^n` and the tape
+answer per (vector site, limb), the `6,352` switch-mask vectors iid uniform on `F_p^n` and the tape
 uniform on the `sampleLane` fibre of `masksOf` (`uniformMaskTape`; the fibre kernel of P1's
 `G0 → G0U` swap) -- and a non-designated hash query at a scale input is answered from the tape when
 it is the **first stage-2 touch of its cell at a fresh input** (`consumeCell`): the simulator
@@ -201,7 +201,7 @@ def runRefill (bits : BitInput) (draw : Cell → PMF (Block × Block)) {α : Typ
         | none => (LazyOracle.query request oracle).bind fun answer =>
             runRefill bits draw (next answer.1) answer.2 record (touch request touched)
 
-/-- **The `I^U` mask tape**: the `5,584` switch-mask vectors iid uniform on `F_p^n`, then the tape
+/-- **The `I^U` mask tape**: the `6,352` switch-mask vectors iid uniform on `F_p^n`, then the tape
 uniformly among those that produce them -- each vector's limbs a uniform `sampleLane`-preimage of a
 uniform vector, independently across vectors. -/
 def uniformMaskTape : PMF Tape :=
@@ -217,8 +217,8 @@ def refillRun {α : Type} (bits : BitInput) (computation : FreeQuery Programs.Sp
 /-! ### `I^U` -/
 
 /-- The opening after its honest run (`Glue.opening`, steps 2–5): the tail, the lifts, the
-designated vector's free coordinates and collector solve, its `452` hash answers
-(`Glue.openingLimbs`), the `452` programs. -/
+designated vector's free coordinates and collector solve, its `362` hash answers
+(`Glue.openingLimbs`), the `362` programs. -/
 def openingCont [FieldCertificate] [GroupCertificate] (samplers : Samplers) (table : Public)
     (input : AffineInput) (labels : LamportSignature) (target : Point)
     (ran : ((Fin pointElementCountX → BaseField) × (Fin pointElementCountY → BaseField)) ×

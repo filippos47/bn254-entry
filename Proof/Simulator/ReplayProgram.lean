@@ -4,7 +4,7 @@ and `curveY`, the bridge and its hash at `bridgeInput t`, the `508` whitened lab
 with its designated chunk, lane `pointY`) against P3's intercepted `openingQueriesM`, from any
 memory satisfying `ReplayStart`. It leaves (`ReplayPost`) the two point lanes' (designated-free)
 values in their accumulators, `j*`, `κ`, `E*` with the complete record `fun _ => some E*` of the
-`452` designated inputs, and every cell outside the replay's work cells unchanged.
+`362` designated inputs, and every cell outside the replay's work cells unchanged.
 -/
 
 import Proof.Simulator.ReplayStartCells
@@ -20,11 +20,11 @@ variable [FieldCertificate]
 
 /-! ### Address facts -/
 
-theorem acc_ne_tmp (e k : Nat) (small : e < 733) (kSmall : k < 16) :
+theorem acc_ne_tmp (e k : Nat) (small : e < 642) (kSmall : k < 16) :
     word (accBase + e) ≠ word (tmpBase + k) :=
   word_ne (by unfold accBase; omega) (by unfold tmpBase; omega) (by unfold accBase tmpBase; omega)
 
-theorem acc_ne_white (e i : Nat) (small : e < 733) (iSmall : i < 508) :
+theorem acc_ne_white (e i : Nat) (small : e < 642) (iSmall : i < 508) :
     word (accBase + e) ≠ word (whiteBase + i) :=
   word_ne (by unfold accBase; omega) (by unfold whiteBase; omega) (by unfold accBase whiteBase; omega)
 
@@ -57,7 +57,7 @@ def ReplayPost (bits : BitInput) (start : Memory)
       DesignatedRecord) (after : Memory) : Prop :=
   (∀ e : Fin pointElementCountX, after.ram (word (accBase + e.val)) = fieldWord (result.1.1 e)) ∧
     (∀ e : Fin pointElementCountY,
-      after.ram (word (accBase + 458 + e.val)) = fieldWord (result.1.2 e)) ∧
+      after.ram (word (accBase + 367 + e.val)) = fieldWord (result.1.2 e)) ∧
     after.ram (word tmpJStar) = word (designatedSwitch bits).val ∧
     after.ram (word tmpKappa) = fieldWord (kappa bits) ∧
     (∃ star : Block, after.ram (word designatedLabel) = blockWord star ∧
@@ -86,14 +86,14 @@ theorem agree_replay (source : Stage1Source) (input : AffineInput) (labels : Lam
     Replay.curveXSpec specOK_curveX (by decide) _ _ _ _ m1 (fun _ => none) (fun _ => 0)
     (laneCells_curveX start frame1) (fun e bound => by
       have small : e < 3 := bound
-      have cell := zeros (455 + e) (by omega)
+      have cell := zeros (364 + e) (by omega)
       rw [← Nat.add_assoc] at cell
       exact cell))
   obtain ⟨accs2, frame2', bits2, record2⟩ := post1
   have frame2 : ∀ address, OffReplay address → m2.ram address = memory.ram address :=
     fun address off => (frame2' address (off.1.chunkFrame specOK_curveX)).trans
       (frame1 address off)
-  have zeros2 : ∀ e, e < 733 → (e < 455 ∨ 458 ≤ e) → m2.ram (word (accBase + e)) = fieldWord 0 :=
+  have zeros2 : ∀ e, e < 642 → (e < 364 ∨ 367 ≤ e) → m2.ram (word (accBase + e)) = fieldWord 0 :=
     fun e small outside => (frame2' _ (acc_chunkFrame specOK_curveX e small outside)).trans
       (zeros e small)
   -- lane `curveY`
@@ -102,27 +102,27 @@ theorem agree_replay (source : Stage1Source) (input : AffineInput) (labels : Lam
     Replay.curveYSpec specOK_curveY (by decide) _ _ _ _ m2 r1.2 (fun _ => 0)
     (laneCells_curveY start frame2) (fun e bound => by
       have small : e < 2 := bound
-      have cell := zeros2 (731 + e) (by omega) (by omega)
+      have cell := zeros2 (640 + e) (by omega) (by omega)
       rw [← Nat.add_assoc] at cell
       exact cell))
   obtain ⟨accs3, frame3', bits3, record3⟩ := post2
   have frame3 : ∀ address, OffReplay address → m3.ram address = memory.ram address :=
     fun address off => (frame3' address (off.1.chunkFrame specOK_curveY)).trans
       (frame2 address off)
-  have zeros3 : ∀ e, e < 731 → (e < 455 ∨ 458 ≤ e) → m3.ram (word (accBase + e)) = fieldWord 0 :=
+  have zeros3 : ∀ e, e < 640 → (e < 364 ∨ 367 ≤ e) → m3.ram (word (accBase + e)) = fieldWord 0 :=
     fun e small outside => (frame3' _ (acc_chunkFrame specOK_curveY e (by omega)
-      (Or.inl (show e < 731 by omega)))).trans (zeros2 e (by omega) outside)
+      (Or.inl (show e < 640 by omega)))).trans (zeros2 e (by omega) outside)
   have curveXCells : ∀ e : Fin curveElementCountX,
-      m3.ram (word (accBase + 455 + e.val)) = fieldWord (r1.1 e) := by
+      m3.ram (word (accBase + 364 + e.val)) = fieldWord (r1.1 e) := by
     intro e
     have small : e.val < 3 := e.isLt
-    rw [Nat.add_assoc, frame3' _ (acc_chunkFrame specOK_curveY (455 + e.val) (by omega)
-      (Or.inl (show 455 + e.val < 731 by omega))), ← Nat.add_assoc]
+    rw [Nat.add_assoc, frame3' _ (acc_chunkFrame specOK_curveY (364 + e.val) (by omega)
+      (Or.inl (show 364 + e.val < 640 by omega))), ← Nat.add_assoc]
     have cell := accs2 e
     simp only [zero_add] at cell
     exact cell
   have curveYCells : ∀ e : Fin curveElementCountY,
-      m3.ram (word (accBase + 731 + e.val)) = fieldWord (r2.1 e) := by
+      m3.ram (word (accBase + 640 + e.val)) = fieldWord (r2.1 e) := by
     intro e
     have cell := accs3 e
     simp only [zero_add] at cell
@@ -154,7 +154,7 @@ theorem agree_replay (source : Stage1Source) (input : AffineInput) (labels : Lam
     rw [ram4, Function.update_of_ne tmpK1_ne_tmpK2, Function.update_self]
   have k2Cell : m4.ram (word tmpK2) = blockWord r3.1.2 := by
     rw [ram4, Function.update_self]
-  have zeros4 : ∀ e, e < 731 → (e < 455 ∨ 458 ≤ e) → m4.ram (word (accBase + e)) = fieldWord 0 := by
+  have zeros4 : ∀ e, e < 640 → (e < 364 ∨ 367 ≤ e) → m4.ram (word (accBase + e)) = fieldWord 0 := by
     intro e small outside
     rw [ram4, Function.update_of_ne (show word (accBase + e) ≠ word tmpK2 from
         acc_ne_tmp e 4 (by omega) (by omega)),
@@ -177,14 +177,14 @@ theorem agree_replay (source : Stage1Source) (input : AffineInput) (labels : Lam
   obtain ⟨whitesX, whitesY, frame5', bits5, record5⟩ := post4
   have frame5 : ∀ address, OffReplay address → m5.ram address = memory.ram address :=
     fun address off => (frame5' address off.2).trans (frame4 address off)
-  have zeros5 : ∀ e, e < 731 → (e < 455 ∨ 458 ≤ e) → m5.ram (word (accBase + e)) = fieldWord 0 :=
+  have zeros5 : ∀ e, e < 640 → (e < 364 ∨ 367 ≤ e) → m5.ram (word (accBase + e)) = fieldWord 0 :=
     fun e small outside => (frame5' _ fun i bound => acc_ne_white e i (by omega) bound).trans
       (zeros4 e small outside)
   -- lane `pointX`, chunk `0` designated
   rw [rtree_seq]
   refine Agree.bindOpt (fun r5 m6 post5 => ?_) (agree_desLane (BitInput.ofAffine input) _ _ _ m5
     r4.2 (fun _ => 0) (laneCells_pointX start _ frame5 whitesX) (fun e bound => by
-      have small : e < 455 := bound
+      have small : e < 364 := bound
       have cell := zeros5 (0 + e) (by omega) (by omega)
       rw [← Nat.add_assoc] at cell
       exact cell))
@@ -202,13 +202,13 @@ theorem agree_replay (source : Stage1Source) (input : AffineInput) (labels : Lam
       m6.ram (accCell Replay.pointYSpec e) = fieldWord 0 := by
     intro e bound
     have small : e < 273 := bound
-    show m6.ram (word (accBase + 458 + e)) = _
-    rw [Nat.add_assoc, frame6' (word (accBase + (458 + e)))
-      ⟨acc_chunkFrame specOK_pointX (458 + e) (by omega) (Or.inr (show 0 + 455 ≤ 458 + e by omega)),
+    show m6.ram (word (accBase + 367 + e)) = _
+    rw [Nat.add_assoc, frame6' (word (accBase + (367 + e)))
+      ⟨acc_chunkFrame specOK_pointX (367 + e) (by omega) (Or.inr (show 0 + 364 ≤ 367 + e by omega)),
         word_ne (by unfold accBase; omega) (by unfold designatedLabel hotLabelBase; omega)
           (by unfold accBase designatedLabel hotLabelBase; omega),
         acc_ne_tmp _ 6 (by omega) (by omega), acc_ne_tmp _ 5 (by omega) (by omega)⟩,
-      zeros5 (458 + e) (by omega) (by omega)]
+      zeros5 (367 + e) (by omega) (by omega)]
   -- lane `pointY`
   simp only [interceptT]
   refine Agree.map _ (fun r6 m7 post6 => ?_) (agree_plainLane (BitInput.ofAffine input)
@@ -217,8 +217,8 @@ theorem agree_replay (source : Stage1Source) (input : AffineInput) (labels : Lam
   obtain ⟨accs7, frame7', bits7, record7⟩ := post6
   have three := designated_chunkFrame specOK_pointY
   refine ⟨fun e => ?_, fun e => ?_, ?_, ?_, ⟨star, ?_, ?_⟩, fun address off => ?_, ?_⟩
-  · have small : e.val < 455 := e.isLt
-    rw [frame7' _ (acc_chunkFrame specOK_pointY e.val (by omega) (Or.inl (show e.val < 458 by omega)))]
+  · have small : e.val < 364 := e.isLt
+    rw [frame7' _ (acc_chunkFrame specOK_pointY e.val (by omega) (Or.inl (show e.val < 367 by omega)))]
     have cell := accs6 e
     simp only [zero_add] at cell
     exact cell

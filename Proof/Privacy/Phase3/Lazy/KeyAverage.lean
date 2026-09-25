@@ -177,18 +177,18 @@ theorem evalChunkM_congr (lane : Lane) (joins : Vector Block foldStepCount)
   unfold Programs.evalChunkM
   rw [same]
 
-/-- The chunks `1 … 55` of a lane read only their own labels. -/
+/-- The chunks `1 … 51` of a lane read only their own labels. -/
 theorem laneRest_congr {β : Type} (lane : Lane) (joins : Vector Block foldStepCount)
     (scale : Fin chunkCount → Fin (laneCount lane) → BaseField) (bits : BitVec coordinateBitCount)
     (labels labels' : Fin coordinateBitCount → Block)
     (masks : Fin (2 ^ chunkWidth chunkZero) → Vector BaseField (laneCount lane))
     (k : (Fin (laneCount lane) → BaseField) → FreeQuery Programs.Spec β)
-    (same : ∀ index : Fin 55,
+    (same : ∀ index : Fin 51,
       chunkLabels labels (index.succ : Fin chunkCount) =
         chunkLabels labels' (index.succ : Fin chunkCount)) :
     laneRest lane joins scale bits labels masks k =
       laneRest lane joins scale bits labels' masks k := by
-  have chunks : (fun index : Fin 55 =>
+  have chunks : (fun index : Fin 51 =>
       Programs.evalChunkM lane joins scale bits labels index.succ) =
       fun index => Programs.evalChunkM lane joins scale bits labels' index.succ :=
     funext fun index => evalChunkM_congr _ _ _ _ _ _ _ (same index)

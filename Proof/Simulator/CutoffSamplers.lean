@@ -6,10 +6,11 @@ bijection from the accepted draws onto a finite type `β` is abort-close to the 
 with extra abort mass the sampler's cutoff `rejectLaw … none`. Instances:
 
 * `fieldCell_close`: a field cell against the uniform field element;
-* `lambda_close`: a lift randomiser against the uniform `NonZeroBase`;
+* `lambda_close`: a lift randomiser against the uniform `NonZeroBase`, and `pair_close`: a
+  randomiser pair against the uniform pair;
 * `preimage_close`: the designated vector's `t` sampler against `idealPreimage` (the uniform
   point of the `sampleLane` fibre);
-* `free_close`: the `182` free coordinates against the uniform free part.
+* `free_close`: the `91` free coordinates against the uniform free part.
 
 `optionProduct_uniform`: independent uniform draws are the uniform law on the product.
 -/
@@ -199,25 +200,25 @@ theorem vectorEnc_eq (vector : Fin pointElementCountX → BaseField) :
   unfold vectorDigits
   rw [dif_pos element.isLt, pNat_eq]
 
-/-- `enc(Y*) < p^455`: the preimage sampler's abort bound applies to every vector. -/
+/-- `enc(Y*) < p^364`: the preimage sampler's abort bound applies to every vector. -/
 theorem vectorEnc_lt (vector : Fin pointElementCountX → BaseField) :
     vectorEnc vector < pNat ^ BigInt.samplerDigits := by
   rw [vectorEnc_eq, pNat_eq]
   exact laneEncode_lt vector
 
-/-- The fibre bound `2^115712` is `2^(256 · 452)`, by its exponent (no power is evaluated). -/
-theorem pow_designated : (2 : Nat) ^ 115712 = 2 ^ (256 * limbCount .pointX) := by
-  rw [show 256 * limbCount .pointX = 115712 from rfl]
+/-- The fibre bound `2^92672` is `2^(256 · 362)`, by its exponent (no power is evaluated). -/
+theorem pow_designated : (2 : Nat) ^ 92672 = 2 ^ (256 * limbCount .pointX) := by
+  rw [show 256 * limbCount .pointX = 92672 from rfl]
 
-/-- The sampler's value `t · p^455 + enc` in the fibre's form `enc + p^455 · t`. -/
+/-- The sampler's value `t · p^364 + enc` in the fibre's form `enc + p^364 · t`. -/
 theorem samplerValue_eq (enc t : Nat) :
     BigInt.samplerValue BigInt.samplerDigits enc t = enc + pNat ^ BigInt.samplerDigits * t := by
   unfold BigInt.samplerValue
   rw [Nat.add_comm, Nat.mul_comm]
 
-/-- An accepted `t` gives the `452` hash answers of a point of the fibre over `Y*`. -/
+/-- An accepted `t` gives the `362` hash answers of a point of the fibre over `Y*`. -/
 theorem sampleLane_natToLimbs_fibre (vector : Fin pointElementCountX → BaseField) (t : Nat)
-    (inFibre : vectorEnc vector + pNat ^ BigInt.samplerDigits * t < 2 ^ 115712) :
+    (inFibre : vectorEnc vector + pNat ^ BigInt.samplerDigits * t < 2 ^ 92672) :
     sampleLane pointElementCountX (limbCount .pointX) (natToLimbs (limbCount .pointX)
       (BigInt.samplerValue BigInt.samplerDigits (vectorEnc vector) t)) = vector := by
   have encSmall := vectorEnc_lt vector
@@ -232,11 +233,11 @@ abbrev DesignatedFibre (vector : Fin pointElementCountX → BaseField) : Type :=
 
 /-- The kept `t` read as a point of the fibre (`none` off the fibre). The test is decided
 classically: its instance never reduces, so no defeq check evaluates the comparison with
-`2^115712`. -/
+`2^92672`. -/
 def fibrePoint (vector : Fin pointElementCountX → BaseField) (t : Nat) :
     Option (DesignatedFibre vector) :=
   haveI := Classical.propDecidable
-  if inFibre : vectorEnc vector + pNat ^ BigInt.samplerDigits * t < 2 ^ 115712 then
+  if inFibre : vectorEnc vector + pNat ^ BigInt.samplerDigits * t < 2 ^ 92672 then
     some ⟨natToLimbs (limbCount .pointX)
       (BigInt.samplerValue BigInt.samplerDigits (vectorEnc vector) t),
       sampleLane_natToLimbs_fibre vector t inFibre⟩
@@ -244,7 +245,7 @@ def fibrePoint (vector : Fin pointElementCountX → BaseField) (t : Nat) :
 
 /-- An accepted `t` is its point of the fibre. -/
 theorem fibrePoint_of (vector : Fin pointElementCountX → BaseField) (t : Nat)
-    (inFibre : vectorEnc vector + pNat ^ BigInt.samplerDigits * t < 2 ^ 115712) :
+    (inFibre : vectorEnc vector + pNat ^ BigInt.samplerDigits * t < 2 ^ 92672) :
     fibrePoint vector t = some ⟨natToLimbs (limbCount .pointX)
       (BigInt.samplerValue BigInt.samplerDigits (vectorEnc vector) t),
       sampleLane_natToLimbs_fibre vector t inFibre⟩ := by
@@ -253,17 +254,17 @@ theorem fibrePoint_of (vector : Fin pointElementCountX → BaseField) (t : Nat)
   · rfl
   · exact absurd inFibre ‹_›
 
-/-- The draw of a point of the fibre: `V / p^455`. -/
+/-- The draw of a point of the fibre: `V / p^364`. -/
 def fibreDraw (vector : Fin pointElementCountX → BaseField) (point : DesignatedFibre vector) :
     Nat :=
   limbsToNat (limbCount .pointX) point.1 / pNat ^ BigInt.samplerDigits
 
-/-- A point of the fibre is `enc(Y*) + p^455 · (V / p^455)`, below `2^115712`. -/
+/-- A point of the fibre is `enc(Y*) + p^364 · (V / p^364)`, below `2^92672`. -/
 theorem fibreDraw_spec (vector : Fin pointElementCountX → BaseField)
     (point : DesignatedFibre vector) :
     limbsToNat (limbCount .pointX) point.1 =
         vectorEnc vector + pNat ^ BigInt.samplerDigits * fibreDraw vector point ∧
-      vectorEnc vector + pNat ^ BigInt.samplerDigits * fibreDraw vector point < 2 ^ 115712 := by
+      vectorEnc vector + pNat ^ BigInt.samplerDigits * fibreDraw vector point < 2 ^ 92672 := by
   have residue : limbsToNat (limbCount .pointX) point.1 % pNat ^ BigInt.samplerDigits =
       vectorEnc vector := by
     have same := (sampleLane_eq_iff _ _ point.1 vector).mp point.2
@@ -296,7 +297,7 @@ theorem preimageLaw_eq (vector : Fin pointElementCountX → BaseField) : preimag
 
 /-- **A preimage draw is abort-close to the uniform point of the fibre** (`idealPreimage`, the
 mask swap's per-site fibre law): the kept `t` is uniform on the accepted draws, which are
-exactly the fibre `{t : enc(Y*) + p^455 · t < 2^115712}` (`accepted_iff_fibre`), in bijection
+exactly the fibre `{t : enc(Y*) + p^364 · t < 2^92672}` (`accepted_iff_fibre`), in bijection
 with the `sampleLane` fibre over `Y*` through `limbsToNat`. -/
 theorem preimage_close [FieldCertificate] (vector : Fin pointElementCountX → BaseField) :
     AbortClose (rejectLaw (BigInt.hiWidth + 256) (BigInt.samplerAccept (vectorEnc vector))
@@ -409,17 +410,34 @@ theorem optionProduct_uniform [FieldCertificate] {α : Type} [Fintype α] [Nonem
       rw [PMF.map_comp]
       rfl
 
-/-- **The free coordinates are abort-close to the uniform free part**: `182` field cells, read in
-the machine's order `2d + slot` (a bijection `finProdFinEquiv`). -/
+/-- **A randomiser pair is abort-close to the uniform pair**: two randomisers, read as the pair
+`(draw 0, draw 1)` (a bijection `piFinTwoEquiv`). -/
+theorem pair_close [FieldCertificate] :
+    AbortClose (((2 : Nat) : ENNReal) *
+        rejectLaw fieldWidth (fun value => decide (1 ≤ value ∧ value < pNat)) attempts none)
+      pairLaw ((PMF.uniformOfFintype (NonZeroBase × NonZeroBase)).map some) := by
+  have draws := AbortClose.optionProduct 2 (fun _ => lambdaLaw)
+    (fun _ => (PMF.uniformOfFintype NonZeroBase).map some) (fun _ => lambda_close)
+  rw [optionProduct_uniform] at draws
+  have reindex : (PMF.uniformOfFintype (NonZeroBase × NonZeroBase)).map some =
+      ((PMF.uniformOfFintype (Fin 2 → NonZeroBase)).map some).map
+        (Option.map fun pair => (pair 0, pair 1)) := by
+    rw [PMF.map_comp, ← uniform_equiv (piFinTwoEquiv fun _ => NonZeroBase), PMF.map_comp]
+    rfl
+  rw [reindex]
+  exact draws.map_opt _ rfl
+
+/-- **The free coordinates are abort-close to the uniform free part**: `91` field cells, read in
+the machine's order `d` (a bijection `finProdFinEquiv`). -/
 theorem free_close [FieldCertificate] :
-    AbortClose (((digitCount * 2 : Nat) : ENNReal) *
+    AbortClose (((digitCount * 1 : Nat) : ENNReal) *
         rejectLaw fieldWidth (fun value => decide (value < pNat)) attempts none)
       freeLaw ((PMF.uniformOfFintype (FreeSite → BaseField)).map some) := by
-  have cells := AbortClose.optionProduct (digitCount * 2) (fun _ => fieldCellLaw)
+  have cells := AbortClose.optionProduct (digitCount * 1) (fun _ => fieldCellLaw)
     (fun _ => (PMF.uniformOfFintype BaseField).map some) (fun _ => fieldCell_close)
   rw [optionProduct_uniform] at cells
   have reindex : (PMF.uniformOfFintype (FreeSite → BaseField)).map some =
-      ((PMF.uniformOfFintype (Fin (digitCount * 2) → BaseField)).map some).map
+      ((PMF.uniformOfFintype (Fin (digitCount * 1) → BaseField)).map some).map
         (Option.map fun draws site => draws (finProdFinEquiv site)) := by
     rw [PMF.map_comp, ← uniform_equiv (finProdFinEquiv.symm.arrowCongr (Equiv.refl BaseField)),
       PMF.map_comp]

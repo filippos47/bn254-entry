@@ -6,17 +6,17 @@
 ### (a) The row solve
 
 With the published constants `γ = rows[d]` and the input `u` fixed, each of a digit's three rows is
-affine in the eight delivered element values (`evaluateGamma_eq_affine`: a `γ`-and-`u` constant
+affine in the seven delivered element values (`evaluateGamma_eq_affine`: a `γ`-and-`u` constant
 plus the linear form `rowLinear u`, which does not mention `γ`), and each row has a **collector**
 that no other row reads (see `rowLinear`): `rowX_x9` for `X` and `rowZ_x9` for `Z`, with
-coefficient one, and `rowY_cubic` for `Y`, with coefficient `x²`. All three are x-type elements of
-lane `pointX`. Every curve point has `x ≠ 0` (`onCurve_x_ne_zero`), so the `Y` solve divides by
-`x²`.
+coefficient one, and `rowY_cubic` for the sign row, with coefficient `x²`. All three are x-type
+elements of lane `pointX`. Every curve point has `x ≠ 0` (`onCurve_x_ne_zero`), so the sign row's
+solve divides by `x²`.
 
 `collectorEquiv γ u v : F_p³ ≃ HomogeneousValue` is the solve: its forward map writes the collector
 triple into `v` and evaluates the three rows, its inverse is the closed form `collectorSolve`
-(note §1.3, E3), for `x ≠ 0`. `collectorSolve` reads `v` only at the five non-collector elements,
-so for every fixed value of the five free elements and the eleven published constants the
+(note §1.3, E3), for `x ≠ 0`. `collectorSolve` reads `v` only at the four non-collector elements,
+so for every fixed value of the four free elements and the ten published constants the
 collector triple and the row triple determine each other (`collectorsOf_eq_solve`).
 
 ### (b) The digit-point law
@@ -38,20 +38,22 @@ points are `D = T + K` with `H(T) = Q`, and the simulator draws `D_tail` and cla
   genuine cost: the event depends on `T`, i.e. on the secret scalar, so no output-only sampler can
   reproduce the conditioning.
 
-**The rows.** `lift D λ = (λ² x, λ³ y, λ)` for a finite point and `(λ², λ³, 0)` for `O`. The real
-row of a digit is (`realRow_digitZero`, `realRow_xNe`, `realRow_neg`):
-digit zero `lift K ρ`; nonzero digit with `x' ≠ k_x` `lift (T + K) (ρ (x' − k_x))`; inverse case
-`T = −K` `lift O (2 ρ k_y)`. In all three the multiplier is non-zero, so under a uniform `ρ ∈ F_p^*`
-the row law is **exactly** the lift of `D` at a uniform `λ ∈ F_p^*` (`lifts_law`, jointly over
-all digits for any law of the points: `rowsLaw_eq`). The **doubling** case `T = K` gives the row
-`(0, 0, 0)` (`realRow_double`), which the gadget resolves; **no lift is ever `(0, 0, 0)`**
-(`lift_ne_zero`), so the simulator never produces a doubling row. That event is the second
-statistical cost; under the simulator's point law each digit hits any fixed target point with
-probability at most `1 / #G` (`clamp_hit_le`), so the doubling event `∃ d, D_d = 2 T_d` has mass at
-most `91 / #Point` under the simulator's law (`bn254_doubling_le`) and at most `182 / #Point` under
-the construction's (`bn254_doubling_real_le`, adding the offset-restriction distance). The
-exception gadget is **not** smoothed over: it is exactly this event, charged, and never
-simulated. Together the two costs are the note's `ε_pt = 182 / (r − 1)` order term.
+**The rows.** `lift D λ t = (λ² x, t² y, λ)` for a finite point and `(λ², 0, 0)` for `O`. The
+real row of a digit (Jacobian `X` and `Z` at `ρ`, the sign row `S = τ² L² y_R` at the independent
+`τ`) is (`realRow_digitZero`, `realRow_xNe`, `realRow_neg`): digit zero `lift K ρ τ`; nonzero digit
+with `x' ≠ k_x` and `L ≠ 0` `lift (T + K) (ρ (x' − k_x)) (τ L)`; inverse case `T = −K`
+`lift O (2 ρ k_y) τ` (the sign row vanishes there: the tangent at `−K` passes through `−K`). In all
+three the multipliers are non-zero, so under uniform `ρ, τ ∈ F_p^*` the row law is **exactly** the
+lift of `D` at uniform `λ, t ∈ F_p^*` (`lifts_law`, jointly over all digits for any law of the
+points: `rowsLaw_eq`). Two cases are not lifts: the **doubling** case `T = K` gives `X = Z = 0`
+(`realRow_double`), and the sign row's other zero `T = 2K` (`L = 0`, `x' ≠ k_x`) gives
+`S = 0 ≠ Z` (`realRow_triple`); the gadget resolves both, and the simulator never produces them.
+They are the second statistical cost: under the simulator's point law each digit hits any fixed
+target point with probability at most `1 / #G` (`clamp_hit_le`), so the exceptional event
+`∃ d, D_d = 2 T_d ∨ D_d = (3/2) T_d` has mass at most `182 / #Point` under the simulator's law
+(`bn254_doubling_le`) and at most `273 / #Point` under the construction's
+(`bn254_doubling_real_le`, adding the offset-restriction distance). The exception gadget is
+**not** smoothed over: it is exactly this event, charged, and never simulated.
 -/
 
 import Proof.Privacy.Phase3.Basic
@@ -90,15 +92,14 @@ instance (element : Biquadratic.Element) : Decidable (IsCollector element) := by
 /-- The row triple's linear part in the delivered values. It does not mention `γ`. -/
 def rowLinear (input : AffineInput) (values : Biquadratic.Values) : HomogeneousValue where
   x := values (.inl .rowX_x7) * input.x + values (.inl .rowX_x9) + values (.inr .rowX_y10)
-  y := values (.inl .rowY_mixed) * input.y + values (.inl .rowY_cubic) * input.x ^ 2
-    + values (.inr .rowY_y8) * input.y + values (.inr .rowY_y10)
+  y := values (.inl .rowY_cubic) * input.x ^ 2 + values (.inr .rowY_y8) * input.y
+    + values (.inr .rowY_y10)
   z := values (.inl .rowZ_x9)
 
 /-- The row triple's constant part: the published constants on the input's monomials. -/
 def rowConstant (gamma : RowGamma) (input : AffineInput) : HomogeneousValue where
   x := gamma.xC0 + gamma.xC1 * input.x + gamma.xC2 * input.y + gamma.xC4 * input.x ^ 2
-  y := gamma.yC0 + gamma.yC2 * input.y + gamma.yC3 * input.x * input.y + gamma.yC4 * input.x ^ 2
-    + gamma.yC5 * input.y ^ 2
+  y := gamma.yC0 + gamma.yC2 * input.y + gamma.yC4 * input.x ^ 2 + gamma.yC5 * input.y ^ 2
   z := gamma.zC0 + gamma.zC1 * input.x
 
 /-- **The rows are affine in the delivered values, with `γ` fixed.** -/
@@ -131,20 +132,20 @@ theorem setCollectors_collectorsOf (values : Biquadratic.Values) :
   split_ifs with hx hy hz <;> first | rw [hx] | rw [hy] | rw [hz] | rfl
 
 /-- **The collector solve** (note §1.3, E3): the collector triple that makes the three rows equal a
-target, given the published constants and the five other delivered values. The `Y` component
+target, given the published constants and the four other delivered values. The sign component
 divides by the `Y` collector's coefficient `x²`, as the inverse `(x · x)⁻¹` (the machine's
 `Opening.finishScaled`; the inverse of `0` is `0`, and on the curve `x ≠ 0`). -/
 def collectorSolve (gamma : RowGamma) (input : AffineInput)
     (values : Biquadratic.Values) (target : HomogeneousValue) : BaseField × BaseField × BaseField :=
   (target.x - (gamma.xC0 + gamma.xC1 * input.x + gamma.xC2 * input.y + gamma.xC4 * input.x ^ 2
       + values (.inl .rowX_x7) * input.x + values (.inr .rowX_y10)),
-   (target.y - (gamma.yC0 + gamma.yC2 * input.y + gamma.yC3 * input.x * input.y
-      + gamma.yC4 * input.x ^ 2 + gamma.yC5 * input.y ^ 2 + values (.inl .rowY_mixed) * input.y
-      + values (.inr .rowY_y8) * input.y + values (.inr .rowY_y10))) * (input.x * input.x)⁻¹,
+   (target.y - (gamma.yC0 + gamma.yC2 * input.y + gamma.yC4 * input.x ^ 2
+      + gamma.yC5 * input.y ^ 2 + values (.inr .rowY_y8) * input.y + values (.inr .rowY_y10)))
+      * (input.x * input.x)⁻¹,
    target.z - (gamma.zC0 + gamma.zC1 * input.x))
 
 /-- **The collector triple and the row triple determine each other**, for every fixed value of the
-five free elements and the published constants, when `x ≠ 0`. -/
+four free elements and the published constants, when `x ≠ 0`. -/
 def collectorEquiv [FieldCertificate] (gamma : RowGamma) (input : AffineInput)
     (values : Biquadratic.Values) (xNe : input.x ≠ 0) :
     (BaseField × BaseField × BaseField) ≃ HomogeneousValue where
@@ -462,116 +463,136 @@ section Lift
 
 variable [FieldCertificate] [GroupCertificate]
 
-/-- **The homogeneous lift** of a point at a scale: `(λ² x, λ³ y, λ)` for a finite point,
-`(λ², λ³, 0)` for the identity. -/
-def lift (point : Point) (scale : BaseField) : HomogeneousValue :=
+/-- **The homogeneous lift** of a point at a scale pair: `(λ² x, t² y, λ)` for a finite point,
+`(λ², 0, 0)` for the identity. -/
+def lift (point : Point) (scale signScale : BaseField) : HomogeneousValue :=
   match point with
-  | .zero => ⟨scale ^ 2, scale ^ 3, 0⟩
-  | .some x y _ => ⟨scale ^ 2 * x, scale ^ 3 * y, scale⟩
-
-/-- **No lift is the doubling row.** -/
-theorem lift_ne_zero (point : Point) {scale : BaseField} (nonzero : scale ≠ 0) :
-    lift point scale ≠ ⟨0, 0, 0⟩ := by
-  cases point with
-  | zero =>
-      intro same
-      have := congrArg HomogeneousValue.x same
-      exact pow_ne_zero 2 nonzero this
-  | some x y valid =>
-      intro same
-      have := congrArg HomogeneousValue.z same
-      exact nonzero this
+  | .zero => ⟨scale ^ 2, 0, 0⟩
+  | .some x y _ => ⟨scale ^ 2 * x, signScale ^ 2 * y, scale⟩
 
 /-- A lift decodes to its point. -/
-theorem decode_lift (point : Point) {scale : BaseField} (nonzero : scale ≠ 0) (digit : Digit)
-    (inputPoint : Point) :
-    Garbling.decodeHomogeneous (lift point scale) digit inputPoint = some point := by
+theorem decode_lift (point : Point) {scale signScale : BaseField} (nonzero : scale ≠ 0)
+    (signNonzero : signScale ≠ 0) (digit tripleDigit : Digit) (inputPoint : Point) :
+    Garbling.decodeHomogeneous (lift point scale signScale) digit tripleDigit inputPoint =
+      some point := by
   cases point with
   | zero =>
       unfold lift Garbling.decodeHomogeneous
       dsimp only
-      rw [if_pos rfl, if_neg (fun both => pow_ne_zero 2 nonzero both.1)]
+      rw [if_pos rfl, if_neg (pow_ne_zero 2 nonzero)]
       rfl
   | some x y valid =>
-      unfold lift Garbling.decodeHomogeneous
-      dsimp only
-      rw [if_neg nonzero]
-      have xs : scale ^ 2 * x / scale ^ 2 = x := by field_simp
-      have ys : scale ^ 3 * y / scale ^ 3 = y := by field_simp
-      rw [xs, ys]
       have onCurve : OnCurve ⟨x, y⟩ :=
         (equation_iff_onCurve ⟨x, y⟩).mp
           ((curve.toAffine.equation_iff_nonsingular_of_Δ_ne_zero discriminantNeZero).mpr valid)
-      rw [JacobianMixed.decodePoint_eq_affinePoint _ onCurve]
+      have yNe : y ≠ 0 := JacobianMixed.noAffineYZero ⟨x, y⟩ onCurve
+      have cubic : x ^ 3 + 3 = y ^ 2 := onCurve.symm
+      unfold lift Garbling.decodeHomogeneous
+      dsimp only
+      rw [if_neg nonzero, if_neg (mul_ne_zero (pow_ne_zero 2 signNonzero) yNe)]
+      have xs : scale ^ 2 * x / scale ^ 2 = x := by field_simp
+      rw [xs, cubic, JacobianMixed.signRoot _ _ signNonzero,
+        JacobianMixed.decodePoint_eq_affinePoint _ onCurve]
       rfl
 
-/-- A row with non-zero `Z` that decodes to a point is that point's lift at scale `Z`. -/
-theorem eq_lift_of_decode (row : HomogeneousValue) (digit : Digit)
-    (inputPoint point : Point)
-    (decoded : Garbling.decodeHomogeneous row digit inputPoint = some point)
-    (nonzero : row.z ≠ 0) :
-    row = lift point row.z := by
-  obtain ⟨X, Y, Z⟩ := row
-  change Z ≠ 0 at nonzero
-  simp only [Garbling.decodeHomogeneous, if_neg nonzero, decodePoint] at decoded
-  split_ifs at decoded with valid
-  cases decoded
-  simp only [lift]
-  congr 1 <;> field_simp
-
-/-- **Digit zero**: the row is the offset's lift at `ρ`. -/
+/-- **Digit zero**: the row is the offset's lift at `(ρ, τ)`. -/
 theorem realRow_digitZero (offset : AffineInput) (onCurve : OnCurve offset) (input : AffineInput)
-    (rho : BaseField) :
-    evaluateRow (Coordinates.rows offset none rho) input
-      = lift (JacobianMixed.affinePoint offset onCurve) rho := by
+    (rho tau : BaseField) :
+    evaluateRow (Coordinates.rows offset none rho tau) input
+      = lift (JacobianMixed.affinePoint offset onCurve) rho tau := by
   rw [evaluateRowsNone]
   rfl
 
-/-- **Non-zero digit, `x' ≠ k_x`**: the row is the lift of `T + K` at `ρ (x' − k_x)`. -/
+/-- **Non-zero digit, `x' ≠ k_x`**: the row is the lift of `T + K` at `(ρ (x' − k_x), τ L)`. -/
 theorem realRow_xNe (offset input : AffineInput) (offsetOnCurve : OnCurve offset)
-    (inputOnCurve : OnCurve input) (xNe : input.x ≠ offset.x) (rho : BaseField) (rhoNe : rho ≠ 0) :
+    (inputOnCurve : OnCurve input) (xNe : input.x ≠ offset.x) (rho tau : BaseField) :
     (⟨rho ^ 2 * Coordinates.evaluate (Coordinates.xCoefficients offset) input,
-      rho ^ 3 * Coordinates.evaluate (Coordinates.yCoefficients offset) input,
+      tau ^ 2 * Coordinates.evaluate (Coordinates.signCoefficients offset) input,
       rho * Coordinates.evaluate (Coordinates.zCoefficients offset) input⟩ : HomogeneousValue)
       = lift (JacobianMixed.affinePoint input inputOnCurve
-          + JacobianMixed.affinePoint offset offsetOnCurve) (rho * (input.x - offset.x)) := by
-  have decoded := JacobianMixed.decodeJacobianOfXNe offset input offsetOnCurve inputOnCurve xNe
-    rho rhoNe .zero 0
-  have zValue : rho * Coordinates.evaluate (Coordinates.zCoefficients offset) input
-      = rho * (input.x - offset.x) := by rw [Coordinates.evaluateZ]; rfl
-  have nonzero : rho * Coordinates.evaluate (Coordinates.zCoefficients offset) input ≠ 0 := by
-    rw [zValue]; exact mul_ne_zero rhoNe (sub_ne_zero.mpr xNe)
-  have := eq_lift_of_decode _ .zero 0 _ decoded nonzero
-  rw [this]
-  simp only
-  rw [zValue]
+          + JacobianMixed.affinePoint offset offsetOnCurve) (rho * (input.x - offset.x))
+          (tau * Coordinates.tangentLine offset input) := by
+  have dNe : input.x - offset.x ≠ 0 := sub_ne_zero.mpr xNe
+  have xValue : Coordinates.evaluate (Coordinates.xCoefficients offset) input =
+      (input.x - offset.x) ^ 2 * curve.toAffine.addX input.x offset.x
+        (curve.toAffine.slope input.x offset.x input.y offset.y) := by
+    rw [← JacobianMixed.xRow_div offset input offsetOnCurve inputOnCurve xNe]
+    field_simp
+  have sValue := JacobianMixed.signValue offset input offsetOnCurve inputOnCurve xNe
+  have zValue : Coordinates.evaluate (Coordinates.zCoefficients offset) input =
+      input.x - offset.x := Coordinates.evaluateZ offset input
+  simp only [JacobianMixed.affinePoint]
+  rw [WeierstrassCurve.Affine.Point.add_of_X_ne xNe]
+  simp only [lift]
+  rw [xValue, sValue, zValue]
+  congr 1 <;> ring
+
+/-- The sign row vanishes at `T = −K`: the tangent at `−K` passes through `−K`. -/
+theorem sign_neg (offset input : AffineInput) (offsetOnCurve : OnCurve offset)
+    (sameX : input.x = offset.x) (negY : input.y = -offset.y) :
+    Coordinates.evaluate (Coordinates.signCoefficients offset) input = 0 := by
+  have curveK : offset.y ^ 2 = offset.x ^ 3 + 3 := offsetOnCurve
+  simp only [Coordinates.evaluate, Coordinates.signCoefficients]
+  rw [sameX, negY]
+  linear_combination (3 * offset.y ^ 3 - 81 * offset.y) * curveK
 
 /-- **The inverse case `T = −K`**: the row is the identity's lift at `2 ρ k_y`. -/
 theorem realRow_neg (offset input : AffineInput) (offsetOnCurve : OnCurve offset)
     (inputOnCurve : OnCurve input) (sameX : input.x = offset.x) (negY : input.y = -offset.y)
-    (rho : BaseField) :
+    (rho tau : BaseField) :
     (⟨rho ^ 2 * Coordinates.evaluate (Coordinates.xCoefficients offset) input,
-      rho ^ 3 * Coordinates.evaluate (Coordinates.yCoefficients offset) input,
+      tau ^ 2 * Coordinates.evaluate (Coordinates.signCoefficients offset) input,
       rho * Coordinates.evaluate (Coordinates.zCoefficients offset) input⟩ : HomogeneousValue)
-      = lift 0 (2 * rho * offset.y) := by
+      = lift 0 (2 * rho * offset.y) tau := by
   rw [Coordinates.exceptionalX offset input offsetOnCurve inputOnCurve sameX,
-    Coordinates.exceptionalY offset input offsetOnCurve inputOnCurve sameX,
+    sign_neg offset input offsetOnCurve sameX negY,
     Coordinates.exceptionalZ offset input sameX, negY]
-  show _ = (⟨(2 * rho * offset.y) ^ 2, (2 * rho * offset.y) ^ 3, 0⟩ : HomogeneousValue)
+  show _ = (⟨(2 * rho * offset.y) ^ 2, 0, 0⟩ : HomogeneousValue)
   congr 1 <;> ring
 
-/-- **The doubling case `T = K`**: the row is `(0, 0, 0)`, which no lift is. -/
+/-- **The doubling case `T = K`**: the row has `X = Z = 0`, which no lift has. -/
 theorem realRow_double (offset input : AffineInput) (offsetOnCurve : OnCurve offset)
     (inputOnCurve : OnCurve input) (sameX : input.x = offset.x) (sameY : input.y = offset.y)
-    (rho : BaseField) :
-    (⟨rho ^ 2 * Coordinates.evaluate (Coordinates.xCoefficients offset) input,
-      rho ^ 3 * Coordinates.evaluate (Coordinates.yCoefficients offset) input,
-      rho * Coordinates.evaluate (Coordinates.zCoefficients offset) input⟩ : HomogeneousValue)
-      = ⟨0, 0, 0⟩ := by
+    (rho tau : BaseField) :
+    rho ^ 2 * Coordinates.evaluate (Coordinates.xCoefficients offset) input = 0 ∧
+      rho * Coordinates.evaluate (Coordinates.zCoefficients offset) input = 0 := by
   rw [Coordinates.exceptionalX offset input offsetOnCurve inputOnCurve sameX,
-    Coordinates.exceptionalY offset input offsetOnCurve inputOnCurve sameX,
     Coordinates.exceptionalZ offset input sameX, sameY]
-  congr 1 <;> ring
+  constructor <;> ring
+
+/-- No lift at a nonzero scale has `X = Z = 0`. -/
+theorem lift_not_double (point : Point) {scale : BaseField} (nonzero : scale ≠ 0)
+    (signScale : BaseField) :
+    ¬ ((lift point scale signScale).x = 0 ∧ (lift point scale signScale).z = 0) := by
+  cases point with
+  | zero => exact fun both => pow_ne_zero 2 nonzero both.1
+  | some x y valid => exact fun both => nonzero both.2
+
+/-- **The sign row's other zero `T = 2K`** (`L = 0`, `x' ≠ k_x`): the row has `S = 0 ≠ Z`, which
+no lift has. -/
+theorem realRow_triple (offset input : AffineInput) (offsetOnCurve : OnCurve offset)
+    (inputOnCurve : OnCurve input) (xNe : input.x ≠ offset.x)
+    (lineZero : Coordinates.tangentLine offset input = 0) (rho tau : BaseField) (rhoNe : rho ≠ 0) :
+    tau ^ 2 * Coordinates.evaluate (Coordinates.signCoefficients offset) input = 0 ∧
+      rho * Coordinates.evaluate (Coordinates.zCoefficients offset) input ≠ 0 := by
+  constructor
+  · rw [JacobianMixed.signValue offset input offsetOnCurve inputOnCurve xNe, lineZero]
+    ring
+  · rw [Coordinates.evaluateZ offset input]
+    exact mul_ne_zero rhoNe (sub_ne_zero.mpr xNe)
+
+/-- No lift at a nonzero sign scale has `S = 0 ≠ Z`: a finite point has `y ≠ 0`. -/
+theorem lift_not_triple (point : Point) (scale : BaseField) {signScale : BaseField}
+    (signNonzero : signScale ≠ 0) :
+    ¬ ((lift point scale signScale).y = 0 ∧ (lift point scale signScale).z ≠ 0) := by
+  cases point with
+  | zero => exact fun both => both.2 rfl
+  | some x y valid =>
+      have onCurve : OnCurve ⟨x, y⟩ :=
+        (equation_iff_onCurve ⟨x, y⟩).mp
+          ((curve.toAffine.equation_iff_nonsingular_of_Δ_ne_zero discriminantNeZero).mpr valid)
+      exact fun both => mul_ne_zero (pow_ne_zero 2 signNonzero)
+        (JacobianMixed.noAffineYZero ⟨x, y⟩ onCurve) both.1
 
 /-- The non-zero field elements, the range of `ρ` and of `λ`. -/
 abbrev NonZeroField := {value : BaseField // value ≠ 0}
@@ -585,34 +606,42 @@ def scaleEquiv (factor : BaseField) (nonzero : factor ≠ 0) : NonZeroField ≃ 
   left_inv value := Subtype.ext (by field_simp)
   right_inv value := Subtype.ext (by field_simp)
 
-/-- **The lift law, jointly over all digits.** For fixed points and any non-zero multipliers,
-lifting at `ρ_d · c_d` with `ρ` uniform on `(F_p^*)^m` is lifting at a uniform `λ`. -/
-theorem lifts_law {m : ℕ} (points : Fin m → Point) (multiplier : Fin m → BaseField)
-    (nonzero : ∀ digit, multiplier digit ≠ 0) :
-    (PMF.uniformOfFintype (Fin m → NonZeroField)).map
-        (fun rho digit => lift (points digit) ((rho digit).1 * multiplier digit))
-      = (PMF.uniformOfFintype (Fin m → NonZeroField)).map
-        (fun scale digit => lift (points digit) (scale digit).1) := by
-  let rescale : (Fin m → NonZeroField) ≃ (Fin m → NonZeroField) :=
-    Equiv.piCongrRight fun digit => scaleEquiv (multiplier digit) (nonzero digit)
-  have factor : (fun (rho : Fin m → NonZeroField) digit =>
-        lift (points digit) ((rho digit).1 * multiplier digit))
-      = (fun (scale : Fin m → NonZeroField) digit => lift (points digit) (scale digit).1)
-        ∘ rescale := rfl
+/-- **The lift law, jointly over all digits.** For fixed points and any non-zero multiplier pairs,
+lifting at `(ρ_d · c_d, τ_d · e_d)` with `(ρ, τ)` uniform on `((F_p^*)²)^m` is lifting at a uniform
+`(λ, t)`. -/
+theorem lifts_law {m : ℕ} (points : Fin m → Point) (multiplier signMultiplier : Fin m → BaseField)
+    (nonzero : ∀ digit, multiplier digit ≠ 0) (signNonzero : ∀ digit, signMultiplier digit ≠ 0) :
+    (PMF.uniformOfFintype (Fin m → NonZeroField × NonZeroField)).map
+        (fun scales digit => lift (points digit) ((scales digit).1.1 * multiplier digit)
+          ((scales digit).2.1 * signMultiplier digit))
+      = (PMF.uniformOfFintype (Fin m → NonZeroField × NonZeroField)).map
+        (fun scales digit => lift (points digit) (scales digit).1.1 (scales digit).2.1) := by
+  let rescale : (Fin m → NonZeroField × NonZeroField) ≃ (Fin m → NonZeroField × NonZeroField) :=
+    Equiv.piCongrRight fun digit => (scaleEquiv (multiplier digit) (nonzero digit)).prodCongr
+      (scaleEquiv (signMultiplier digit) (signNonzero digit))
+  have factor : (fun (scales : Fin m → NonZeroField × NonZeroField) digit =>
+        lift (points digit) ((scales digit).1.1 * multiplier digit)
+          ((scales digit).2.1 * signMultiplier digit))
+      = (fun (scales : Fin m → NonZeroField × NonZeroField) digit =>
+          lift (points digit) (scales digit).1.1 (scales digit).2.1) ∘ rescale := rfl
   rw [factor, ← PMF.map_comp, uniformOfFintype_map_equiv rescale]
 
 /-- **The row law given the points, for any point law.** Whatever law the digit points have, rows
-lifted at `ρ_d · c_d(D)` (non-zero multipliers that may depend on the points and on anything
-fixed, such as the digit multiples) have exactly the law of rows lifted at uniform `λ` — which
-depends on the point law alone. -/
+lifted at `(ρ_d · c_d(D), τ_d · e_d(D))` (non-zero multipliers that may depend on the points and on
+anything fixed, such as the digit multiples) have exactly the law of rows lifted at uniform
+`(λ, t)` — which depends on the point law alone. -/
 theorem rowsLaw_eq {m : ℕ} (pointsLaw : PMF (Fin m → Point))
-    (multiplier : (Fin m → Point) → Fin m → BaseField)
-    (nonzero : ∀ points digit, multiplier points digit ≠ 0) :
-    pointsLaw.bind (fun points => (PMF.uniformOfFintype (Fin m → NonZeroField)).map
-        (fun rho digit => lift (points digit) ((rho digit).1 * multiplier points digit)))
-      = pointsLaw.bind (fun points => (PMF.uniformOfFintype (Fin m → NonZeroField)).map
-        (fun scale digit => lift (points digit) (scale digit).1)) :=
-  congrArg _ (funext fun points => lifts_law points (multiplier points) (nonzero points))
+    (multiplier signMultiplier : (Fin m → Point) → Fin m → BaseField)
+    (nonzero : ∀ points digit, multiplier points digit ≠ 0)
+    (signNonzero : ∀ points digit, signMultiplier points digit ≠ 0) :
+    pointsLaw.bind (fun points => (PMF.uniformOfFintype (Fin m → NonZeroField × NonZeroField)).map
+        (fun scales digit => lift (points digit) ((scales digit).1.1 * multiplier points digit)
+          ((scales digit).2.1 * signMultiplier points digit)))
+      = pointsLaw.bind (fun points =>
+          (PMF.uniformOfFintype (Fin m → NonZeroField × NonZeroField)).map
+            (fun scales digit => lift (points digit) (scales digit).1.1 (scales digit).2.1)) :=
+  congrArg _ (funext fun points => lifts_law points (multiplier points) (signMultiplier points)
+    (nonzero points) (signNonzero points))
 
 end Lift
 
@@ -658,16 +687,44 @@ theorem bn254_digitPoints_good_etvDist_le [Fintype Point] (multiples : Fin 91 �
   have := digitPoints_good_etvDist_le (n := 89) radixMap radixMap_injective multiples output hits
   simpa using this
 
-/-- **The doubling event under the simulator's point law**: some digit point is twice its
-multiple (`T_d = K_d`) with probability at most `91 / #Point`. -/
+/-- The exceptional digit points of a multiple `T`: `2 T` (the doubling input `T = K`) and
+`(3/2) T` (the sign row's other zero `T = 2K`). -/
+def Exceptional (multiple point : Point) : Prop :=
+  point = multiple + multiple ∨ point = Garbling.threeHalves • multiple
+
+/-- **The exceptional event under the simulator's point law**: some digit point is exceptional
+for its multiple with probability at most `182 / #Point` (`91` for each of the two targets). -/
 theorem bn254_doubling_le [Fintype Point] (multiples : Fin 91 → Point) (output : Point) :
     (PMF.uniformOfFintype (Fin 90 → Point)).toOuterMeasure
-        {tail | ∃ digit, clampPoints radixMap output tail digit = multiples digit + multiples digit}
-      ≤ (91 : ℝ≥0∞) * (Fintype.card Point : ℝ≥0∞)⁻¹ := by
+        {tail | ∃ digit, Exceptional (multiples digit) (clampPoints radixMap output tail digit)}
+      ≤ (182 : ℝ≥0∞) * (Fintype.card Point : ℝ≥0∞)⁻¹ := by
   classical
-  have := clamp_anyHit_le (n := 89) radixMap radixMap_injective output
+  have double := clamp_anyHit_le (n := 89) radixMap radixMap_injective output
     (fun digit => multiples digit + multiples digit)
-  simpa using this
+  have triple := clamp_anyHit_le (n := 89) radixMap radixMap_injective output
+    (fun digit => Garbling.threeHalves • multiples digit)
+  have split : {tail : Fin 90 → Point |
+      ∃ digit, Exceptional (multiples digit) (clampPoints radixMap output tail digit)} =
+      {tail | ∃ digit, clampPoints radixMap output tail digit = multiples digit + multiples digit} ∪
+      {tail | ∃ digit, clampPoints radixMap output tail digit =
+        Garbling.threeHalves • multiples digit} := by
+    ext tail
+    simp only [Exceptional, Set.mem_setOf_eq, Set.mem_union]
+    constructor
+    · rintro ⟨digit, same | same⟩
+      · exact Or.inl ⟨digit, same⟩
+      · exact Or.inr ⟨digit, same⟩
+    · rintro (⟨digit, same⟩ | ⟨digit, same⟩)
+      · exact ⟨digit, Or.inl same⟩
+      · exact ⟨digit, Or.inr same⟩
+  rw [split]
+  refine le_trans (MeasureTheory.measure_union_le _ _) ?_
+  calc _ ≤ (91 : ℝ≥0∞) * (Fintype.card Point : ℝ≥0∞)⁻¹ +
+        (91 : ℝ≥0∞) * (Fintype.card Point : ℝ≥0∞)⁻¹ := add_le_add (by simpa using double)
+          (by simpa using triple)
+    _ = (182 : ℝ≥0∞) * (Fintype.card Point : ℝ≥0∞)⁻¹ := by
+        rw [← add_mul]
+        norm_num
 
 /-- An event's mass moves by at most the total-variation distance. -/
 theorem toOuterMeasure_le_add_etvDist {A : Type} (first second : PMF A) (event : Set A) :
@@ -681,23 +738,23 @@ theorem toOuterMeasure_le_add_etvDist {A : Type} (first second : PMF A) (event :
   · rw [Set.indicator_of_notMem inside]
     exact zero_le
 
-/-- **The doubling event under the construction's point law**: at most `182 / #Point` — the
-simulator's `91 / #Point` plus the offset-restriction distance. -/
+/-- **The exceptional event under the construction's point law**: at most `273 / #Point` — the
+simulator's `182 / #Point` plus the offset-restriction distance. -/
 theorem bn254_doubling_real_le [Fintype Point] (multiples : Fin 91 → Point) (output : Point)
     (hits : horner radixMap 91 multiples = output)
     [Nonempty {tail : Fin 90 → Point // GoodTail radixMap tail}]
     [Nonempty {tail : Fin 90 → Point // NoHit radixMap output multiples tail}] :
     ((PMF.uniformOfFintype {tail : Fin 90 → Point // GoodTail radixMap tail}).map
         (fun tail => realPoints radixMap multiples tail.1)).toOuterMeasure
-        {points | ∃ digit, points digit = multiples digit + multiples digit}
-      ≤ (182 : ℝ≥0∞) * (Fintype.card Point : ℝ≥0∞)⁻¹ := by
+        {points | ∃ digit, Exceptional (multiples digit) (points digit)}
+      ≤ (273 : ℝ≥0∞) * (Fintype.card Point : ℝ≥0∞)⁻¹ := by
   classical
   refine le_trans (toOuterMeasure_le_add_etvDist _
     ((PMF.uniformOfFintype (Fin 90 → Point)).map (clampPoints radixMap output)) _) ?_
   have idealMass : ((PMF.uniformOfFintype (Fin 90 → Point)).map
       (clampPoints radixMap output)).toOuterMeasure
-        {points | ∃ digit, points digit = multiples digit + multiples digit}
-      ≤ (91 : ℝ≥0∞) * (Fintype.card Point : ℝ≥0∞)⁻¹ := by
+        {points | ∃ digit, Exceptional (multiples digit) (points digit)}
+      ≤ (182 : ℝ≥0∞) * (Fintype.card Point : ℝ≥0∞)⁻¹ := by
     rw [PMF.toOuterMeasure_map_apply]
     exact bn254_doubling_le multiples output
   refine le_trans (add_le_add idealMass

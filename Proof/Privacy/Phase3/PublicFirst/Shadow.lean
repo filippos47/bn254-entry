@@ -14,8 +14,9 @@ bit-`true` pads and the gadget. The on-curve shadow asks exactly the rest, in a 
    label mirror the garbler's visible gadget entries, the others are discardable fresh pairs).
 
 The **reveal flag** is the generalised exceptional event (root `PublicFirst` §4): some nonzero digit
-`o` whose exceptional input agrees with the input `u` at every position `i` where the two pads do
-not collide, `pad₀(i) ⊕ pad₁(i) ≠ Δ_κ` (at a colliding position the two gadget labels coincide).
+`o` one of whose two exceptional inputs (the doubling input or the sign-zero input) agrees with the
+input `u` at every position `i` where the two pads do not collide, `pad₀(i) ⊕ pad₁(i) ≠ Δ_κ` (at a
+colliding position the two gadget labels coincide).
 The pads are read from the
 final private state at the keys the evaluator's prefix reads there (`prefixKeysOn`), and the
 free-XOR offsets `Δ` are the shadow's coin (`HW`'s Lamport key has none).
@@ -124,15 +125,21 @@ def outputKeyOf (scalar : NonZeroScalar) (offsets : FieldMacToECMac.SuccessfulOf
     (o : Fin digitCount) : FieldMacToECMac.OutputKey :=
   (FieldMacToECMac.outputKeys construction scalar.value offsets).get o
 
-/-- **Digit `o` reveals at `u` off the collisions**: it is a nonzero digit, and its exceptional
-input agrees with `u` at every position whose two pads do not differ by `Δ`. -/
+/-- A digit's exceptional input of a kind: the doubling input (`false`, `Q = K`) or the sign-zero
+input (`true`, `Q = 2K`). -/
+def kindInput (phi : BaseField) (offset : AffineInput) : Bool → AffineInput
+  | false => Exception.exceptionalInput phi offset
+  | true => Exception.tripleInput phi offset
+
+/-- **Digit `o` reveals at `u` off the collisions**: it is a nonzero digit, and one of its two
+exceptional inputs agrees with `u` at every position whose two pads do not differ by `Δ`. -/
 def RevealsAt (scalar : NonZeroScalar) (offsets : FieldMacToECMac.SuccessfulOffsets)
     (bits : BitInput) (collide : EncPRF.Coordinate → Fin coordinateBitCount → Prop)
     (o : Fin digitCount) : Prop :=
   ∃ phi, digitEndomorphismBase (outputKeyOf scalar offsets o).digit = some phi ∧
-    ∀ coordinate position,
-      inputBit (BitInput.ofAffine (Exception.exceptionalInput phi
-          (outputKeyOf scalar offsets o).offset.coordinates)) coordinate position
+    ∃ kind, ∀ coordinate position,
+      inputBit (BitInput.ofAffine (kindInput phi
+          (outputKeyOf scalar offsets o).offset.coordinates kind)) coordinate position
         = inputBit bits coordinate position ∨ collide coordinate position
 
 /-- **The on-curve reveal flag**: some digit reveals, with the collisions read from the final

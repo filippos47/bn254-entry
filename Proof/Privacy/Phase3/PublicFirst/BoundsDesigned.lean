@@ -5,7 +5,7 @@
 shadow, off the curve the pads at a uniform coin and system A, with **no** reveal flag. So:
 
 * `offRevealBound_designedOff` — the designed off-curve part never reveals (mass `0`);
-* **`designedShadow_revealBound`** — `RevealBound (designedShadow scalar) scalar (182/(r − 1))`,
+* **`designedShadow_revealBound`** — `RevealBound (designedShadow scalar) scalar (364/(r − 1))`,
   real, by transport of `revealBound_planBShadow` (no re-proof);
 * `designedBounds_of_perPair` — `DesignedBounds` from its per-pair half alone.
 -/
@@ -44,7 +44,7 @@ theorem offRevealBound_designedOff (ρ : ℝ≥0∞) : OffRevealBound designedOf
       simp [revealWeight, noReveal]
   · rw [(PMF.apply_eq_zero_iff _ _).mpr member, zero_mul]
 
-/-- **(B2) for the designed shadow**, at the honest constant `182/(r − 1)`. -/
+/-- **(B2) for the designed shadow**, at the honest constant `364/(r − 1)`. -/
 theorem designedShadow_revealBound (scalar : NonZeroScalar) :
     RevealBound (designedShadow scalar) scalar
       (ENNReal.ofReal Kriterion.ArgoMAC.Phase3.Glue.exceptionalError) :=

@@ -29,15 +29,15 @@ open scoped ENNReal
 noncomputable section
 
 variable [FieldCertificate] [GroupCertificate] (scalar : NonZeroScalar) (input : AffineInput)
-  (pos : Fin digitCount → Coord × Fin PlanB.coordinateBits)
+  (pos : PosPair)
 
 noncomputable instance restWFintype : Fintype (RestW input pos) := Fintype.ofFinite _
 
-/-- A row randomness is its four fields. -/
-def rowRandEquiv : RowRandomness ≃
-    NonZeroBase × Biquadratic.XRandomness × Biquadratic.YRandomness × Biquadratic.ZRandomness where
-  toFun r := (r.rho, r.x, r.y, r.z)
-  invFun p := ⟨p.1, p.2.1, p.2.2.1, p.2.2.2⟩
+/-- A row randomness is its five fields. -/
+def rowRandEquiv : RowRandomness ≃ NonZeroBase × NonZeroBase × Biquadratic.XRandomness ×
+    Biquadratic.YRandomness × Biquadratic.ZRandomness where
+  toFun r := (r.rho, r.tau, r.x, r.y, r.z)
+  invFun p := ⟨p.1, p.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2⟩
   left_inv _ := rfl
   right_inv _ := rfl
 
@@ -56,25 +56,27 @@ def ctxOn (E : PermutationOracle EncPRF.PermutationIndex Block) (H : OtherTable)
   foldVisible t := (ctxW input pos (padsOf E (bridgeOf H t)) keys o).foldVisible t
   gadgetVisible t := (ctxW input pos (padsOf E (bridgeOf H t)) keys o).gadgetVisible t
   gadgetSlot := (ctxW input pos (padsOf E (bridgeOf H 0)) keys o).gadgetSlot
+  gadgetMix := (ctxW input pos (padsOf E (bridgeOf H 0)) keys o).gadgetMix
   gadgetCode := (ctxW input pos (padsOf E (bridgeOf H 0)) keys o).gadgetCode
 
 omit [GroupCertificate] in
-/-- `publicOf` reads a context through its rows, `ρ`, its visible parts at the bridge key, its slots
-and codes. -/
+/-- `publicOf` reads a context through its rows, `ρ`, its visible parts at the bridge key, its slots,
+mixes and codes. -/
 theorem publicOf_congr (first second : JointContext) (jc : JointCoins) (rows : first.rows = second.rows)
     (rho : first.rho = second.rho)
     (fold : first.foldVisible (bridgeKeyOf jc) = second.foldVisible (bridgeKeyOf jc))
     (gadget : first.gadgetVisible (bridgeKeyOf jc) = second.gadgetVisible (bridgeKeyOf jc))
-    (slot : first.gadgetSlot = second.gadgetSlot) (code : first.gadgetCode = second.gadgetCode) :
+    (slot : first.gadgetSlot = second.gadgetSlot) (mix : first.gadgetMix = second.gadgetMix)
+    (code : first.gadgetCode = second.gadgetCode) :
     publicOf first jc = publicOf second jc := by
   unfold publicOf
-  rw [rows, rho, fold, gadget, slot, code]
+  rw [rows, rho, fold, gadget, slot, mix, code]
 
 theorem publicOf_ctxOn (E : PermutationOracle EncPRF.PermutationIndex Block) (H : OtherTable)
     (keys : OutputKeys) (o : OuterW input pos) (jc : JointCoins) :
     publicOf (ctxOn input pos E H keys o) jc =
       publicOf (ctxW input pos (padsOf E (bridgeOf H (bridgeKeyOf jc))) keys o) jc :=
-  publicOf_congr _ _ jc rfl rfl rfl rfl rfl rfl
+  publicOf_congr _ _ jc rfl rfl rfl rfl rfl rfl rfl
 
 /-! ### 2. The published value through the masks -/
 
@@ -84,22 +86,26 @@ def pubM (pads : Programs.Pads) (coins : Coins) (v : FixedIndex → Block) (m : 
       (regroupW input pos (coinsRest coins, v, m)).1) (regroupW input pos (coinsRest coins, v, m)).2)
     defaultKey).publicValue
 
-theorem tablePub_masks (pads : Programs.Pads) (coins : Coins) (v : FixedIndex → Block) (T : Tape) :
+theorem tablePub_masks (pads : Programs.Pads) (coins : Coins) (v : FixedIndex → Block) (T : Tape)
+    (valid : ∀ d : Fin digitCount,
+      ValidPair pos ((FieldMacToECMac.outputKeys construction scalar.value coins.offsets).get d) d) :
     tablePub scalar coins pads v T =
       pubM scalar input pos pads coins v (maskCoordEquiv (masksOf VectorSite.lane T)) :=
-  tablePub_cellsW input pos pads scalar coins v T defaultKey _ rfl
+  tablePub_cellsW input pos pads scalar coins v T defaultKey _ rfl valid
 
 /-- **The garbler's tape at the view, the published value through the masks.** -/
 theorem real_tapeK (Ψ : Public → LamportSignature → LState → ℝ≥0∞) (pads : Programs.Pads)
     (coins : Coins) (v : FixedIndex → Block) (E : PermutationOracle EncPRF.PermutationIndex Block)
-    (H : OtherTable) (x : (FixedIndex → Block) → VO input → Block) :
+    (H : OtherTable) (x : (FixedIndex → Block) → VO input → Block)
+    (valid : ∀ d : Fin digitCount,
+      ValidPair pos ((FieldMacToECMac.outputKeys construction scalar.value coins.offsets).get d) d) :
     ∑' T, uniformMaskTape T * ∑' w, PMF.uniformOfFintype (FixedIndex → Block) w *
         onKW input Ψ (tablePub scalar coins pads v T) coins.inputMacKey E H (x w)
           (fun s limb => T ⟨s.1, limb⟩) =
       ∑' m, PMF.uniformOfFintype (MaskCoord → BaseField) m *
         ∑' bd, viewWeight input (m ∘ wSite input) bd * ∑' w, PMF.uniformOfFintype (FixedIndex → Block) w *
           onKW input Ψ (pubM scalar input pos pads coins v m) coins.inputMacKey E H (x w) bd := by
-  simp only [tablePub_masks scalar input pos]
+  simp only [tablePub_masks scalar input pos _ _ _ _ valid]
   exact real_tape input (fun m bd => ∑' w, PMF.uniformOfFintype (FixedIndex → Block) w *
     onKW input Ψ (pubM scalar input pos pads coins v m) coins.inputMacKey E H (x w) bd)
 

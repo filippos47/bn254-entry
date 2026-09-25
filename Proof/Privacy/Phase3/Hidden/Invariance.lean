@@ -123,9 +123,8 @@ theorem indexShift_shiftCoins (T : TapeShift) (scalar : NonZeroScalar) (coins : 
     indexShift T scalar (shiftCoins T coins) = indexShift T scalar coins := by
   funext index
   cases index with
-  | gadget o κ position =>
-      simp only [indexShift, gadgetShift, shiftCoins_offsets]
-      rfl
+  | gadget o κ position bit =>
+      simp only [indexShift, gadgetShift]
   | _ => rfl
 
 theorem shiftCoins_shiftCoins (T : TapeShift) (coins : Coins) :

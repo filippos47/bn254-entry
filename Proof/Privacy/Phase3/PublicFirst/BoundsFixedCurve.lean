@@ -100,7 +100,7 @@ theorem awayFrom_of_lane [FieldCertificate] {lane lane' : Lane} (different : lan
     · intro c' at'
       cases i with
       | hot l cc f e h => exact different (fixed.1.symm.trans at'.1)
-      | gadget _ _ _ => exact at'.elim
+      | gadget _ _ _ _ => exact at'.elim
     · exact hash.elim
   | _ => trivial
 

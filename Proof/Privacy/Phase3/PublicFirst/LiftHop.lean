@@ -15,12 +15,12 @@ lift is against the coincidence-free game:
 * **`G1U → G1U°`** costs the mass of the coincidence event `visible ≠ designed` under `G1U`'s
   stage 1 (`hop_advantage_le`, `advantage_le_of_agree`). The obligation
   `CoincidenceBound coincidenceError` asks it below the Glue's budget term
-  `coincidenceError = 2^16/2^128` (`LawsGuess`: `12245` label and bridge events of `≤ 2/2^128`
+  `coincidenceError = 2^16/2^128` (`LawsGuess`: `13813` label and bridge events of `≤ 2/2^128`
   each; grouping by label, not by reach query, is what keeps it small);
 * **`G1U° → HW`** is the overlap with `M'` against `g1uLaterWith designedInstall`
   (`below_laterWith`), its flag mass from `PerPairBound`/`RevealBound`, and a **refined** mask-tape
   distance: off the curve the designed shadow's fill reads only the curve lanes' limbs, so the two
-  readings of `M'` are within `curveSwapError = 1396·(δ_curveX + δ_curveY)` (proved for the
+  readings of `M'` are within `curveSwapError = 1588·(δ_curveX + δ_curveY)` (proved for the
   designed shadow in `LiftTV.lean`), at most one copy of the mask swap (`curveSwapError_le`).
 
 `planB_publicFirst_of_designed`: the Glue's `publicFirst` field at its constant
@@ -165,7 +165,7 @@ end Designed
 
 /-! ### 3. The obligations and the constant -/
 
-/-- **The curve lanes' share of the mask swap**: system A's `1396 + 1396` vectors, each at its
+/-- **The curve lanes' share of the mask swap**: system A's `1588 + 1588` vectors, each at its
 lane's bias. -/
 def curveSwapError : ℝ≥0∞ := (laneVectorCount : ℝ≥0∞) * (laneDelta .curveX + laneDelta .curveY)
 

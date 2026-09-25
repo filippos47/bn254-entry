@@ -30,12 +30,13 @@ variable [FieldCertificate] [GroupCertificate] (scalar : NonZeroScalar) (input :
 /-! ### 1. The core -/
 
 /-- The rows at offsets and `ρ`. -/
-def rowsK (K : ClampedOffsets) (ρ : Fin digitCount → NonZeroBase) (d : Fin digitCount) : Coordinates.Rows :=
+def rowsK (K : ClampedOffsets) (ρ : Fin digitCount → NonZeroBase × NonZeroBase) (d : Fin digitCount) : Coordinates.Rows :=
   Coordinates.rows ((FieldMacToECMac.outputKeys construction scalar.value K.1).get d).offset.coordinates
-    (digitEndomorphismBase ((FieldMacToECMac.outputKeys construction scalar.value K.1).get d).digit) (ρ d).value
+    (digitEndomorphismBase ((FieldMacToECMac.outputKeys construction scalar.value K.1).get d).digit)
+    (ρ d).1.value (ρ d).2.value
 
 /-- **The designated masks of the core**: F4's collector solve at the true rows. -/
-def desK (K : ClampedOffsets) (ρ : Fin digitCount → NonZeroBase) (cells : PublicCells)
+def desK (K : ClampedOffsets) (ρ : Fin digitCount → NonZeroBase × NonZeroBase) (cells : PublicCells)
     (vis : VisibleCells (offShape input)) : DSite → BaseField := fun dc =>
   simDesignated (offShape input) (rowTarget (rowsK scalar K ρ dc.1) input) (cells.1 dc.1).1 (cells.1 dc.1).2
     (vis.1 dc.1) (.inl (collectorElement dc.2))
@@ -45,7 +46,7 @@ def coreKEH (Ψ : Public → LamportSignature → LState → ℝ≥0∞) (K : Cl
     (E : PermutationOracle EncPRF.PermutationIndex Block) (H : OtherTable) : ℝ≥0∞ :=
   ∑' cells, PMF.uniformOfFintype PublicCells cells *
     ∑' vis, PMF.uniformOfFintype (VisibleCells (offShape input)) vis *
-      ∑' ρ, PMF.uniformOfFintype (Fin digitCount → NonZeroBase) ρ *
+      ∑' ρ, PMF.uniformOfFintype (Fin digitCount → NonZeroBase × NonZeroBase) ρ *
         ∑' key, PMF.uniformOfFintype InputMacKey key *
           ∑' x, PMF.uniformOfFintype (VO input → Block) x *
             ∑' bd, viewWeight input (Sum.elim (visEquiv input vis) (desK scalar input K ρ cells vis)) bd *
@@ -62,9 +63,9 @@ theorem notHidden_of_notFresh (i : VO input) (notFresh : ¬ FreshQ scalar input 
   obtain ⟨index, view⟩ := i
   cases index with
   | hot lane c fold entry half =>
-      exact viewHot_not_hidden scalar input K.1 _ view fun _ _ _ same => by cases same
-  | gadget d κ p =>
-      exact planted_not_hidden scalar input K.1 off d κ p (Classical.not_not.mp notFresh)
+      exact viewHot_not_hidden scalar input K.1 _ view fun _ _ _ _ same => by cases same
+  | gadget d κ p b =>
+      exact planted_not_hidden scalar input K.1 d κ p b (Classical.not_not.mp notFresh)
 
 open Classical in
 /-- Where the view reads a fixed-key answer: the rest (fold gates, planted gadget positions) or the
@@ -210,7 +211,7 @@ theorem real_perK (valid : validate input = true) (Ψ : Public → LamportSignat
               (padsOf E (bridgeOf H (coinsSplit.symm (K, rest)).bridgeKey)) (coinsSplit.symm (K, rest)) v m)
             (coinsSplit.symm (K, rest)).inputMacKey E H (xvW scalar input K.1 v w) bd :=
     fun rest v => real_tapeK scalar input (posK scalar input K.1) Ψ _ _ v E H
-      (fun w => xvW scalar input K.1 v w)
+      (fun w => xvW scalar input K.1 v w) (fun d => posK_valid scalar input K.1 off d)
   rw [tsum_congr fun rest => congrArg _ (tsum_congr fun v => congrArg _ (step1 rest v))]
   rw [regroup_sum input (posK scalar input K.1) (fun rest v m =>
     ∑' bd, viewWeight input (m ∘ wSite input) bd * ∑' w, PMF.uniformOfFintype (FixedIndex → Block) w *
@@ -246,7 +247,7 @@ theorem real_perK (valid : validate input = true) (Ψ : Public → LamportSignat
   refine tsum_congr fun cells => congrArg _ ?_
   rw [tsum_swap_mul]
   refine tsum_congr fun vis => congrArg _ ?_
-  rw [tsum_uniform_prod (α := Fin digitCount → NonZeroBase)]
+  rw [tsum_uniform_prod (α := Fin digitCount → NonZeroBase × NonZeroBase)]
   refine tsum_congr fun ρ => congrArg _ ?_
   rw [tsum_uniform_prod (α := Coord → Fin coordinateBitCount → Block)]
   have labels := tsum_labels (BitInput.ofAffine input) fun mac =>

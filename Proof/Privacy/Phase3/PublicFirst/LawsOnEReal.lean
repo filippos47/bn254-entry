@@ -43,13 +43,12 @@ def toEnc : Coord → EncPRF.Coordinate
   | .x => .x
   | .y => .y
 
-/-- **A planted gadget position**: its digit has an exceptional input, which agrees with `u` there
-(the garbler's designed gadget entries). -/
+/-- **A planted gadget index**: its digit has an exceptional input (the garbler asks both bits of
+every position), and its bit is `u`'s (the garbler's designed gadget entries). -/
 def Planted (K : FieldMacToECMac.SuccessfulOffsets) (d : Fin digitCount) (κ : Coord)
-    (p : Fin PlanB.coordinateBits) : Prop :=
-  ∃ phi, digitEndomorphismBase (outputKeyOf scalar K d).digit = some phi ∧
-    inputBit (BitInput.ofAffine (Exception.exceptionalInput phi (outputKeyOf scalar K d).offset.coordinates))
-        (toEnc κ) p = inputBit (BitInput.ofAffine input) (toEnc κ) p
+    (p : Fin PlanB.coordinateBits) (b : Bool) : Prop :=
+  (∃ phi, digitEndomorphismBase (outputKeyOf scalar K d).digit = some phi) ∧
+    (inputBits input κ).getLsb p = b
 
 /-- **`E₀`: some nonzero digit's exceptional input is `u`.** -/
 def Exact0 (K : FieldMacToECMac.SuccessfulOffsets) : Prop :=
@@ -57,7 +56,7 @@ def Exact0 (K : FieldMacToECMac.SuccessfulOffsets) : Prop :=
 
 /-- A fresh gadget index (the garbler's designed entries leave it empty). -/
 def FreshQ (K : FieldMacToECMac.SuccessfulOffsets) : FixedIndex → Prop
-  | .gadget d κ p => ¬ Planted scalar input K d κ p
+  | .gadget d κ p b => ¬ Planted scalar input K d κ p b
   | _ => False
 
 open Classical in
@@ -153,64 +152,183 @@ theorem real_view (Ψ : Public → LamportSignature → LState → ℝ≥0∞) (
   refine tsum_congr fun H => congrArg _ ?_
   rw [tsum_productPMF]
 
-/-! ### 3. The hidden gadget positions: fresh ones -/
+/-! ### 3. The hidden gadget indices -/
+
+/-- A position where an input's bit differs from `u`'s. -/
+abbrev DiffAt (point : AffineInput) (q : Coord × Fin PlanB.coordinateBits) : Prop :=
+  (inputBits point q.1).getLsb q.2 ≠ (inputBits input q.1).getLsb q.2
+
+/-- The origin position `(x, 0)`. -/
+def pos₀ : Coord × Fin PlanB.coordinateBits := (.x, ⟨0, by unfold PlanB.coordinateBits; omega⟩)
+
+/-- The position `(x, 1)`. -/
+def pos₁ : Coord × Fin PlanB.coordinateBits := (.x, ⟨1, by unfold PlanB.coordinateBits; omega⟩)
+
+/-- A position other than `q`. -/
+def otherPos (q : Coord × Fin PlanB.coordinateBits) : Coord × Fin PlanB.coordinateBits :=
+  if q = pos₀ then pos₁ else pos₀
+
+theorem otherPos_ne (q : Coord × Fin PlanB.coordinateBits) : otherPos q ≠ q := by
+  unfold otherPos
+  split_ifs with origin
+  · rw [origin]
+    intro same
+    cases congrArg (fun q : Coord × Fin PlanB.coordinateBits => q.2.val) same
+  · exact fun same => origin same.symm
 
 open Classical in
-/-- A fresh position of each digit (`(x, 0)` if there is none). -/
-def posOf (K : FieldMacToECMac.SuccessfulOffsets) (d : Fin digitCount) : Coord × Fin PlanB.coordinateBits :=
-  if h : ∃ q : Coord × Fin PlanB.coordinateBits, ¬ Planted scalar input K d q.1 q.2 then Classical.choose h
-  else (.x, ⟨0, by unfold PlanB.coordinateBits; omega⟩)
+/-- **A digit's two hidden positions** at fixed offsets: a position where only the doubling input
+differs from `u`, then one where the sign-zero input does; or a position where only the sign-zero
+input differs, and one where the doubling input does. -/
+def positionsOf (K : FieldMacToECMac.SuccessfulOffsets) (d : Fin digitCount) :
+    (Coord × Fin PlanB.coordinateBits) × (Coord × Fin PlanB.coordinateBits) :=
+  match digitEndomorphismBase (outputKeyOf scalar K d).digit with
+  | none => (pos₀, pos₁)
+  | some phi =>
+    if h : ∃ q, DiffAt input (Exception.exceptionalInput phi (outputKeyOf scalar K d).offset.coordinates) q ∧
+        ¬ DiffAt input (Exception.tripleInput phi (outputKeyOf scalar K d).offset.coordinates) q then
+      (Classical.choose h,
+        if h₂ : ∃ q, DiffAt input (Exception.tripleInput phi (outputKeyOf scalar K d).offset.coordinates) q
+        then Classical.choose h₂ else otherPos (Classical.choose h))
+    else if h' : ∃ q, DiffAt input (Exception.tripleInput phi (outputKeyOf scalar K d).offset.coordinates) q ∧
+        ¬ DiffAt input (Exception.exceptionalInput phi (outputKeyOf scalar K d).offset.coordinates) q then
+      (if h₁ : ∃ q, DiffAt input (Exception.exceptionalInput phi (outputKeyOf scalar K d).offset.coordinates) q
+        then Classical.choose h₁ else otherPos (Classical.choose h'),
+        Classical.choose h')
+    else (pos₀, pos₁)
 
-theorem inputBit_toEnc (bits : BitInput) (c : EncPRF.Coordinate) (p : Fin coordinateBitCount) :
-    inputBit bits (toEnc (Pipeline.gadgetCoord c)) p = inputBit bits c p := by
-  cases c <;> rfl
+theorem positionsOf_ne (K : FieldMacToECMac.SuccessfulOffsets) (d : Fin digitCount) :
+    (positionsOf scalar input K d).1 ≠ (positionsOf scalar input K d).2 := by
+  unfold positionsOf
+  split
+  · exact fun same => by cases congrArg (fun q : Coord × Fin PlanB.coordinateBits => q.2.val) same
+  · rename_i phi found
+    split_ifs with h h₂ h' h₁
+    · intro same
+      simp only at same
+      exact (Classical.choose_spec h).2 (same ▸ Classical.choose_spec h₂)
+    · exact (otherPos_ne _).symm
+    · intro same
+      simp only at same
+      exact (Classical.choose_spec h').2 (same.symm ▸ Classical.choose_spec h₁)
+    · exact otherPos_ne _
+    · exact fun same => by cases congrArg (fun q : Coord × Fin PlanB.coordinateBits => q.2.val) same
 
-/-- **Off `Exact0` every digit has a fresh position.** -/
-theorem posOf_fresh (K : FieldMacToECMac.SuccessfulOffsets) (off : ¬ Exact0 scalar input K)
-    (d : Fin digitCount) : ¬ Planted scalar input K d (posOf scalar input K d).1 (posOf scalar input K d).2 := by
-  unfold posOf
-  split_ifs with h
-  · exact Classical.choose_spec h
-  · push Not at h
-    intro planted
-    obtain ⟨phi, found, _⟩ := planted
-    refine off ⟨d, phi, found, fun c p => Or.inl ?_⟩
-    obtain ⟨phi', found', agree⟩ := h (Pipeline.gadgetCoord c, p)
-    rw [found] at found'
-    cases Option.some.inj found'
-    rw [← inputBit_toEnc, ← inputBit_toEnc (BitInput.ofAffine input)]
-    exact agree
+/-- The hidden index at a position: the position and the bit `u` does not have there. -/
+def flipAt (q : Coord × Fin PlanB.coordinateBits) : Coord × Fin PlanB.coordinateBits × Bool :=
+  (q.1, q.2, !(inputBits input q.1).getLsb q.2)
+
+theorem flipAt_injective (q q' : Coord × Fin PlanB.coordinateBits) (same : flipAt input q = flipAt input q') :
+    q = q' := by
+  have first := congrArg Prod.fst same
+  have second := congrArg (fun t => t.2.1) same
+  exact Prod.ext first second
 
 variable (K : FieldMacToECMac.SuccessfulOffsets)
 
-/-- The hidden gadget positions at fixed offsets. -/
-abbrev posK : Fin digitCount → Coord × Fin PlanB.coordinateBits := posOf scalar input K
+/-- **The hidden gadget indices at fixed offsets**: each digit's two positions, at the bits `u` does
+not have. -/
+def posK : PosPair :=
+  ⟨fun d kind => flipAt input (bif kind then (positionsOf scalar input K d).2
+      else (positionsOf scalar input K d).1),
+    fun d same => positionsOf_ne scalar input K d (flipAt_injective input _ _ same)⟩
+
+/-- Off `Exact0`, every exceptional input of a nonzero digit differs from `u` somewhere. -/
+theorem exists_diff (off : ¬ Exact0 scalar input K) (d : Fin digitCount) (phi : BaseField)
+    (found : digitEndomorphismBase (outputKeyOf scalar K d).digit = some phi) (kind : Bool) :
+    ∃ q, DiffAt input (kindInput phi (outputKeyOf scalar K d).offset.coordinates kind) q := by
+  by_contra none
+  push Not at none
+  apply off
+  refine ⟨d, phi, found, kind, fun c p => Or.inl ?_⟩
+  cases c
+  · exact none (.x, p)
+  · exact none (.y, p)
+
+/-- A hidden index is read by an input's digest iff the input differs from `u` there. -/
+theorem reads_flip (point : AffineInput) (q : Coord × Fin PlanB.coordinateBits) :
+    (inputBits point (flipAt input q).1).getLsb (flipAt input q).2.1 = (flipAt input q).2.2 ↔
+      DiffAt input point q := by
+  unfold flipAt DiffAt
+  dsimp only
+  cases (inputBits point q.1).getLsb q.2 <;> cases (inputBits input q.1).getLsb q.2 <;> simp
+
+/-- **Off `Exact0` the hidden pair of every digit is valid.** -/
+theorem posK_valid (off : ¬ Exact0 scalar input K) (d : Fin digitCount) :
+    ValidPair (posK scalar input K) (outputKeyOf scalar K d) d := by
+  intro phi found
+  have diff₁ := exists_diff scalar input K off d phi found false
+  have diff₂ := exists_diff scalar input K off d phi found true
+  simp only [kindInput] at diff₁ diff₂
+  have apartInputs := exceptionalInput_ne_triple phi
+    (digitEndomorphismBasePowSix _ _ found) _ (outputKeyOf scalar K d).offset.onCurve
+  set e₁ := Exception.exceptionalInput phi (outputKeyOf scalar K d).offset.coordinates with e₁Def
+  set e₂ := Exception.tripleInput phi (outputKeyOf scalar K d).offset.coordinates with e₂Def
+  have positionsEq : positionsOf scalar input K d =
+      if h : ∃ q, DiffAt input e₁ q ∧ ¬ DiffAt input e₂ q then
+        (Classical.choose h,
+          if h₂ : ∃ q, DiffAt input e₂ q then Classical.choose h₂ else otherPos (Classical.choose h))
+      else if h' : ∃ q, DiffAt input e₂ q ∧ ¬ DiffAt input e₁ q then
+        (if h₁ : ∃ q, DiffAt input e₁ q then Classical.choose h₁ else otherPos (Classical.choose h'),
+          Classical.choose h')
+      else (pos₀, pos₁) := by
+    unfold positionsOf
+    rw [found]
+  unfold ReadsAt posK
+  simp only [cond_false, cond_true, reads_flip]
+  rw [positionsEq]
+  by_cases h : ∃ q, DiffAt input e₁ q ∧ ¬ DiffAt input e₂ q
+  · rw [dif_pos h, dif_pos diff₂]
+    exact ⟨(Classical.choose_spec h).1, Classical.choose_spec diff₂,
+      fun both => (Classical.choose_spec h).2 both.1⟩
+  · rw [dif_neg h]
+    by_cases h' : ∃ q, DiffAt input e₂ q ∧ ¬ DiffAt input e₁ q
+    · rw [dif_pos h', dif_pos diff₁]
+      exact ⟨Classical.choose_spec diff₁, (Classical.choose_spec h').1,
+        fun both => (Classical.choose_spec h').2 both.2⟩
+    · exfalso
+      push Not at h h'
+      refine apartInputs (affine_eq_of_bits fun q => ?_)
+      by_cases first : DiffAt input e₁ q
+      · have second := h q first
+        unfold DiffAt at first second
+        revert first second
+        cases (inputBits e₁ q.1).getLsb q.2 <;> cases (inputBits e₂ q.1).getLsb q.2 <;>
+          cases (inputBits input q.1).getLsb q.2 <;> simp
+      · have second : ¬ DiffAt input e₂ q := fun hit => first (h' q hit)
+        unfold DiffAt at first second
+        push Not at first second
+        rw [first, second]
 
 omit parameter in
 /-- **A fold gate of the view is not hidden**: the view asks every entry but the active parent. -/
 theorem viewHot_not_hidden (i : FixedIndex) (view : ViewIdx input i)
-    (notGadget : ∀ o κ p, i ≠ .gadget o κ p) : i ∉ Set.range (hidW input (posK scalar input K)) := by
-  rintro ⟨(⟨ℓ, s⟩ | d), same⟩
+    (notGadget : ∀ o κ p b, i ≠ .gadget o κ p b) : i ∉ Set.range (hidW input (posK scalar input K)) := by
+  rintro ⟨(⟨ℓ, s⟩ | ⟨d, kind⟩), same⟩
   · simp only [hidW] at same
     rw [hotIndexNat_slot _ _ _ (activeAtSlot_lt input ℓ s)] at same
     subst same
     exact view.2.2.2 rfl
-  · exact notGadget _ _ _ same.symm
+  · exact notGadget _ _ _ _ same.symm
 
 omit parameter in
-/-- Off `Exact0` a planted gadget index is not hidden. -/
-theorem planted_not_hidden (off : ¬ Exact0 scalar input K) (d : Fin digitCount) (κ : Coord)
-    (p : Fin PlanB.coordinateBits) (planted : Planted scalar input K d κ p) :
-    FixedIndex.gadget d κ p ∉ Set.range (hidW input (posK scalar input K)) := by
-  rintro ⟨(⟨ℓ, s⟩ | d'), same⟩
+/-- A planted gadget index is not hidden: the hidden ones carry the bit `u` does not have. -/
+theorem planted_not_hidden (d : Fin digitCount) (κ : Coord) (p : Fin PlanB.coordinateBits) (b : Bool)
+    (planted : Planted scalar input K d κ p b) :
+    FixedIndex.gadget d κ p b ∉ Set.range (hidW input (posK scalar input K)) := by
+  rintro ⟨(⟨ℓ, s⟩ | ⟨d', kind⟩), same⟩
   · simp only [hidW] at same
     rw [hotIndexNat_slot _ _ _ (activeAtSlot_lt input ℓ s)] at same
     cases same
   · simp only [hidW, FixedIndex.gadget.injEq] at same
-    obtain ⟨rfl, coordEq, position⟩ := same
-    refine posOf_fresh scalar input K off d' ?_
-    rw [coordEq, position]
-    exact planted
+    obtain ⟨rfl, coordEq, position, bitEq⟩ := same
+    have flip : ((posK scalar input K).1 d' kind).2.2 =
+        !(inputBits input ((posK scalar input K).1 d' kind).1).getLsb ((posK scalar input K).1 d' kind).2.1 :=
+      rfl
+    rw [flip, coordEq, position] at bitEq
+    have bitIs := planted.2
+    rw [← bitEq] at bitIs
+    cases h : (inputBits input κ).getLsb p <;> simp [h] at bitIs
 
 end
 

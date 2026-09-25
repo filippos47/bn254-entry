@@ -58,14 +58,22 @@ def macAt (mac : InputMac) : Coord → Fin PlanB.coordinateBits → Block
   | .x, position => mac.x.get position
   | .y, position => mac.y.get position
 
-/-- The gadget of the evaluator asks every position of every digit at its transformed label. -/
-theorem asks_unlock {ans : ∀ q : PublicQuery FixedIndex EncPRF.PermutationIndex, q.Answer}
-    (table : FieldMacToECMac.Table) (input : AffineInput) (mac : InputMac) (o : Fin digitCount)
+/-- One label of an encoded coordinate. -/
+theorem encodeCoordinate_get (key : CoordinateMacKey) (bits : BitVec coordinateBitCount)
+    (index : Fin coordinateBitCount) :
+    (encodeCoordinate key bits).get index = BitAdaptor.encode key[index.val] (bits.getLsb index) := by
+  simp [encodeCoordinate, Vector.get_eq_getElem]
+
+/-- The gadget of the evaluator asks every position of every digit, at the index of the input's
+bit there, at its transformed label. -/
+theorem asks_masks {ans : ∀ q : PublicQuery FixedIndex EncPRF.PermutationIndex, q.Answer}
+    (input : AffineInput) (mac : InputMac) (o : Fin digitCount)
     (κ : Coord) (position : Fin PlanB.coordinateBits) (label : Block)
     (labelEq : macAt mac κ position = label) :
-    Asks ans (Programs.unlockM table input mac) (.fixedForward (.gadget o κ position) label) := by
+    Asks ans (Programs.masksM input mac)
+      (.fixedForward (.gadget o κ position ((inputBits input κ).getLsb position)) label) := by
   subst labelEq
-  unfold Programs.unlockM
+  unfold Programs.masksM
   refine Asks.vector _ o (Asks.bind_left ?_)
   unfold Programs.gadgetMaskM
   cases κ
@@ -75,6 +83,15 @@ theorem asks_unlock {ans : ∀ q : PublicQuery FixedIndex EncPRF.PermutationInde
   · refine Asks.bind_right (Asks.bind_left ?_)
     unfold Programs.gadgetDigestM
     exact Asks.bind_left (Asks.vector _ position (Asks.hashM _ _))
+
+/-- `asks_masks` at a named bit. -/
+theorem asks_masks_of {ans : ∀ q : PublicQuery FixedIndex EncPRF.PermutationIndex, q.Answer}
+    (input : AffineInput) (mac : InputMac) (o : Fin digitCount)
+    (κ : Coord) (position : Fin PlanB.coordinateBits) (bit : Bool) (label : Block)
+    (bitEq : (inputBits input κ).getLsb position = bit) (labelEq : macAt mac κ position = label) :
+    Asks ans (Programs.masksM input mac) (.fixedForward (.gadget o κ position bit) label) := by
+  subst bitEq
+  exact asks_masks input mac o κ position label labelEq
 
 /-! ### The tape -/
 
@@ -263,34 +280,33 @@ theorem designed_fixed (parameter : ℕ) (scalar : NonZeroScalar) (tape : Coins 
       exact asks_onCurve parameter scalar tape input ℓ laneOk _ fun scale =>
         asks_evalLane_hot tape.2 ℓ _ _ (laneKeys_correlated tape ℓ) scale _ k fold.val small
           ⟨r.val, rSmall⟩ half off
-  | gadget o κ position =>
+  | gadget o κ position bit =>
       have isSome : (digitEndomorphismBase (digitKey scalar tape.1.offsets o).digit).isSome =
           true :=
         shape
       obtain ⟨phi, found⟩ := Option.isSome_iff_exists.mp isSome
       simp only [designedIndex, Bool.and_eq_true, decide_eq_true_eq] at designed
       obtain ⟨valid, agreeBit⟩ := designed
-      let exceptional :=
-        Exception.exceptionalInput phi (digitKey scalar tape.1.offsets o).offset.coordinates
-      have agree : (inputBits input κ).getLsb position = (inputBits exceptional κ).getLsb position := by
-        rw [agreeBit]
-        simp only [exceptionalBit, found]
-        cases κ <;> rfl
-      have label : garblerPointOf scalar tape (.gadget o κ position) =
+      have label : garblerPointOf scalar tape (.gadget o κ position bit) =
           macAt ((EncPRF.transformKey tape.2.2.1 (EncPRF.whiteningKeys tape.2.2.2 tape.1.bridgeKey)
-            tape.1.inputMacKey).encodeAffine exceptional) κ position := by
-        show gadgetLabel scalar tape o κ position = _
+            tape.1.inputMacKey).encodeAffine input) κ position := by
+        show gadgetLabel scalar tape o κ position bit = _
+        rw [← agreeBit]
         simp only [gadgetLabel, found]
-        cases κ <;> rfl
+        cases κ <;> simp only [macAt, InputMacKey.encodeAffine, InputMacKey.encode,
+          BitInput.ofAffine, inputBits] <;>
+          exact (encodeCoordinate_get _ _ position).symm
       rw [label]
       unfold Programs.onCurveM
       refine Asks.bind_right (Asks.bind_right (Asks.bind_right (Asks.bind_right
         (Asks.bind_right (Asks.bind_right (Asks.bind_left ?_))))))
       rw [Programs.eval_evalPadsM, Programs.eval_askHash, Programs.eval_evalLaneM,
         Programs.eval_evalLaneM]
-      refine asks_unlock _ _ _ o κ position _ ?_
-      exact transformed_label tape input exceptional κ position _
-        (onCurve_bridge parameter scalar tape input valid) agree
+      refine asks_masks_of _ _ o κ position bit _ ?_ ?_
+      · rw [BitInput.toAffineOfAffine]
+        exact agreeBit
+      · exact transformed_label tape input input κ position _
+          (onCurve_bridge parameter scalar tape input valid) rfl
 
 /-- **Containment at a designed vector site**: every hash limb of a designed switch, at the
 garbler's label. -/

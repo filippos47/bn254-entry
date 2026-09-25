@@ -162,13 +162,16 @@ theorem onCurveM_eq (mac : InputMac) :
           Programs.evalPadsM ⟨hashed.1, hashed.2⟩ bits >>= fun pads =>
             pointXM table bits (Programs.whitenMacOf pads mac) >>= fun pointX =>
               pointYM table bits (Programs.whitenMacOf pads mac) >>= fun pointY =>
-                Programs.unlockM (Pipeline.pointTable table) bits.toAffine
-                    (Programs.transformMacOf pads mac) >>= fun digits =>
+                Programs.masksM bits.toAffine (Programs.transformMacOf pads mac) >>= fun masks =>
                   pure (some (Garbling.decodeResult
                     { point := bits.toAffine
                       pointMacs := FieldMacToECMac.evaluateHomogeneous (Pipeline.pointTable table)
                         (Pipeline.digitValues pointX pointY) bits.toAffine
-                      exceptionDigits := digits })) := rfl
+                      exceptionDigits :=
+                        Programs.unlockDigits (Pipeline.pointTable table) bits.toAffine masks false
+                      tripleDigits :=
+                        Programs.unlockDigits (Pipeline.pointTable table) bits.toAffine masks true
+                    })) := rfl
 
 theorem evalPadsM_encAt (keys : WhiteningKeys) : AllQ EncAt (Programs.evalPadsM keys bits) := by
   unfold Programs.evalPadsM
@@ -200,7 +203,7 @@ theorem queriesAlong_onCurveM (mac : InputMac) (ans : (request : Request) → re
                 (Programs.whitenMacOf (ePadsOf table bits mac ans) mac)) ++
               (queriesAlong ans (pointYM table bits
                   (Programs.whitenMacOf (ePadsOf table bits mac ans) mac)) ++
-                queriesAlong ans (Programs.unlockM (Pipeline.pointTable table) bits.toAffine
+                queriesAlong ans (Programs.masksM bits.toAffine
                   (Programs.transformMacOf (ePadsOf table bits mac ans) mac))))))) := by
   rw [onCurveM_eq]
   simp only [queriesAlong_bind, queriesAlong_pure, List.append_nil, queriesAlong_askHash]
@@ -233,7 +236,7 @@ theorem mem_shadow_fixed (mac : InputMac) (ans : (request : Request) → request
         (Programs.whitenMacOf (wPadsOf table bits mac ans) mac)) ∨
       .fixedForward i x ∈ queriesAlong ans (pointYM table bits
         (Programs.whitenMacOf (wPadsOf table bits mac ans) mac)) ∨
-      .fixedForward i x ∈ queriesAlong ans (Programs.unlockM (Pipeline.pointTable table)
+      .fixedForward i x ∈ queriesAlong ans (Programs.masksM
         bits.toAffine (Programs.transformMacOf (ePadsOf table bits mac ans) mac)) := by
   rw [queriesAlong_shadowOnM, queriesAlong_curvePrefixM, queriesAlong_onCurveM,
     whitenMac_ePads] at member
@@ -251,24 +254,24 @@ theorem mem_shadow_fixed (mac : InputMac) (ans : (request : Request) → request
   · exact Or.inr (Or.inr (Or.inr (Or.inl f)))
   · exact Or.inr (Or.inr (Or.inr (Or.inr g)))
 
-/-- A gadget question at the given labels. -/
+/-- A gadget question at the given labels (at any bit's index). -/
 def GadgetQ (mac : InputMac) (r : Request) : Prop :=
-  ∃ (d : Fin digitCount) (κ : EncPRF.Coordinate) (pos : Fin coordinateBitCount),
-    r = .fixedForward (.gadget d (Pipeline.gadgetCoord κ) pos)
+  ∃ (d : Fin digitCount) (κ : EncPRF.Coordinate) (pos : Fin coordinateBitCount) (bit : Bool),
+    r = .fixedForward (.gadget d (Pipeline.gadgetCoord κ) pos bit)
       (Pipeline.macLabels mac (Pipeline.gadgetCoord κ) pos)
 
 theorem gadgetDigestM_gadgetQ (mac : InputMac) (d : Fin digitCount) (κ : EncPRF.Coordinate)
-    (labels : CoordinateMac)
+    (bits : CoordinateBits) (labels : CoordinateMac)
     (same : ∀ pos, labels.get pos = Pipeline.macLabels mac (Pipeline.gadgetCoord κ) pos) :
-    AllQ (GadgetQ mac) (Programs.gadgetDigestM d κ labels) :=
-  (AllQ.vector fun pos => AllQ.bind (.query _ _ ⟨d, κ, pos, by rw [same]⟩ fun _ => .pure _)
+    AllQ (GadgetQ mac) (Programs.gadgetDigestM d κ bits labels) :=
+  (AllQ.vector fun pos => AllQ.bind (.query _ _ ⟨d, κ, pos, _, by rw [same]⟩ fun _ => .pure _)
     fun _ => .pure _).bind fun _ => .pure _
 
-theorem unlockM_gadgetQ (table' : FieldMacToECMac.Table) (input : AffineInput) (mac : InputMac) :
-    AllQ (GadgetQ mac) (Programs.unlockM table' input mac) :=
+theorem masksM_gadgetQ (input : AffineInput) (mac : InputMac) :
+    AllQ (GadgetQ mac) (Programs.masksM input mac) :=
   AllQ.vector fun d =>
-    ((gadgetDigestM_gadgetQ mac d .x mac.x fun _ => rfl).bind fun _ =>
-      (gadgetDigestM_gadgetQ mac d .y mac.y fun _ => rfl).bind fun _ => .pure _).bind
+    ((gadgetDigestM_gadgetQ mac d .x _ mac.x fun _ => rfl).bind fun _ =>
+      (gadgetDigestM_gadgetQ mac d .y _ mac.y fun _ => rfl).bind fun _ => .pure _).bind
         fun _ => .pure _
 
 /-- **The hash questions of the shadow** are the bridge input and the lanes' own hash questions
@@ -296,7 +299,7 @@ theorem mem_shadow_hash (mac : InputMac) (ans : (request : Request) → request.
   · exact absurd (mem_queriesAlong_allQ ans (evalPadsM_encAt bits _) _ d) not_encAt_hash
   · exact Or.inr (Or.inr (Or.inr (Or.inl e)))
   · exact Or.inr (Or.inr (Or.inr (Or.inr f)))
-  · obtain ⟨_, _, _, same⟩ := mem_queriesAlong_allQ ans (unlockM_gadgetQ _ _ _) _ g
+  · obtain ⟨_, _, _, _, same⟩ := mem_queriesAlong_allQ ans (masksM_gadgetQ _ _) _ g
     cases same
 
 end Shadow

@@ -32,7 +32,7 @@ noncomputable section
 /-- The lane a fixed-key index belongs to (`none` for the gadget). -/
 def indexLane : FixedIndex → Option Lane
   | .hot ℓ _ _ _ _ => some ℓ
-  | .gadget _ _ _ => none
+  | .gadget _ _ _ _ => none
 
 /-- A question of lane `ℓ`: a fold gate of `ℓ`, or a hash limb of a switch of `ℓ`. -/
 def LaneQ (ℓ : Lane) : PublicQuery FixedIndex EncPRF.PermutationIndex → Prop
@@ -42,7 +42,7 @@ def LaneQ (ℓ : Lane) : PublicQuery FixedIndex EncPRF.PermutationIndex → Prop
 
 /-- A fixed-key forward question at a gadget index. -/
 def GadgetQ : PublicQuery FixedIndex EncPRF.PermutationIndex → Prop
-  | .fixedForward (.gadget _ _ _) _ => True
+  | .fixedForward (.gadget _ _ _ _) _ => True
   | _ => False
 
 section LaneOnly
@@ -78,16 +78,15 @@ end LaneOnly
 theorem gadgetM_gadgetOnly [FieldCertificate] [GroupCertificate] (keys : FieldMacToECMac.OutputKeys)
     (inputKey : InputMacKey) (pads : FieldMacToECMac.ExceptionPad) :
     QueryOnly GadgetQ (Programs.gadgetM keys inputKey pads) := by
-  have digest : ∀ output coordinate mac,
-      QueryOnly GadgetQ (Programs.gadgetDigestM output coordinate mac) :=
-    fun _ _ _ =>
-      QueryOnly.bind (QueryOnly.vector _ fun _ => hashM_ask _ _ trivial) fun _ => QueryOnly.pure' _
+  have pairs : ∀ output coordinate key, QueryOnly GadgetQ (Programs.gadgetPairsM output coordinate key) :=
+    fun _ _ _ => QueryOnly.vector _ fun _ => QueryOnly.bind (hashM_ask _ _ trivial) fun _ =>
+      QueryOnly.bind (hashM_ask _ _ trivial) fun _ => QueryOnly.pure' _
   refine QueryOnly.vector _ fun output => ?_
   unfold Programs.garbleEntryM
   split
   · exact QueryOnly.pure' _
-  · exact QueryOnly.bind (QueryOnly.bind (digest _ _ _) fun _ => QueryOnly.bind (digest _ _ _)
-      fun _ => QueryOnly.pure' _) fun _ => QueryOnly.pure' _
+  · exact QueryOnly.bind (pairs _ _ _) fun _ => QueryOnly.bind (pairs _ _ _)
+      fun _ => QueryOnly.pure' _
 
 /-- A transcript all of whose questions a predicate rejects filters to nothing. -/
 theorem filter_nil_of_only {α : Type} {S : PublicQuery FixedIndex EncPRF.PermutationIndex → Prop}
@@ -127,7 +126,7 @@ theorem keep_point (scalar : NonZeroScalar) (tape : Coins × Oracle) (input : Af
           simp only [LaneQ, indexLane, Option.some.injEq] at lane
           subst lane
           simp [designedKeep, designedRule, designedIndex, point, invalid, Entry.IsEnc]
-      | gadget o κ position => simp [LaneQ, indexLane] at lane
+      | gadget o κ position bit => simp [LaneQ, indexLane] at lane
   | hash key =>
       obtain ⟨slot, label, rfl, same⟩ := lane
       have notDesigned : designedHash input (labelInput slot label) = false := by
@@ -143,7 +142,7 @@ theorem keep_gadget (scalar : NonZeroScalar) (tape : Coins × Oracle) (input : A
   cases request with
   | fixedForward index x =>
       cases index with
-      | gadget o κ position => simp [designedKeep, designedRule, designedIndex, invalid, Entry.IsEnc]
+      | gadget o κ position bit => simp [designedKeep, designedRule, designedIndex, invalid, Entry.IsEnc]
       | _ => exact gadget.elim
   | _ => exact gadget.elim
 
@@ -349,7 +348,7 @@ theorem curveDesigned_congr (scalar : NonZeroScalar) (tape tape' : Coins × Orac
     cases request with
     | fixedForward index x =>
         cases index with
-        | gadget o κ position => simp [LaneQ, indexLane] at lane
+        | gadget o κ position bit => simp [LaneQ, indexLane] at lane
         | _ => rfl
     | hash key => rfl
     | _ => exact lane.elim

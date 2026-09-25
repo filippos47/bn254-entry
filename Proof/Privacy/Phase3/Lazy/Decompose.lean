@@ -2,7 +2,7 @@
 **Phase 3, P4b — the honest evaluation, chunk 0 of `curveX` first and chunk 0 of `pointX` inside.**
 
 * `evalLaneM_split`: a lane's evaluation is its chunk-0 fold, its chunk-0 masks, then `laneRest`
-  (the other 55 chunks and the continuation), which reads the chunk-0 masks only through their
+  (the other 51 chunks and the continuation), which reads the chunk-0 masks only through their
   value.
 * `openingQueriesM_split`: the honest evaluation is the `curveX` chunk-0 fold and masks, then
   `curveRest` (the other `curveX` chunks, `curveY`, the bridge hash, the pads), then `pointPart`
@@ -29,7 +29,7 @@ noncomputable section
 
 /-! ### A lane with chunk 0 split off -/
 
-/-- The chunks `1 … 55` of a lane, then the continuation on the lane value, given the chunk-0
+/-- The chunks `1 … 51` of a lane, then the continuation on the lane value, given the chunk-0
 masks. -/
 def laneRest {β : Type} (lane : Lane) (joins : Vector Block foldStepCount)
     (scale : Fin chunkCount → Fin (laneCount lane) → BaseField) (bits : BitVec coordinateBitCount)
@@ -37,7 +37,7 @@ def laneRest {β : Type} (lane : Lane) (joins : Vector Block foldStepCount)
     (masks : Fin (2 ^ chunkWidth chunkZero) → Vector BaseField (laneCount lane))
     (k : (Fin (laneCount lane) → BaseField) → FreeQuery Programs.Spec β) :
     FreeQuery Programs.Spec β :=
-  FreeQuery.vector 55 (fun index : Fin 55 =>
+  FreeQuery.vector 51 (fun index : Fin 51 =>
       Programs.evalChunkM lane joins scale bits labels index.succ) >>= fun rest =>
     k fun element => ∑ c : Fin chunkCount,
       ((vcons (Programs.evalScaleOf (chunkWidth chunkZero) masks (chunkOf bits chunkZero)
@@ -58,11 +58,11 @@ theorem evalLaneM_split {β : Type} (lane : Lane) (joins : Vector Block foldStep
           laneRest lane joins scale bits labels masks k := by
   have split : FreeQuery.vector chunkCount (Programs.evalChunkM lane joins scale bits labels)
       = Programs.evalChunkM lane joins scale bits labels chunkZero >>= fun x =>
-        FreeQuery.vector 55 (fun index : Fin 55 =>
+        FreeQuery.vector 51 (fun index : Fin 51 =>
           Programs.evalChunkM lane joins scale bits labels index.succ) >>= fun v =>
             (Pure.pure (vcons x v) :
               FreeQuery Programs.Spec (Vector (Fin (laneCount lane) → BaseField) chunkCount)) :=
-    vector_succ_first 55 (Programs.evalChunkM lane joins scale bits labels)
+    vector_succ_first 51 (Programs.evalChunkM lane joins scale bits labels)
   unfold Programs.evalLaneM
   rw [fq_bind_assoc, split, fq_bind_assoc]
   unfold Programs.evalChunkM
@@ -162,7 +162,7 @@ theorem indexAt_unique {lane lane' : Lane} {chunk chunk' : Fin chunkCount} {inde
     lane = lane' ∧ chunk = chunk' := by
   cases index with
   | hot l c _ _ _ => exact ⟨first.1.symm.trans second.1, first.2.symm.trans second.2⟩
-  | gadget _ _ _ => exact first.elim
+  | gadget _ _ _ _ => exact first.elim
 
 /-- A cell input is at one (lane, chunk) only. -/
 theorem cellAt_unique {lane lane' : Lane} {chunk chunk' : Fin chunkCount} {input : BaseField}
@@ -189,13 +189,13 @@ theorem bridgeInput_not_cellAt (t : BaseField) (lane : Lane) (chunk : Fin chunkC
 
 /-- The fold indices the rest of `curveX`, `curveY` and the hash and pads may touch. -/
 def CurveRestIndex (index : FixedIndex) : Prop :=
-  (∃ c : Fin 55, IndexAt .curveX c.succ index) ∨ ∃ c, IndexAt .curveY c index
+  (∃ c : Fin 51, IndexAt .curveX c.succ index) ∨ ∃ c, IndexAt .curveY c index
 
 /-- The hash inputs the rest of `curveX`, `curveY`, the hash and the pads may ask: every input but
 the `curveX` chunk-0 cells'. -/
 def CurveRestInput (input : BaseField) : Prop := ¬ CellAt .curveX chunkZero input
 
-theorem chunk_succ_ne_zero (c : Fin 55) : (c.succ : Fin chunkCount) ≠ chunkZero := by
+theorem chunk_succ_ne_zero (c : Fin 51) : (c.succ : Fin chunkCount) ≠ chunkZero := by
   intro same
   have := congrArg Fin.val same
   simp [chunkZero] at this
@@ -208,14 +208,14 @@ theorem evalLaneM_allQ (lane : Lane) (joins : Vector Block foldStepCount)
   (AllQ.vector fun c => (evalChunkM_allQ lane joins scale bits labels c).mono
     fun _ inside => ⟨c, inside⟩).bind fun _ => .pure _
 
-/-- The chunks `1 … 55` of a lane ask at their own chunks. -/
+/-- The chunks `1 … 51` of a lane ask at their own chunks. -/
 theorem laneRest_allQ {β : Type} (P : Request → Prop) (lane : Lane)
     (joins : Vector Block foldStepCount)
     (scale : Fin chunkCount → Fin (laneCount lane) → BaseField) (bits : BitVec coordinateBitCount)
     (labels : Fin coordinateBitCount → Block)
     (masks : Fin (2 ^ chunkWidth chunkZero) → Vector BaseField (laneCount lane))
     (k : (Fin (laneCount lane) → BaseField) → FreeQuery Programs.Spec β)
-    (chunks : ∀ (c : Fin 55) (r : Request), LaneAt lane c.succ r → P r)
+    (chunks : ∀ (c : Fin 51) (r : Request), LaneAt lane c.succ r → P r)
     (rest : ∀ value, AllQ P (k value)) :
     AllQ P (laneRest lane joins scale bits labels masks k) :=
   (AllQ.vector fun c => (evalChunkM_allQ lane joins scale bits labels c.succ).mono

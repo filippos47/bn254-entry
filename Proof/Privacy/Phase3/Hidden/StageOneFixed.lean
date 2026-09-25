@@ -267,12 +267,12 @@ theorem familyPath_level (κ : Coord) (k : Fin chunkCount) (t : Nat) (c : Block)
 /-- **The family moving the garbler's point and output at a fixed-key index.** -/
 def familyAt : FixedIndex → Block → TapeShift
   | .hot ℓ k _ entry _, c => familyPath ℓ.coord k entry.val c
-  | .gadget _ κ position, c => familyZeros κ (fun p => p = position.val) (fun _ _ => 0) c
+  | .gadget _ κ position _, c => familyZeros κ (fun p => p = position.val) (fun _ _ => 0) c
 
 theorem familyAt_valid (index : FixedIndex) (c : Block) : (familyAt index c).Valid := by
   cases index with
   | hot ℓ k fold entry half => exact familyPath_valid _ _ _ _
-  | gadget o κ position => exact familyZeros_valid κ (fun p => p = position.val) (fun _ _ => 0) c
+  | gadget o κ position bit => exact familyZeros_valid κ (fun p => p = position.val) (fun _ _ => 0) c
 
 /-- **The family moving the garbler's one-hot label at a vector site.** -/
 def siteFamily (site : VectorSite) (c : Block) : TapeShift :=
@@ -321,13 +321,13 @@ theorem familyAt_moves (scalar : NonZeroScalar) (coins : Coins) (index : FixedIn
         fun h => pathRoute_ne entry.val fold.val entrySmall h.2
       rw [if_pos rfl, Nat.mod_eq_of_lt (pathRoute_lt _ _ one), if_neg ne, ite_self, bxor_zero,
         bxor_zero]
-  | gadget o κ position =>
-      show (gadgetShift _ scalar coins o κ position, gadgetShift _ scalar coins o κ position) = (c,
-          c)
-      have shift : gadgetShift (familyAt (.gadget o κ position) c) scalar coins o κ position = c :=
-          by
+  | gadget o κ position bit =>
+      show (gadgetShift _ scalar coins o κ position bit,
+        gadgetShift _ scalar coins o κ position bit) = (c, c)
+      have shift : gadgetShift (familyAt (.gadget o κ position bit) c) scalar coins o κ position bit
+          = c := by
         show (0 : Block) ^^^ (if κ = κ ∧ position.val = position.val then c else 0) ^^^
-          (if exceptionalBit scalar coins.offsets o κ position then 0 else 0) = c
+          (if bit then 0 else 0) = c
         rw [if_pos ⟨rfl, rfl⟩, ite_self, bzero_xor, bxor_zero]
       rw [shift]
 

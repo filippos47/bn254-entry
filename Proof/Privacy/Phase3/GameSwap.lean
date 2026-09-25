@@ -12,9 +12,9 @@ This module supplies
 * `maskSwapBound_real :
     Glue.HopBound Glue.realHybrid maskSwappedHybrid (fun _ _ => Glue.maskSwapError)`
   — P3's field `MaskSwapBound.real`, verbatim, with P3's constant
-  `maskSwapError = (1396 · Σ_lane laneDelta lane).toReal` matched **exactly**
-  (`maskSwapError_eq`: it is `(Σ_site laneDelta site.lane).toReal` over the `5,584` vector sites,
-  `laneVectorCount_eq`: `1396 = Σ_c 2 ^ b_c`).
+  `maskSwapError = (1588 · Σ_lane laneDelta lane).toReal` matched **exactly**
+  (`maskSwapError_eq`: it is `(Σ_site laneDelta site.lane).toReal` over the `6,352` vector sites,
+  `laneVectorCount_eq`: `1588 = Σ_c 2 ^ b_c`).
 
 The proof: `G0` is `realGame` on `(realTape uniform).map reassemble` (`uniform_eq_realTape`, a
 bijection of the tape; the instance mismatch of `Fintype.ofFinite` against the derived instances is
@@ -181,14 +181,14 @@ theorem realGame_etvDist_le [FieldCertificate] [GroupCertificate]
   unfold realGame
   exact PMF.etvDist_bind_right_le _ first second
 
-/-- **The Glue's lane-vector count is the vector-site count of a lane**: `1396 = Σ_c 2 ^ b_c`. -/
+/-- **The Glue's lane-vector count is the vector-site count of a lane**: `1588 = Σ_c 2 ^ b_c`. -/
 theorem laneVectorCount_eq :
     Kriterion.ArgoMAC.Phase3.Glue.laneVectorCount
       = ∑ chunk : Fin chunkCount, 2 ^ chunkWidth chunk := by
   rw [sum_twoPow_chunkWidth]
   rfl
 
-/-- **P3's constant is exactly the swap bias** summed over the `5,584` vector sites. -/
+/-- **P3's constant is exactly the swap bias** summed over the `6,352` vector sites. -/
 theorem maskSwapError_eq :
     Kriterion.ArgoMAC.Phase3.Glue.maskSwapError
       = (∑ site : VectorSite, laneDelta site.lane).toReal := by

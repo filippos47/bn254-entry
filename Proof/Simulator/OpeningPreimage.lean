@@ -6,7 +6,7 @@
   `BigInt.samplerFinal` (`BigInt.memSem_preimageSampler_A1` on the phase-4 layout
   `samplerLayout`);
 * `samplerFinal_half`: afterwards half cell `i` holds half `i` of the limbs of
-  `V = enc(Y*) + p^455 · t` (`halfValue_limbHalf`: the halves of `natToLimbs 452 V`);
+  `V = enc(Y*) + p^364 · t` (`halfValue_limbHalf`: the halves of `natToLimbs 362 V`);
 * `samplerFinal_sameOff`, `samplerFinal_bits`: nothing off the sampler's region changes.
 -/
 
@@ -76,7 +76,7 @@ theorem samplerFinal_half (enc : Nat) (memory : Memory) (t : Nat) (half : Nat)
     (BigInt.samplerFinal samplerBase BigInt.samplerLimbs BigInt.samplerDigits enc memory t).ram
         (word (halfCell half)) =
       word (BigInt.halfValue (BigInt.samplerValue BigInt.samplerDigits enc t) half) := by
-  have bound : half < 904 := small
+  have bound : half < 724 := small
   rw [samplerFinal_ram]
   unfold BigInt.finalRam halfCell
   rw [BigInt.writeCells_out _ _ _ _ _ (by unfold BigInt.halfBase samplerBase BigInt.samplerLimbs; omega)

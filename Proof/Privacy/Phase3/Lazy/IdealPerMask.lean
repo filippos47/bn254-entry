@@ -3,7 +3,7 @@
 
 For every adversary:
 
-* the sites are P1's switch-mask vector sites (`VectorSite`), `1,396 = laneVectorCount` of each
+* the sites are P1's switch-mask vector sites (`VectorSite`), `1,588 = laneVectorCount` of each
   lane (`sum_vectorSite_lane`), each costing its lane's sampler bias `laneDelta`;
 * `advantage(I^U, I) ≤ Σ_{v : VectorSite} δ_{lane v}` (`idealUniform_etvDist_le`): the two
   stage-2 kernels are within that constant at every oracle state (`refillStage2_etvDist_le`), so

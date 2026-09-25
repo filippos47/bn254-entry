@@ -56,7 +56,7 @@ theorem word_xor_eq_zero {first second : Nat} (firstSmall : first < 2 ^ 256)
 abbrev accCell (spec : Replay.LaneSpec) (index : Nat) : Word := word (accBase + spec.slot + index)
 
 theorem accCell_ne (spec : Replay.LaneSpec) {first second : Nat}
-    (firstFits : spec.slot + first < 733) (secondFits : spec.slot + second < 733)
+    (firstFits : spec.slot + first < 642) (secondFits : spec.slot + second < 642)
     (different : first ≠ second) : accCell spec first ≠ accCell spec second :=
   word_ne (by unfold accBase; omega) (by unfold accBase; omega) (by omega)
 
@@ -81,14 +81,14 @@ theorem writeCells_off (ram : Word → Word) (base count : Nat) (f : Nat → Nat
   rw [Nat.add_sub_cancel' low, BigInt.word_toNat]
 
 omit [FieldCertificate] in
-theorem laneCount_le (lane : Lane) : laneCount lane ≤ 455 := by cases lane <;> decide
+theorem laneCount_le (lane : Lane) : laneCount lane ≤ 364 := by cases lane <;> decide
 
 omit [FieldCertificate] in
-theorem limbCount_le (lane : Lane) : limbCount lane ≤ 452 := by cases lane <;> decide
+theorem limbCount_le (lane : Lane) : limbCount lane ≤ 362 := by cases lane <;> decide
 
 /-- The static facts of a lane description. -/
 structure SpecOK (spec : Replay.LaneSpec) : Prop where
-  fits : spec.slot + laneCount spec.lane ≤ 733
+  fits : spec.slot + laneCount spec.lane ≤ 642
   labelsLow : spec.labels + 254 < 2 ^ 46
   hotLow : spec.hotRow < 4
   coordLow : spec.coordinate < 2 ^ 46
@@ -129,7 +129,7 @@ theorem limb_limbsToNat (k : Nat) (h : Fin k → Block × Block) (i : Fin k) :
 
 /-- **Digit extraction on packed answers**: the digit cells hold `sampleLane n k h`; only the
 vector region changes. -/
-theorem det_digitsOf_limbs (k n : Nat) (kSmall : k ≤ 512) (nSmall : n ≤ 455) (memory : Memory)
+theorem det_digitsOf_limbs (k n : Nat) (kSmall : k ≤ 512) (nSmall : n ≤ 364) (memory : Memory)
     (h : Fin k → Block × Block)
     (limbsIn : ∀ i : Fin k, memory.ram (word (vectorLimbBase + i.val)) = word (limbValue (h i))) :
     ∃ after, BigInt.det (BigInt.digitsOf vectorLimbBase k n vectorDigitBase) memory = some after ∧
@@ -833,7 +833,7 @@ theorem agree_switches (bits : BitInput) (spec : Replay.LaneSpec) (ok : SpecOK s
 /-! ### The published-join terms -/
 
 /-- **The published-join terms** `acc[e] += J[e] · ι(α)` (`ι(α)` in `rF`). -/
-theorem det_joinTerms (spec : Replay.LaneSpec) (ok : SpecOK spec) (chunk : Nat) (chunkSmall : chunk < 56)
+theorem det_joinTerms (spec : Replay.LaneSpec) (ok : SpecOK spec) (chunk : Nat) (chunkSmall : chunk < 52)
     (memory : Memory) (join : Nat → BaseField) (acc0 : Nat → BaseField) (alpha : BaseField)
     (factor : ((memory.registers rF).toNat : BaseField) = alpha)
     (joins : ∀ e, e < laneCount spec.lane →

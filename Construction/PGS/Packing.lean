@@ -9,7 +9,7 @@ y coordinate's `elementCountY` values slots `elementCountX .. elementCount - 1`;
 `2 ^ coordinateBits`.
 
 Interleaving the two coordinates per chunk is what makes the published unit a single word:
-`elementCount * coordinateBits = 186,182` value bits, and two zero bits above the last slot round
+`elementCount * coordinateBits = 163,068` value bits, and four zero bits above the last slot round
 the word up to `chunkJoinBits = 8 * chunkJoinBytes`.
 
 Rule N: `256 ^ chunkJoinBytes = 2 ^ chunkJoinBits` is proved symbolically; no numeral of that
@@ -77,9 +77,9 @@ private theorem packNat_digit (width : Nat) (digit : Nat → Nat)
 
 /-! ### The chunk word -/
 
-/-- `chunkJoinBits = coordinateBits * elementCount + 2`: the value slots, a structural product of
-two small numerals, and the two zero bits that round the word up to whole bytes. -/
-theorem chunkJoinBits_eq_product : chunkJoinBits = coordinateBits * elementCount + 2 := by
+/-- `chunkJoinBits = coordinateBits * elementCount + 4`: the value slots, a structural product of
+two small numerals, and the four zero bits that round the word up to whole bytes. -/
+theorem chunkJoinBits_eq_product : chunkJoinBits = coordinateBits * elementCount + 4 := by
   unfold chunkJoinBits coordinateBits elementCount
   norm_num
 
@@ -91,7 +91,7 @@ theorem slots_le_chunkJoinBits : coordinateBits * elementCount ≤ chunkJoinBits
 /-- `256 ^ chunkJoinBytes = 2 ^ chunkJoinBits`.
 
 Rule N: `256 = 2 ^ 8` and `chunkJoinBits = 8 * chunkJoinBytes`, so this is `pow_mul`; the
-`186184`-bit numeral is never formed. -/
+`163072`-bit numeral is never formed. -/
 theorem pow_width : (256 : Nat) ^ chunkJoinBytes = 2 ^ chunkJoinBits := by
   rw [chunkJoinBits_eq, pow_mul]
   norm_num

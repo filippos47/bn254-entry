@@ -184,12 +184,11 @@ theorem sourceOfDraws_congr (cells cells' : Nat → BaseField) (bytes bytes' hot
     intro digit bound
     have small : digit < 91 := bound
     simp only [sourceOfDraws, Vector.getElem_ofFn]
-    rw [sameCells _ (by omega), sameCells (3 + 11 * digit + 1) (by omega),
-      sameCells (3 + 11 * digit + 2) (by omega), sameCells (3 + 11 * digit + 3) (by omega),
-      sameCells (3 + 11 * digit + 4) (by omega), sameCells (3 + 11 * digit + 5) (by omega),
-      sameCells (3 + 11 * digit + 6) (by omega), sameCells (3 + 11 * digit + 7) (by omega),
-      sameCells (3 + 11 * digit + 8) (by omega), sameCells (3 + 11 * digit + 9) (by omega),
-      sameCells (3 + 11 * digit + 10) (by omega)]
+    rw [sameCells _ (by omega), sameCells (3 + 10 * digit + 1) (by omega),
+      sameCells (3 + 10 * digit + 2) (by omega), sameCells (3 + 10 * digit + 3) (by omega),
+      sameCells (3 + 10 * digit + 4) (by omega), sameCells (3 + 10 * digit + 5) (by omega),
+      sameCells (3 + 10 * digit + 6) (by omega), sameCells (3 + 10 * digit + 7) (by omega),
+      sameCells (3 + 10 * digit + 8) (by omega), sameCells (3 + 10 * digit + 9) (by omega)]
   · apply Vector.ext
     intro digit bound
     apply Vector.ext
@@ -199,27 +198,27 @@ theorem sourceOfDraws_congr (cells cells' : Nat → BaseField) (bytes bytes' hot
     exact sameBytes _ (by unfold exceptionByteCount; omega)
   · apply Vector.ext
     intro chunk bound
-    have small : chunk < 198 := bound
+    have small : chunk < 202 := bound
     simp only [sourceOfDraws, Vector.getElem_ofFn]
     exact sameHot _ (by unfold hotBlockCount; omega)
   · apply Vector.ext
     intro chunk bound
-    have small : chunk < 198 := bound
+    have small : chunk < 202 := bound
     simp only [sourceOfDraws, Vector.getElem_ofFn]
     exact sameHot _ (by unfold hotBlockCount; omega)
   · apply Vector.ext
     intro chunk bound
-    have small : chunk < 198 := bound
+    have small : chunk < 202 := bound
     simp only [sourceOfDraws, Vector.getElem_ofFn]
     exact sameHot _ (by unfold hotBlockCount; omega)
   · apply Vector.ext
     intro chunk bound
-    have small : chunk < 198 := bound
+    have small : chunk < 202 := bound
     simp only [sourceOfDraws, Vector.getElem_ofFn]
     exact sameHot _ (by unfold hotBlockCount; omega)
   · funext chunk slot
-    have chunkSmall : chunk.val < 56 := chunk.isLt
-    have slotSmall : slot.val < 733 := slot.isLt
+    have chunkSmall : chunk.val < 52 := chunk.isLt
+    have slotSmall : slot.val < 642 := slot.isLt
     exact sameCells _ (by omega)
   · apply inputMacKey_ext
     · apply Vector.ext

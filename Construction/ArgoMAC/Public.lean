@@ -9,14 +9,14 @@ to exactly `ciphertextBytesConstant` bytes; the byte-count theorem therefore doe
 | Field       | Encoding                                 | Bytes   |
 |-------------|------------------------------------------|---------|
 | `curve`     | `3 * Wire.field`                          | 96      |
-| `rows`      | `Vector RowGamma 91`, 11 field elements   | 32,032  |
-| `exception` | `Vector (Vector (BitVec 8) 6) 91`         | 546     |
-| `curveXHot` | `Vector Block 198`                        | 3,168   |
-| `curveYHot` | `Vector Block 198`                        | 3,168   |
-| `pointXHot` | `Vector Block 198`                        | 3,168   |
-| `pointYHot` | `Vector Block 198`                        | 3,168   |
-| `scale`     | `Vector (BitVec 186184) 56`               | 1,303,288 |
-| **total**   |                                           | **1,348,634** |
+| `rows`      | `Vector RowGamma 91`, 10 field elements   | 29,120  |
+| `exception` | `Vector (Vector (BitVec 8) 12) 91`        | 1,092   |
+| `curveXHot` | `Vector Block 202`                        | 3,232   |
+| `curveYHot` | `Vector Block 202`                        | 3,232   |
+| `pointXHot` | `Vector Block 202`                        | 3,232   |
+| `pointYHot` | `Vector Block 202`                        | 3,232   |
+| `scale`     | `Vector (BitVec 163072) 52`               | 1,059,968 |
+| **total**   |                                           | **1,103,204** |
 -/
 
 import Construction.ArgoMAC.Exception
@@ -26,10 +26,10 @@ namespace Kriterion.ArgoMAC.PlanB
 
 open BN254 Cryptography
 
-/-- The eleven published constants of one digit's three Jacobian rows.
+/-- The ten published constants of one digit's three rows.
 
-The `Y` row publishes five coefficients, not six (`c1` is always absent in the baseline's
-`Biquadratic.garbleY`), so a digit publishes `4 + 5 + 2 = 11` field elements. -/
+The sign row publishes four coefficients (it has no `x` and no `x y` monomial), so a digit
+publishes `4 + 4 + 2 = 10` field elements. -/
 structure RowGamma where
   /-- `X` row constant `c0`. -/
   xC0 : BaseField
@@ -43,8 +43,6 @@ structure RowGamma where
   yC0 : BaseField
   /-- `Y` row constant `c2`. -/
   yC2 : BaseField
-  /-- `Y` row constant `c3`. -/
-  yC3 : BaseField
   /-- `Y` row constant `c4`. -/
   yC4 : BaseField
   /-- `Y` row constant `c5`. -/
@@ -61,9 +59,9 @@ Every field is fixed-width: there are no `Option` tags, so every inhabitant enco
 structure Public where
   /-- The curve-membership check: three published constants. -/
   curve : BaseField × BaseField × BaseField
-  /-- The eleven published row constants of each digit. -/
+  /-- The ten published row constants of each digit. -/
   rows : Vector RowGamma digitCount
-  /-- The doubling-exception gadget, six bytes per digit. -/
+  /-- The exception gadget, twelve bytes per digit. -/
   exception : Vector Exception.Entry digitCount
   /-- System A's `bin-to-hot` fold joins on the x coordinate's raw Lamport labels. -/
   curveXHot : Vector Block foldStepCount
@@ -77,6 +75,6 @@ structure Public where
   scale : Vector (BitVec chunkJoinBits) chunkCount
 
 /-- The Plan B ciphertext size in bytes. -/
-def ciphertextBytesConstant : Nat := 1348634
+def ciphertextBytesConstant : Nat := 1103204
 
 end Kriterion.ArgoMAC.PlanB

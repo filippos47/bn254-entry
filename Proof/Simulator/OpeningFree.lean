@@ -1,11 +1,11 @@
 /-
 **The opening, the non-collectors** (`Opening.nonCollectors`).
 
-The designated vector's `182` free coordinates `Y*[5d]`, `Y*[5d + 2]` are drawn in the machine's
-order, draw `2d + s` being the free coordinate `(d, s)` (element `ncElement (2d + s) = 5d + 2s`):
-each is a field cell (bounded rejection below `p`), stored in its designated cell and added to
-its element's value, `acc[e] += κ · Y*[e]` (`memSem_nonCollectorOne`). All `182` are
-`optionProduct 182 fieldCellLaw` (`memSem_nonCollectors`); afterwards every free designated cell
+The designated vector's `91` free coordinates `Y*[4d]` are drawn in the machine's order, draw `d`
+being the free coordinate `(d, 0)` (element `ncElement d = 4d`): each is a field cell (bounded
+rejection below `p`), stored in its designated cell and added to its element's value,
+`acc[e] += κ · Y*[e]` (`memSem_nonCollectorOne`). All `91` are
+`optionProduct 91 fieldCellLaw` (`memSem_nonCollectors`); afterwards every free designated cell
 holds its draw (`ncFold_designated`), every free accumulator its value plus `κ` times the draw
 (`ncFold_acc`), and every other cell is unchanged (`ncFold_off`).
 -/
@@ -36,8 +36,8 @@ def ncRam (element : Nat) (ram : Word → Word) (value : Word) : Word → Word :
 def ncMem (element : Nat) (memory : Memory) (value : BaseField) : Memory :=
   clearRegs (withRam memory (ncRam element memory.ram (fieldWord value))) ncScratch
 
-/-- The element of draw `i`: `5 ⌊i / 2⌋ + 2 (i mod 2)`. -/
-def ncElement (index : Nat) : Nat := 5 * (index / 2) + 2 * (index % 2)
+/-- The element of draw `i`: `4 i`. -/
+def ncElement (index : Nat) : Nat := 4 * index
 
 /-! ### One non-collector -/
 
@@ -47,7 +47,7 @@ theorem plain_storeNonCollector (element : Nat) :
   unfold Opening.storeNonCollector loadAt storeAt cst ar
   plain_split
 
-theorem det_storeNonCollector (element : Nat) (small : element < 455) (memory : Memory) :
+theorem det_storeNonCollector (element : Nat) (small : element < 364) (memory : Memory) :
     ∃ after, BigInt.det (Opening.storeNonCollector element) memory = some after ∧
       after.ram = ncRam element memory.ram (memory.registers rOut) ∧ after.bits = memory.bits ∧
       ∀ index, index ≠ rAddr → index ≠ rA → index ≠ rB →
@@ -69,7 +69,7 @@ def ncTail (element : Nat) (memory : Memory) : PMF (Option Memory) :=
   else PMF.pure (some (clearRegs (withRam memory (ncRam element memory.ram (memory.registers rOut)))
     ncScratch))
 
-theorem memSem_ncContinuation (element : Nat) (small : element < 455) (memory : Memory) :
+theorem memSem_ncContinuation (element : Nat) (small : element < 364) (memory : Memory) :
     (Prog.seq (.ite rFlag (Opening.storeNonCollector element) (.abort rSel))
       (zeroRegs ncScratch)).memSem memory = ncTail element memory := by
   rw [memSem_seq]
@@ -114,7 +114,7 @@ theorem ncTail_clear (element : Nat) (memory : Memory) :
 
 /-- **One non-collector is a field cell**, stored in its designated cell and added to its
 element's value. -/
-theorem memSem_nonCollectorOne (element : Nat) (small : element < 455) (memory : Memory) :
+theorem memSem_nonCollectorOne (element : Nat) (small : element < 364) (memory : Memory) :
     (Opening.nonCollectorOne element).memSem memory =
       fieldCellLaw.map (Option.map (ncMem element memory)) := by
   have scratchJunk : attemptScratch [rAddr] = [rAcc, rBit, rAddr, rSel, rAddr] := rfl
@@ -198,36 +198,23 @@ theorem memSem_nonCollectorOne (element : Nat) (small : element < 455) (memory :
 /-! ### All non-collectors -/
 
 omit [FieldCertificate] in
-theorem ncElement_lt (index : Nat) (small : index < digitCount * 2) : ncElement index < 455 := by
+theorem ncElement_lt (index : Nat) (small : index < digitCount * 1) : ncElement index < 364 := by
   unfold ncElement digitCount at *
   omega
 
 /-- The non-collector steps from draw `offset` on. -/
 def ncStep (offset index : Nat) : Memory → BaseField → Memory := ncMem (ncElement (index + offset))
 
-/-- **The non-collectors**: `182` independent field cells, draw `i` at element `ncElement i`. -/
+/-- **The non-collectors**: `91` independent field cells, draw `i` at element `ncElement i`. -/
 theorem memSem_nonCollectors (memory : Memory) :
     Opening.nonCollectors.memSem memory =
-      (optionProduct (digitCount * 2) fun _ => fieldCellLaw).map
-        (Option.map (foldStore (ncStep 0) (digitCount * 2) memory)) := by
+      (optionProduct (digitCount * 1) fun _ => fieldCellLaw).map
+        (Option.map (foldStore (ncStep 0) (digitCount * 1) memory)) := by
   unfold Opening.nonCollectors
-  rw [memSem_rep_congr _ (fun digit => Prog.rep 2 fun slot =>
-      if slot = 0 then Opening.nonCollectorOne (5 * digit) else
-        Opening.nonCollectorOne (5 * digit + 2)) 91
-      (fun digit _ memory => memSem_seq_rep_two _ _ memory),
-    memSem_rep_nest 2 _ (by norm_num) 91]
-  exact memSem_rep_law_idx (fun _ => True) (91 * 2) (fun _ => fieldCellLaw) _ (ncStep 0)
+  exact memSem_rep_law_idx (fun _ => True) (91 * 1) (fun _ => fieldCellLaw) _ (ncStep 0)
     (fun index bound memory _ => by
       have element := ncElement_lt index bound
-      rcases Nat.mod_two_eq_zero_or_one index with even | odd
-      · rw [if_pos even]
-        have same : 5 * (index / 2) = ncElement index := by unfold ncElement; omega
-        rw [same]
-        exact memSem_nonCollectorOne _ element memory
-      · rw [if_neg (by omega)]
-        have same : 5 * (index / 2) + 2 = ncElement index := by unfold ncElement; omega
-        rw [same]
-        exact memSem_nonCollectorOne _ element memory)
+      exact memSem_nonCollectorOne (ncElement (index + 0)) element memory)
     (fun _ _ _ _ _ => trivial) memory trivial
 
 
@@ -277,7 +264,7 @@ theorem ncFold_off : ∀ (count offset : Nat) (memory : Memory) (values : Fin co
           exact away (index + 1) (by omega)),
         ncStep, ncMem_ram, ncRam_off _ _ _ _ (by simpa using away 0 (by omega))]
 
-theorem ncFold_designated : ∀ (count offset : Nat), offset + count ≤ digitCount * 2 →
+theorem ncFold_designated : ∀ (count offset : Nat), offset + count ≤ digitCount * 1 →
     ∀ (memory : Memory) (values : Fin count → BaseField) (index : Fin count),
       (foldStore (ncStep offset) count memory values).ram
           (word (designatedCell (ncElement (index.val + offset)))) = fieldWord (values index)
@@ -304,7 +291,7 @@ theorem ncFold_designated : ∀ (count offset : Nat), offset + count ≤ digitCo
             simp only [Fin.val_succ]; omega] at this
           exact this
 
-theorem ncFold_acc : ∀ (count offset : Nat), offset + count ≤ digitCount * 2 →
+theorem ncFold_acc : ∀ (count offset : Nat), offset + count ≤ digitCount * 1 →
     ∀ (memory : Memory) (values : Fin count → BaseField) (index : Fin count),
       (foldStore (ncStep offset) count memory values).ram
           (word (Opening.xCell (ncElement (index.val + offset)))) =

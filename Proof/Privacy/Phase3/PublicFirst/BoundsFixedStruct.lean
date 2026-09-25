@@ -320,7 +320,7 @@ theorem entry_lt_chunkBits {c : Fin chunkCount} {s : ℕ} (small : s < chunkWidt
 /-- The fold questions of step `t` of one (lane, chunk). -/
 def StepAt (lane : Lane) (c : Fin chunkCount) (t : ℕ) : FixedIndex → Prop
   | .hot lane' c' fold _ _ => lane' = lane ∧ c' = c ∧ fold.val = t
-  | .gadget _ _ _ => False
+  | .gadget _ _ _ _ => False
 
 theorem stepAt_hot {lane : Lane} {c : Fin chunkCount} {t : ℕ} (small : t < chunkBits) (e : ℕ)
     (h : Bool) : StepAt lane c t (hotIndexNat lane c t e h) :=
@@ -432,7 +432,7 @@ theorem lane_prefix (c : Fin chunkCount) (t : ℕ) (le : t ≤ chunkWidth c) :
         · cases i with
           | hot l cc f e h =>
             exact beforeOther c' inside (fixed.2.symm.trans atStep.2.1)
-          | gadget _ _ _ => exact fixed.elim
+          | gadget _ _ _ _ => exact fixed.elim
         · exact hash.elim
       | _ => exact atStep.elim
     · obtain ⟨s, small, e, _, h, rfl⟩ := (mem_evalFoldM ans lane c _ _ _ _ _).mp fold

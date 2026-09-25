@@ -140,11 +140,11 @@ def putPoint (ram : Word → Word) (base : Nat) (words : Word × Word × Word) :
 
 /-! ### The opening's own cells -/
 
-/-- The opening's own cells: its region `openBase + [0, 2^12)`, the `455` cells of the designated
+/-- The opening's own cells: its region `openBase + [0, 2^12)`, the `364` cells of the designated
 vector and the preimage sampler's region `samplerBase + [0, 2^11)`. -/
 def OpenCell (address : Word) : Prop :=
   (openBase ≤ address.toNat ∧ address.toNat < openBase + 2 ^ 12) ∨
-    (designatedBase ≤ address.toNat ∧ address.toNat < designatedBase + 455) ∨
+    (designatedBase ≤ address.toNat ∧ address.toNat < designatedBase + 364) ∨
     (samplerBase ≤ address.toNat ∧ address.toNat < samplerBase + 2 ^ 11)
 
 omit [FieldCertificate] in
@@ -155,7 +155,7 @@ theorem openCell_word (offset : Nat) (small : offset < 2 ^ 12) :
   omega
 
 omit [FieldCertificate] in
-theorem openCell_designated (element : Nat) (small : element < 455) :
+theorem openCell_designated (element : Nat) (small : element < 364) :
     OpenCell (word (designatedCell element)) := by
   right; left
   unfold designatedCell

@@ -22,10 +22,10 @@ whose fuel is the larger (valid) arm.
 | next | valid arm (replay, opening, emit labels), then `halt` |
 | last | reject `halt` |
 
-**Where the charge goes** (`totalCost = 56,921,991,801 ≈ 2 ^ 35.73`): stage 1's `42,052`
-bounded-rejection field cells (`≈ 3.30 · 10 ^ 10` in code and fuel), the replay's digit
-extraction of every switch mask vector (`1,396` vectors per lane, `≈ 2.27 · 10 ^ 10`), and the
-opening's preimage sampler (`≈ 8.4 · 10 ^ 8`).
+**Where the charge goes** (`totalCost = 46,837,161,227 ≈ 2 ^ 35.45`): stage 1's `34,297`
+bounded-rejection field cells (`≈ 2.69 · 10 ^ 10` in code and fuel), the replay's digit
+extraction of every switch mask vector (`1,588` vectors per lane, `≈ 1.90 · 10 ^ 10`), and the
+opening's preimage sampler (`≈ 5.4 · 10 ^ 8`).
 -/
 
 import Construction.Simulator.Layout
@@ -39,39 +39,39 @@ namespace Design
 /-! ### Oracle instruction counts -/
 
 /-- Fixed-key fold queries of one lane: chunk `0` asks `2` (one step, one inactive entry), each
-of the `32` width-`5` chunks `2 + 6 + 14 + 30 = 52`, each of the `23` width-`4` chunks
+of the `48` width-`5` chunks `2 + 6 + 14 + 30 = 52`, each of the `3` width-`4` chunks
 `2 + 6 + 14 = 22`. -/
-def laneFoldQueries : Nat := 2 + 32 * 52 + 23 * 22
+def laneFoldQueries : Nat := 2 + 48 * 52 + 3 * 22
 
 /-- Hash queries of one lane with `k` limbs per vector: `k` for each of the `3` inactive switches
-of chunk `0`, the `31` of each width-`5` chunk and the `15` of each width-`4` chunk, `1340 k` in
+of chunk `0`, the `31` of each width-`5` chunk and the `15` of each width-`4` chunk, `1536 k` in
 all. -/
-def laneHashQueries (limbs : Nat) : Nat := 3 * limbs + 32 * (31 * limbs) + 23 * (15 * limbs)
+def laneHashQueries (limbs : Nat) : Nat := 3 * limbs + 48 * (31 * limbs) + 3 * (15 * limbs)
 
 /-- All queries of one lane: the honest evaluator's `laneEvalBudget`,
-`(2 + 3k) + 32 (52 + 31k) + 23 (22 + 15k)`. -/
+`(2 + 3k) + 48 (52 + 31k) + 3 (22 + 15k)`. -/
 def laneQueries (limbs : Nat) : Nat := laneFoldQueries + laneHashQueries limbs
 
 /-- Stage 2's lane queries: the replay's fixed-key fold queries and scale hash queries of systems
-A and B (`k = 4, 3, 452, 272`), less the `452` designated limbs of lane `pointX` (which the
+A and B (`k = 4, 3, 362, 272`), less the `362` designated limbs of lane `pointX` (which the
 opening programs instead); `laneReplayQueries_split` separates the two kinds. -/
 def laneReplayQueries : Nat :=
-  laneQueries 4 + laneQueries 3 + laneQueries 452 - 452 + laneQueries 272
+  laneQueries 4 + laneQueries 3 + laneQueries 362 - 362 + laneQueries 272
 
 /-- The replay's fixed-key fold queries. -/
 def foldQueries : Nat := 4 * laneFoldQueries
 
 /-- The replay's scale hash queries: every inactive vector's limbs but the designated ones. -/
 def hashQueries : Nat :=
-  laneHashQueries 4 + laneHashQueries 3 + laneHashQueries 452 - 452 + laneHashQueries 272
+  laneHashQueries 4 + laneHashQueries 3 + laneHashQueries 362 - 362 + laneHashQueries 272
 
 /-- Stage 2's oracle queries: systems A and B, one bridge hash, `508` EncPRF pads. -/
 def stage2Queries : Nat := laneReplayQueries + 1 + 508
 
-/-- Stage 2's programs: the `452` designated hash limbs. -/
+/-- Stage 2's programs: the `362` designated hash limbs. -/
 def stage2Programs : Nat := limbCount .pointX
 
-theorem laneQueries_eq (limbs : Nat) : laneQueries limbs = 2172 + 1340 * limbs := by
+theorem laneQueries_eq (limbs : Nat) : laneQueries limbs = 2564 + 1536 * limbs := by
   unfold laneQueries laneFoldQueries laneHashQueries
   omega
 
@@ -80,34 +80,36 @@ theorem laneReplayQueries_split : laneReplayQueries = foldQueries + hashQueries 
   unfold laneReplayQueries foldQueries hashQueries laneQueries laneHashQueries
   omega
 
-theorem foldQueries_eq : foldQueries = 8688 := by
+theorem foldQueries_eq : foldQueries = 10256 := by
   unfold foldQueries laneFoldQueries
   norm_num
 
-theorem hashQueries_eq : hashQueries = 979088 := by
+theorem hashQueries_eq : hashQueries = 984214 := by
   unfold hashQueries laneHashQueries
   norm_num
 
-theorem laneReplayQueries_eq : laneReplayQueries = 987776 := by
+theorem laneReplayQueries_eq : laneReplayQueries = 994470 := by
   rw [laneReplayQueries_split, foldQueries_eq, hashQueries_eq]
 
-theorem stage2Queries_eq : stage2Queries = 988285 := by
+theorem stage2Queries_eq : stage2Queries = 994979 := by
   unfold stage2Queries
   rw [laneReplayQueries_eq]
 
-theorem stage2Programs_eq : stage2Programs = 452 := rfl
+theorem stage2Programs_eq : stage2Programs = 362 := rfl
 
-/-- The honest evaluator's `1,035,473` queries are the machine's `988,285` plus the `452`
+/-- The honest evaluator's `1,042,077` queries are the machine's `994,979` plus the `362`
 designated limbs, which it programs instead, the `508` bit-`true` pads it may ask, and the
-`46,228` gadget hashes, which the opening does not need. -/
-theorem evaluator_queries : stage2Queries + stage2Programs + 508 + 46228 = 1035473 := by
+`46,228` gadget hashes (`508` per digit: one mask per digit unlocks both exceptional slots),
+which the opening does not need. -/
+theorem evaluator_queries : stage2Queries + stage2Programs + 508 + 46228 = 1042077 := by
   rw [stage2Queries_eq, stage2Programs_eq]
 
 /-! ### Instruction counts -/
 
-/-- The serializer: `2 + 3 · width` per cell; each chunk word's last cell is `256` bits wide. -/
+/-- The serializer: `2 + 3 · width` per cell; each chunk word is two pushed zero bits, its last
+cell `256` bits wide, then its other `641` cells. -/
 def serializeCount : Nat :=
-  56 * ((2 + 3 * 256) + 732 * (2 + 3 * 254)) + hotBlockCount * (2 + 3 * 128) +
+  52 * (2 + (2 + 3 * 256) + 641 * (2 + 3 * 254)) + hotBlockCount * (2 + 3 * 128) +
     exceptionByteCount * (2 + 3 * 8) + (curveCellCount + rowCellCount) * (2 + 3 * 256)
 
 /-- Stage 1: code slots and fuel. -/
@@ -164,65 +166,65 @@ def totalCost : Nat := size + 1 + firstFuel + secondFuel
 /-! The closed formulas are unfolded (never rewritten by their equation lemmas) and evaluated
 by `norm_num`; every term is a sum or product of numerals below `2 ^ 36`. -/
 
-theorem stage1Size_eq : stage1Size = 19261596692 := by
+theorem stage1Size_eq : stage1Size = 15709913657 := by
   unfold stage1Size serializeCount fieldCellCount curveCellCount rowCellCount scaleCellCount
     exceptionByteCount hotBlockCount keyBlockCount
   norm_num
 
-theorem stage1Cost_eq : stage1Cost = 13792220456 := by
+theorem stage1Cost_eq : stage1Cost = 11249070094 := by
   unfold stage1Cost serializeCount fieldCellCount curveCellCount rowCellCount scaleCellCount
     exceptionByteCount hotBlockCount keyBlockCount
   norm_num
 
-theorem replaySize_eq : replaySize = 11363239891 := by
+theorem replaySize_eq : replaySize = 9518946929 := by
   unfold replaySize Replay.programSize Replay.laneSize Replay.chunkSize Replay.foldSize
     Replay.switchSize BigInt.digitsOfCost BigInt.digitStepCost
   norm_num
 
-theorem replayCost_eq : replayCost = 11354997699 := by
+theorem replayCost_eq : replayCost = 9510713377 := by
   unfold replayCost Replay.programCost Replay.laneCost Replay.chunkCost Replay.foldCost
     Replay.switchCost BigInt.digitsOfCost BigInt.digitStepCost
   norm_num
 
-theorem openingSize_eq : openingSize = 600895216 := by
+theorem openingSize_eq : openingSize = 449262537 := by
   unfold openingSize Opening.programSize BigInt.preimageSamplerSize BigInt.tAttemptSize
     BigInt.useKeptCost BigInt.macPassesCost BigInt.macPassCost BigInt.samplerLimbs
     BigInt.samplerDigits BigInt.samplerAttempts BigInt.hiWidth
   norm_num
 
-theorem openingCost_eq : openingCost = 548427574 := by
+theorem openingCost_eq : openingCost = 398640360 := by
   unfold openingCost Opening.programCost BigInt.preimageSamplerCost BigInt.tAttemptCost
     BigInt.useKeptCost BigInt.macPassesCost BigInt.macPassCost BigInt.samplerLimbs
     BigInt.samplerDigits BigInt.samplerAttempts BigInt.hiWidth
   norm_num
 
-theorem validSize_eq : validSize = 11964331195 := by
+theorem validSize_eq : validSize = 9968405554 := by
   unfold validSize labelCount
   rw [replaySize_eq, openingSize_eq]
 
-theorem validCost_eq : validCost = 11903621361 := by
+theorem validCost_eq : validCost = 9909549825 := by
   unfold validCost labelCount
   rw [replayCost_eq, openingCost_eq]
 
-theorem size_eq : size = 31226139270 := by
+theorem size_eq : size = 25678530594 := by
   unfold size rejectAt validHalt validBase invalidHalt invalidBase branchAt stage2Base stage1Halt
     stage1Base
   rw [stage1Size_eq, validSize_eq]
   unfold prefixSize invalidSize labelCount
   norm_num
 
-theorem firstFuel_eq : firstFuel = 13792220459 := by
+theorem firstFuel_eq : firstFuel = 11249070097 := by
   unfold firstFuel
   rw [stage1Cost_eq]
 
-theorem secondFuel_eq : secondFuel = 11903632071 := by
+theorem secondFuel_eq : secondFuel = 9909560535 := by
   unfold secondFuel
   rw [validCost_eq]
   unfold prefixCost labelCount
   norm_num
 
 /-- **The exact charge** of the machine. -/
-theorem totalCost_eq : totalCost = 56921991801 := by
+theorem totalCost_eq : totalCost = 46837161227 := by
   unfold totalCost
   rw [size_eq, firstFuel_eq, secondFuel_eq]
 

@@ -45,13 +45,13 @@ def gadgetPart (table : Public) (bits : BitInput) (mac : InputMac)
     (r : (EncPRF.Coordinate → Fin coordinateBitCount → Block × Block) ×
       (Fin pointElementCountX → BaseField) × (Fin pointElementCountY → BaseField)) :
     Programs.M (Option (Option Point)) :=
-  Programs.unlockM (Pipeline.pointTable table) bits.toAffine (Programs.transformMacOf r.1 mac)
-    >>= fun digits =>
+  Programs.masksM bits.toAffine (Programs.transformMacOf r.1 mac) >>= fun masks =>
   pure (some (Garbling.decodeResult
     { point := bits.toAffine
       pointMacs := FieldMacToECMac.evaluateHomogeneous (Pipeline.pointTable table)
         (Pipeline.digitValues r.2.1 r.2.2) bits.toAffine
-      exceptionDigits := digits }))
+      exceptionDigits := Programs.unlockDigits (Pipeline.pointTable table) bits.toAffine masks false
+      tripleDigits := Programs.unlockDigits (Pipeline.pointTable table) bits.toAffine masks true }))
 
 open Kriterion.ArgoMAC.Phase3.Lazy (fq_bind_assoc fq_pure_bind) in
 theorem onCurveM_split (table : Public) (bits : BitInput) (mac : InputMac) :
@@ -76,13 +76,13 @@ theorem onCurveM_split (table : Public) (bits : BitInput) (mac : InputMac) :
 
 /-- A question at no gadget index. -/
 def NotGadget (q : PublicQuery FixedIndex EncPRF.PermutationIndex) : Prop :=
-  ∀ (o : Fin digitCount) (κ : Coord) (p : Fin PlanB.coordinateBits) (x : Block),
-    q ≠ .fixedForward (.gadget o κ p) x
+  ∀ (o : Fin digitCount) (κ : Coord) (p : Fin PlanB.coordinateBits) (bit : Bool) (x : Block),
+    q ≠ .fixedForward (.gadget o κ p bit) x
 
 theorem notGadget_laneAt (lane : Lane) (c : Fin chunkCount)
     (q : PublicQuery FixedIndex EncPRF.PermutationIndex)
     (inside : Kriterion.ArgoMAC.Phase3.Lazy.LaneAt lane c q) : NotGadget q := by
-  intro o κ p x same
+  intro o κ p bit x same
   subst same
   rcases inside with fixed | hash
   · exact fixed
@@ -110,7 +110,7 @@ theorem notGadget_prefix (table : Public) (bits : BitInput) (mac : InputMac) :
   unfold curvePrefixM
   exact Hidden.QueryOnly.bind (notGadget_laneM _ _ _ _ _) fun _ =>
     Hidden.QueryOnly.bind (notGadget_laneM _ _ _ _ _) fun _ =>
-      Hidden.QueryOnly.ask _ fun o κ p x same => by cases same
+      Hidden.QueryOnly.ask _ fun o κ p bit x same => by cases same
 
 theorem notGadget_preM (table : Public) (bits : BitInput) (mac : InputMac) :
     Hidden.QueryOnly NotGadget (preM table bits mac) := by
@@ -119,7 +119,7 @@ theorem notGadget_preM (table : Public) (bits : BitInput) (mac : InputMac) :
     Hidden.QueryOnly.bind (queryOnly_mono (Guess.evalPadsM_encOnly _ _) ?_) fun _ =>
       Hidden.QueryOnly.bind (notGadget_laneM _ _ _ _ _) fun _ =>
         Hidden.QueryOnly.bind (notGadget_laneM _ _ _ _ _) fun _ => Hidden.QueryOnly.pure' _
-  rintro q ⟨c, i, b, rfl⟩ o κ p x same
+  rintro q ⟨c, i, b, rfl⟩ o κ p bit x same
   cases same
 
 /-- The pads ask each pad question at the first whitening key. -/

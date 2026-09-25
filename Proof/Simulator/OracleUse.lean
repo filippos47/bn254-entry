@@ -140,7 +140,7 @@ theorem stage1_noOracle : Stage1.program.NoOracle := by
   · exact ⟨noOracle_sampleWord _, ⟨rfl, rfl⟩, noOracle_zeroRegs _⟩
   · exact ⟨noOracle_sampleWord _, ⟨rfl, rfl⟩, noOracle_zeroRegs _⟩
   · exact ⟨noOracle_rep _ _ fun _ _ =>
-        ⟨noOracle_emitWord _ _, noOracle_rep _ _ fun _ _ => noOracle_emitWord _ _⟩,
+        ⟨rfl, rfl, noOracle_emitWord _ _, noOracle_rep _ _ fun _ _ => noOracle_emitWord _ _⟩,
       noOracle_rep _ _ fun _ _ => noOracle_emitWord _ _,
       noOracle_rep _ _ fun _ _ => noOracle_emitWord _ _,
       noOracle_rep _ _ fun _ _ => noOracle_emitWord _ _⟩

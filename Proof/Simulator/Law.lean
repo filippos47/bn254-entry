@@ -15,9 +15,10 @@ statements, and `machineLaw_of` proves the split:
 `boundedSamplers` are the machine's exact sampler laws, in P3's `Samplers` shape, component by
 component: `fieldCellLaw` (bounded rejection over `254` coins below `p`, `rejectLaw`, whose
 machine realisation starts from `memSem_sampleWord`), `curvePointLaw` (a uniform finite point by
-`x`-rejection and a fair sign), `liftLaw`, `freeLaw` (the designated vector's `182` free
-coordinates, `182` field cells in the machine's draw order `2d + slot`) and `preimageLaw` (the
-`t` sampler of `BigInt.preimageSampler`: `V = enc(Y*) + p^455 · t`, read as its `452` limbs).
+`x`-rejection and a fair sign), `liftLaw` (`91` randomiser pairs `(λ_d, t_d)`, each two
+randomisers in the machine's draw order), `freeLaw` (the designated vector's `91` free
+coordinates, `91` field cells in the machine's draw order) and `preimageLaw` (the `t` sampler of
+`BigInt.preimageSampler`: `V = enc(Y*) + p^364 · t`, read as its `362` limbs).
 
 What is proved here: the definitions, and `machineLaw_of`. `Stage1Law` (`Stage1Law.lean`),
 `Stage2Law` (`Stage2Valid.lean`, `OpeningMachine.lean`) and `SamplerCutoff` (`CutoffMass.lean`)
@@ -63,17 +64,17 @@ def stage1Draws : PMF (Option ((Fin fieldCellCount → BaseField) × (Fin except
 /-- The source a draw publishes and retains. -/
 def sourceOfDraws (cells : Nat → BaseField) (bytes hot key : Nat → Nat) : Stage1Source where
   curve := (cells 0, cells 1, cells 2)
-  rows := Vector.ofFn fun digit => ⟨cells (3 + 11 * digit), cells (3 + 11 * digit + 1),
-    cells (3 + 11 * digit + 2), cells (3 + 11 * digit + 3), cells (3 + 11 * digit + 4),
-    cells (3 + 11 * digit + 5), cells (3 + 11 * digit + 6), cells (3 + 11 * digit + 7),
-    cells (3 + 11 * digit + 8), cells (3 + 11 * digit + 9), cells (3 + 11 * digit + 10)⟩
+  rows := Vector.ofFn fun digit => ⟨cells (3 + 10 * digit), cells (3 + 10 * digit + 1),
+    cells (3 + 10 * digit + 2), cells (3 + 10 * digit + 3), cells (3 + 10 * digit + 4),
+    cells (3 + 10 * digit + 5), cells (3 + 10 * digit + 6), cells (3 + 10 * digit + 7),
+    cells (3 + 10 * digit + 8), cells (3 + 10 * digit + 9)⟩
   exception := Vector.ofFn fun digit => Vector.ofFn fun slot =>
-    BitVec.ofNat 8 (bytes (6 * digit + slot))
+    BitVec.ofNat 8 (bytes (12 * digit + slot))
   curveXHot := Vector.ofFn fun chunk => BitVec.ofNat 128 (hot chunk)
-  curveYHot := Vector.ofFn fun chunk => BitVec.ofNat 128 (hot (198 + chunk))
-  pointXHot := Vector.ofFn fun chunk => BitVec.ofNat 128 (hot (396 + chunk))
-  pointYHot := Vector.ofFn fun chunk => BitVec.ofNat 128 (hot (594 + chunk))
-  joins := fun chunk slot => cells (1004 + 733 * chunk + slot)
+  curveYHot := Vector.ofFn fun chunk => BitVec.ofNat 128 (hot (202 + chunk))
+  pointXHot := Vector.ofFn fun chunk => BitVec.ofNat 128 (hot (404 + chunk))
+  pointYHot := Vector.ofFn fun chunk => BitVec.ofNat 128 (hot (606 + chunk))
+  joins := fun chunk slot => cells (913 + 642 * chunk + slot)
   key := ⟨Vector.ofFn fun bit => ⟨BitVec.ofNat 128 (key (2 * bit)),
       BitVec.ofNat 128 (key (2 * bit + 1))⟩,
     Vector.ofFn fun bit => ⟨BitVec.ofNat 128 (key (2 * (254 + bit))),
@@ -117,20 +118,24 @@ def tailLaw [FieldCertificate] [GroupCertificate] :
     if FieldMacToECMac.clampedFirst (Vector.ofFn points) = 0 then none
     else some (Vector.ofFn points)
 
-/-- One lift randomiser `λ ∈ [1, p)` (`Opening.lambdaOne`). -/
+/-- One lift randomiser in `[1, p)` (`Opening.nonZeroCell`). -/
 def lambdaLaw : PMF (Option NonZeroBase) :=
   (rejectLaw fieldWidth (fun value => decide (1 ≤ value ∧ value < pNat)) attempts).map
     fun drawn => drawn.bind fun value =>
       if nonzero : (value : BaseField) ≠ 0 then some ⟨value, nonzero⟩ else none
 
-/-- **The machine's lift law.** -/
-def liftLaw : PMF (Option (Fin digitCount → NonZeroBase)) := optionProduct digitCount fun _ => lambdaLaw
+/-- One randomiser pair `(λ, t)` (`Opening.lambdaOne`): `λ`, then `t`. -/
+def pairLaw : PMF (Option (NonZeroBase × NonZeroBase)) :=
+  (optionProduct 2 fun _ => lambdaLaw).map (Option.map fun pair => (pair 0, pair 1))
 
-/-- **The machine's free-coordinate law** (`Opening.nonCollectors`): `182` field cells, drawn in
-the machine's order, draw `2d + slot` being the free coordinate `(d, slot)` (element `5d` for
-slot `0`, `5d + 2` for slot `1`). -/
+/-- **The machine's lift law.** -/
+def liftLaw : PMF (Option (Fin digitCount → NonZeroBase × NonZeroBase)) :=
+  optionProduct digitCount fun _ => pairLaw
+
+/-- **The machine's free-coordinate law** (`Opening.nonCollectors`): `91` field cells, drawn in
+the machine's order, draw `d` being the free coordinate `(d, 0)` (element `4d`). -/
 def freeLaw : PMF (Option (FreeSite → BaseField)) :=
-  (optionProduct (digitCount * 2) fun _ => fieldCellLaw).map
+  (optionProduct (digitCount * 1) fun _ => fieldCellLaw).map
     (Option.map fun draws site => draws (finProdFinEquiv site))
 
 /-- The digits of a designated vector, as the preimage sampler reads them from its cells. -/
@@ -142,8 +147,8 @@ def vectorEnc (vector : Fin pointElementCountX → BaseField) : Nat :=
   BigInt.encNat (vectorDigits vector) BigInt.samplerDigits
 
 /-- **The machine's preimage law** (`BigInt.preimageSampler`): `t` by bounded rejection over
-`326` coins with `80` attempts, accepted iff `enc(Y*) + p^455 · t < 2^115712`, then the `452`
-hash answers of `V = t · p^455 + enc(Y*)`. -/
+`363` coins with `80` attempts, accepted iff `enc(Y*) + p^364 · t < 2^92672`, then the `362`
+hash answers of `V = t · p^364 + enc(Y*)`. -/
 def preimageLaw (vector : Fin pointElementCountX → BaseField) : PMF (Option DesignatedLimbs) :=
   (rejectLaw (BigInt.hiWidth + 256) (BigInt.samplerAccept (vectorEnc vector))
       BigInt.samplerAttempts).map
@@ -176,7 +181,7 @@ installs. -/
 def machineKernels [FieldCertificate] :=
   @machineAbstract _ PlanB.FixedIndex EncPRF.PermutationIndex PlanB.Public
     (Fintype.ofFinite _) (Fintype.ofFinite _) (Classical.decEq _) (Classical.decEq _)
-    Wire.encoding 1348634 planBSimulator
+    Wire.encoding 1103204 planBSimulator
 
 /-- The abstract simulator of the machine's samplers, at the same instances. -/
 def boundedKernels [FieldCertificate] [GroupCertificate] :=

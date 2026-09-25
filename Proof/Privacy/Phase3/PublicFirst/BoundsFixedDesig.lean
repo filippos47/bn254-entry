@@ -1,7 +1,7 @@
 /-
 **Phase 3, P1m — (B1) the fixed-key part on the curve: outputs.**
 
-The designated installation programs hash inputs only (`programRequests`: the `452` limbs of the
+The designated installation programs hash inputs only (`programRequests`: the `362` limbs of the
 designated vector, at `designatedInput`), so it adds no fixed-key pair: every fixed-key pair of
 `M'`'s private state is a lazy forward answer, at its index's canonical input (`final_fixed`), so at
 most one per index (`final_used_le`). The designated entries' answers are hash answers, which the

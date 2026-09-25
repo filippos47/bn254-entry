@@ -36,11 +36,11 @@ variable [FieldCertificate] [GroupCertificate] (scalar : NonZeroScalar) (input :
 
 theorem exact0_reveal (source : Stage1Source) (coins : Coins) (Δ : EncPRF.Coordinate → Block) (state : LState)
     (h : Exact0 scalar input coins.offsets) : revealOnPred scalar source input coins Δ state := by
-  obtain ⟨o, phi, found, agree⟩ := h
+  obtain ⟨o, phi, found, kind, agree⟩ := h
   have restored : (Lamport.restore input (sourceLabels source input)).input = BitInput.ofAffine input := by
     rw [Kriterion.ArgoMAC.Phase3.Lazy.restore_selectedLabels]
   unfold revealOnPred
-  refine ⟨o, phi, found, fun c p => ?_⟩
+  refine ⟨o, phi, found, kind, fun c p => ?_⟩
   rw [restored]
   exact Or.inl ((agree c p).resolve_right id)
 
@@ -152,7 +152,7 @@ omit [GroupCertificate] in
 theorem rowsGet (keys : OutputKeys) (R : Randomness) (i : Fin digitCount) :
     (FieldMacToECMac.rowsForOutputKeys keys R).get i =
       Coordinates.rows (keys.get i).offset.coordinates (digitEndomorphismBase (keys.get i).digit)
-        (R.get i).rho.value := by
+        (R.get i).rho.value (R.get i).tau.value := by
   unfold FieldMacToECMac.rowsForOutputKeys
   exact Vector.get_ofFn _ i
 

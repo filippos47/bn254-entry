@@ -168,7 +168,7 @@ end AllQ
 /-- The fixed-key (fold) indices of one (lane, chunk). -/
 def IndexAt (lane : Lane) (chunk : Fin chunkCount) : FixedIndex → Prop
   | .hot lane' chunk' _ _ _ => lane' = lane ∧ chunk' = chunk
-  | .gadget _ _ _ => False
+  | .gadget _ _ _ _ => False
 
 /-- The hash inputs of the cells of one (lane, chunk). -/
 def CellAt (lane : Lane) (chunk : Fin chunkCount) (input : BaseField) : Prop :=

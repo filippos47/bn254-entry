@@ -163,9 +163,6 @@ theorem designatedVector_freeOf (T : Tape) (d : Fin digitCount) (xe : XElement) 
       have collector : IsCollector (.inl XElement.rowX_x9) := Or.inl rfl
       rw [if_pos collector]
       exact Kriterion.ArgoMAC.Phase3.Glue.designatedVector_collector _ _ d 0
-  | rowY_mixed =>
-      rw [if_neg (by simp [IsCollector, collectorX, collectorY, collectorZ])]
-      exact Kriterion.ArgoMAC.Phase3.Glue.designatedVector_free _ _ d 1
   | rowY_cubic =>
       have collector : IsCollector (.inl XElement.rowY_cubic) := Or.inr (Or.inl rfl)
       rw [if_pos collector]

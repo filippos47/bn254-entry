@@ -46,31 +46,56 @@ theorem ofFn_congr_digit {α : Type} (f : Fin outputMacCount → α) (g : Fin di
 def fixedTable (v : FixedIndex → Block) (T : Tape) : Table :=
   (⟨fun _ => Equiv.refl Block⟩, fun _ => (0, 0), v, T)
 
-/-- **A digit's gadget digest** at some labels, from the fixed-key answers. -/
-def digest (v : FixedIndex → Block) (output : Fin digitCount) (mac : InputMac) : Block :=
-  xorFold (fun index : Fin coordinateBitCount => v (.gadget output .x index) ^^^ mac.x.get index)
-    ^^^
-    xorFold (fun index : Fin coordinateBitCount => v (.gadget output .y index) ^^^ mac.y.get index)
+/-- **A digit's gadget digest** at an input's bits and labels, from the fixed-key answers. -/
+def digest (v : FixedIndex → Block) (output : Fin digitCount) (point : AffineInput)
+    (mac : InputMac) : Block :=
+  xorFold (fun index : Fin coordinateBitCount =>
+      v (.gadget output .x index ((inputBits point .x).getLsb index)) ^^^ mac.x.get index) ^^^
+    xorFold (fun index : Fin coordinateBitCount =>
+      v (.gadget output .y index ((inputBits point .y).getLsb index)) ^^^ mac.y.get index)
 
-/-- A digit's gadget entry from the fixed-key answers. -/
+/-- A digit's gadget entry from the fixed-key answers: the doubling slot, then the sign-zero
+slot. -/
 def entryOf (v : FixedIndex → Block) (output : Fin digitCount) (key : OutputKey)
     (inputKey : InputMacKey) (pad : Exception.Entry) : Exception.Entry :=
   match digitEndomorphismBase key.digit with
   | none => pad
-  | some phi => Exception.writeEntry pad
-      (Exception.exceptionIndex (Exception.exceptionalInput phi key.offset.coordinates))
-      (Exception.lowByte (digest v output
-        (inputKey.encodeAffine (Exception.exceptionalInput phi key.offset.coordinates))) ^^^
+  | some phi => Exception.writeEntry
+      (Exception.writeEntry pad
+        (Exception.slotOf false (Exception.exceptionalInput phi key.offset.coordinates))
+        (Exception.lowByte (digest v output (Exception.exceptionalInput phi key.offset.coordinates)
+          (inputKey.encodeAffine (Exception.exceptionalInput phi key.offset.coordinates))) ^^^
+          Exception.digitCode key.digit))
+      (Exception.slotOf true (Exception.tripleInput phi key.offset.coordinates))
+      (Exception.lowByte (digest v output (Exception.tripleInput phi key.offset.coordinates)
+        (inputKey.encodeAffine (Exception.tripleInput phi key.offset.coordinates))) ^^^
         Exception.digitCode key.digit)
 
-theorem gadgetDigestM_table (A : Table) (output : Fin outputMacCount)
-    (coordinate : EncPRF.Coordinate) (mac : CoordinateMac) :
-    (Programs.gadgetDigestM output coordinate mac).eval (tableAnswer A) =
+/-- One position's two hashes on a table. -/
+theorem gadgetPairsM_table_get (A : Table) (output : Fin outputMacCount)
+    (coordinate : EncPRF.Coordinate) (key : CoordinateMacKey) (index : Fin coordinateBitCount) :
+    ((Programs.gadgetPairsM output coordinate key).eval (tableAnswer A)).get index =
+      (A.2.2.1 (.gadget output (Pipeline.gadgetCoord coordinate) index false) ^^^
+          BitAdaptor.encode key[index.val] false,
+        A.2.2.1 (.gadget output (Pipeline.gadgetCoord coordinate) index true) ^^^
+          BitAdaptor.encode key[index.val] true) := by
+  unfold Programs.gadgetPairsM
+  rw [FreeQuery.eval_vector]
+  exact Vector.get_ofFn _ index
+
+/-- A coordinate's digest, read from the hashes on a table. -/
+theorem pairsDigest_table (A : Table) (output : Fin outputMacCount)
+    (coordinate : EncPRF.Coordinate) (key : CoordinateMacKey) (bits : CoordinateBits) :
+    Programs.pairsDigest ((Programs.gadgetPairsM output coordinate key).eval (tableAnswer A)) bits =
       xorFold (fun index : Fin coordinateBitCount =>
-        A.2.2.1 (.gadget output (Pipeline.gadgetCoord coordinate) index) ^^^ mac.get index) := by
-  simp only [Programs.gadgetDigestM, FreeQuery.eval_bind, FreeQuery.eval_pure,
-    FreeQuery.eval_vector, Vector.get_ofFn]
-  rfl
+        A.2.2.1 (.gadget output (Pipeline.gadgetCoord coordinate) index (bits.getLsb index)) ^^^
+          (encodeCoordinate key bits).get index) := by
+  unfold Programs.pairsDigest xorFold
+  refine congrArg (fun step => Fin.foldl coordinateBitCount step (0 : Block))
+    (funext fun acc => funext fun index => ?_)
+  rw [gadgetPairsM_table_get]
+  simp only [encodeCoordinate, Vector.get_ofFn]
+  cases bits.getLsb index <;> rfl
 
 /-- **A gadget entry on a table** reads the table's gadget answers only. -/
 theorem garbleEntryM_eval (A : Table) (output : Fin outputMacCount) (key : OutputKey)
@@ -81,8 +106,7 @@ theorem garbleEntryM_eval (A : Table) (output : Fin outputMacCount) (key : Outpu
   cases digitEndomorphismBase key.digit with
   | none => rfl
   | some phi =>
-      simp only [FreeQuery.eval_bind, FreeQuery.eval_pure, Programs.gadgetMaskM,
-        gadgetDigestM_table]
+      simp only [FreeQuery.eval_bind, FreeQuery.eval_pure, Programs.pairsMask, pairsDigest_table]
       rfl
 
 theorem garbleEntryM_table (v : FixedIndex → Block) (T : Tape) (output : Fin digitCount)
@@ -301,46 +325,175 @@ theorem foldJoin_split (v : FixedIndex → Block) (lane : Lane) (slot : Fin fold
       w (hotIndexNat lane (slotChunk slot) (slotOffset slot + 1) e.val true)), ← except]
   exact xor_split_hidden _ _ _ _ _ _ hidden other
 
-theorem gadget_not_hidden (output : Fin digitCount) (κ : Coord) (index : Fin coordinateBitCount)
-    (off : ¬ (κ = .x ∧ index.val = 0)) :
-    FixedIndex.gadget output κ index ∉ Set.range (hiddenIdx input) := by
-  rintro ⟨(⟨ℓ, s⟩ | d), same⟩
+theorem gadget_not_hidden (output : Fin digitCount) (κ : Coord) (index : Fin PlanB.coordinateBits)
+    (b : Bool) (off : (κ, index) ≠ originPos) :
+    FixedIndex.gadget output κ index b ∉ Set.range (hiddenIdx input) := by
+  rintro ⟨(⟨ℓ, s⟩ | ⟨d, b'⟩), same⟩
   · simp only [hiddenIdx, hotIndexNat, reduceCtorEq] at same
   · simp only [hiddenIdx, gadgetIdx] at same
-    injection same with outputEq coordEq position
+    injection same with outputEq coordEq position bitEq
     subst coordEq
-    exact off ⟨rfl, (congrArg Fin.val position).symm⟩
+    subst position
+    exact off rfl
 
-/-- **A digest is its hidden gadget answer XOR the rest.** -/
-theorem digest_split (v : FixedIndex → Block) (output : Fin digitCount) (mac : InputMac) :
-    digest v output mac = v (hiddenIdx input (.inr output)) ^^^
-      digest (zeroHidden input (splitAlong (hiddenIdx input) (hiddenIdx_injective input) v).2)
-        output mac := by
-  set w := zeroHidden input (splitAlong (hiddenIdx input) (hiddenIdx_injective input) v).2
-  have zeroIndex : (0 : Nat) < coordinateBitCount := by decide
-  let first : Fin coordinateBitCount := ⟨0, zeroIndex⟩
-  have hiddenAt : FixedIndex.gadget output .x first = hiddenIdx input (.inr output) := rfl
-  have atHidden : w (FixedIndex.gadget output .x first) = 0 := by
-    rw [hiddenAt]
-    exact zeroHidden_of_hidden input _ _
-  have restX : ∀ index : Fin coordinateBitCount, index ≠ first →
-      w (FixedIndex.gadget output .x index) = v (FixedIndex.gadget output .x index) :=
-    fun index off =>
-    zeroHidden_of_rest input v _ (gadget_not_hidden input output .x index
-      (fun h => off (Fin.ext h.2)))
-  have restY : ∀ index : Fin coordinateBitCount,
-      w (FixedIndex.gadget output .y index) = v (FixedIndex.gadget output .y index) := fun index =>
-    zeroHidden_of_rest input v _ (gadget_not_hidden input output .y index (fun h => by cases h.1))
-  unfold digest
-  rw [xorFold_split first,
-    xorFold_split first (fun index => w (FixedIndex.gadget output .x index) ^^^ _),
-    Programs.xorFoldExcept_congr first (fun index => w (FixedIndex.gadget output .x index) ^^^ _)
-      (fun index => v (FixedIndex.gadget output .x index) ^^^ mac.x.get index)
-      (fun index off => by rw [restX index off])]
-  simp only [atHidden, restY, ← hiddenAt]
+theorem xorFold_update {n : Nat} (p : Fin n) (f g : Fin n → Block)
+    (agree : ∀ i, i ≠ p → f i = g i) : xorFold f = xorFold g ^^^ (f p ^^^ g p) := by
+  rw [xorFold_split p f, xorFold_split p g, Programs.xorFoldExcept_congr p f g agree]
   refine xor_bits _ _ fun i => ?_
   simp only [BitVec.getLsbD_xor]
-  cases (v (FixedIndex.gadget output .x first)).getLsbD i <;> simp
+  cases (xorFoldExcept p g).getLsbD i <;> cases (f p).getLsbD i <;> cases (g p).getLsbD i <;> rfl
+
+theorem xor_hidden_left (X Y A B C : Block) (zero : C = 0) :
+    (X ^^^ ((A ^^^ B) ^^^ (C ^^^ B))) ^^^ Y = A ^^^ (X ^^^ Y) := by
+  have zeroXor : (0 : Block) ^^^ B = B := BitVec.zero_xor
+  rw [zero, zeroXor]
+  refine xor_bits _ _ fun i => ?_
+  simp only [BitVec.getLsbD_xor]
+  cases X.getLsbD i <;> cases Y.getLsbD i <;> cases A.getLsbD i <;> cases B.getLsbD i <;> rfl
+
+theorem xor_hidden_right (X Y A B C : Block) (zero : C = 0) :
+    X ^^^ (Y ^^^ ((A ^^^ B) ^^^ (C ^^^ B))) = A ^^^ (X ^^^ Y) := by
+  have zeroXor : (0 : Block) ^^^ B = B := BitVec.zero_xor
+  rw [zero, zeroXor]
+  refine xor_bits _ _ fun i => ?_
+  simp only [BitVec.getLsbD_xor]
+  cases X.getLsbD i <;> cases Y.getLsbD i <;> cases A.getLsbD i <;> cases B.getLsbD i <;> rfl
+
+/-- **A digest is one of its answers XOR the digest of answers that zero it and agree elsewhere
+on the digit.** -/
+theorem digest_split_at (v w : FixedIndex → Block) (output : Fin digitCount) (point : AffineInput)
+    (mac : InputMac) (κ : Coord) (p : Fin PlanB.coordinateBits)
+    (rest : ∀ (κ' : Coord) (p' : Fin PlanB.coordinateBits) (b : Bool), (κ', p') ≠ (κ, p) →
+      w (.gadget output κ' p' b) = v (.gadget output κ' p' b))
+    (here : w (.gadget output κ p ((inputBits point κ).getLsb p)) = 0) :
+    digest v output point mac =
+      v (.gadget output κ p ((inputBits point κ).getLsb p)) ^^^ digest w output point mac := by
+  unfold digest
+  cases κ
+  · have hx := xorFold_update p
+      (fun index : Fin coordinateBitCount =>
+        v (.gadget output .x index ((inputBits point .x).getLsb index)) ^^^ mac.x.get index)
+      (fun index : Fin coordinateBitCount =>
+        w (.gadget output .x index ((inputBits point .x).getLsb index)) ^^^ mac.x.get index)
+      (fun index off => congrArg (· ^^^ mac.x.get index)
+        (rest .x index _ (fun same => off (Prod.mk.inj same).2)).symm)
+    have hy : xorFold (fun index : Fin coordinateBitCount =>
+          v (.gadget output .y index ((inputBits point .y).getLsb index)) ^^^ mac.y.get index) =
+        xorFold (fun index : Fin coordinateBitCount =>
+          w (.gadget output .y index ((inputBits point .y).getLsb index)) ^^^ mac.y.get index) :=
+      congrArg xorFold (funext fun index => congrArg (· ^^^ mac.y.get index)
+        (rest .y index _ (fun same => by cases (Prod.mk.inj same).1)).symm)
+    exact (congrArg₂ (· ^^^ ·) hx hy).trans (xor_hidden_left _ _ _ _ _ here)
+  · have hx : xorFold (fun index : Fin coordinateBitCount =>
+          v (.gadget output .x index ((inputBits point .x).getLsb index)) ^^^ mac.x.get index) =
+        xorFold (fun index : Fin coordinateBitCount =>
+          w (.gadget output .x index ((inputBits point .x).getLsb index)) ^^^ mac.x.get index) :=
+      congrArg xorFold (funext fun index => congrArg (· ^^^ mac.x.get index)
+        (rest .x index _ (fun same => by cases (Prod.mk.inj same).1)).symm)
+    have hy := xorFold_update p
+      (fun index : Fin coordinateBitCount =>
+        v (.gadget output .y index ((inputBits point .y).getLsb index)) ^^^ mac.y.get index)
+      (fun index : Fin coordinateBitCount =>
+        w (.gadget output .y index ((inputBits point .y).getLsb index)) ^^^ mac.y.get index)
+      (fun index off => congrArg (· ^^^ mac.y.get index)
+        (rest .y index _ (fun same => off (Prod.mk.inj same).2)).symm)
+    exact (congrArg₂ (· ^^^ ·) hx hy).trans (xor_hidden_right _ _ _ _ _ here)
+
+/-- **A digest over answers that differ at one index of the digit**: that answer, if the digest
+reads it, XOR the digest over the other answers. -/
+theorem digest_update (v w : FixedIndex → Block) (output : Fin digitCount) (point : AffineInput)
+    (mac : InputMac) (κ : Coord) (p : Fin PlanB.coordinateBits) (b : Bool)
+    (rest : ∀ (κ' : Coord) (p' : Fin PlanB.coordinateBits) (b' : Bool), (κ', p', b') ≠ (κ, p, b) →
+      w (.gadget output κ' p' b') = v (.gadget output κ' p' b'))
+    (zero : w (.gadget output κ p b) = 0) :
+    digest v output point mac =
+      (if (inputBits point κ).getLsb p = b then v (.gadget output κ p b) else 0) ^^^
+        digest w output point mac := by
+  by_cases read : (inputBits point κ).getLsb p = b
+  · rw [if_pos read]
+    subst read
+    exact digest_split_at v w output point mac κ p
+      (fun κ' p' b' off => rest κ' p' b' (fun same => by
+        have κEq : κ' = κ := congrArg Prod.fst same
+        have pEq : p' = p := congrArg (fun t => t.2.1) same
+        exact off (by rw [κEq, pEq]))) zero
+  · rw [if_neg read]
+    have agree : ∀ (κ' : Coord) (index : Fin PlanB.coordinateBits),
+        w (.gadget output κ' index ((inputBits point κ').getLsb index)) =
+          v (.gadget output κ' index ((inputBits point κ').getLsb index)) := fun κ' index =>
+      rest κ' index _ (fun same => read (by
+        have κEq : κ' = κ := congrArg Prod.fst same
+        have indexEq : index = p := congrArg (fun t => t.2.1) same
+        have bitEq := congrArg (fun t => t.2.2) same
+        subst κEq
+        subst indexEq
+        exact bitEq))
+    have zeroXor : ∀ a : Block, (0 : Block) ^^^ a = a := fun a => BitVec.zero_xor
+    rw [zeroXor]
+    unfold digest
+    exact congrArg₂ (· ^^^ ·)
+      (congrArg xorFold (funext fun index => congrArg (· ^^^ mac.x.get index) (agree .x index).symm))
+      (congrArg xorFold (funext fun index => congrArg (· ^^^ mac.y.get index) (agree .y index).symm))
+
+/-- The answers with the hidden ones zeroed, read back through the index swap. -/
+def zeroSwapped (keys : OutputKeys) (v : FixedIndex → Block) : FixedIndex → Block :=
+  zeroHidden input (splitAlong (hiddenIdx input) (hiddenIdx_injective input)
+    (v ∘ indexSwap keys)).2 ∘ indexSwap keys
+
+/-- Off a digit's differing position the zeroed answers are the answers. -/
+theorem zeroSwapped_rest (keys : OutputKeys) (v : FixedIndex → Block) (d : Fin digitCount)
+    (κ : Coord) (p : Fin PlanB.coordinateBits) (b : Bool) (off : (κ, p) ≠ diffPos (keyOf keys d)) :
+    zeroSwapped input keys v (.gadget d κ p b) = v (.gadget d κ p b) := by
+  unfold zeroSwapped
+  show zeroHidden input _ (indexSwap keys (.gadget d κ p b)) = _
+  by_cases origin : (κ, p) = originPos
+  · have swapped : indexSwap keys (.gadget d κ p b) = .gadget d (diffPos (keyOf keys d)).1
+        (diffPos (keyOf keys d)).2 (b ^^ diffBit (keyOf keys d)) := by
+      show FixedIndex.gadget d _ _ _ = _
+      unfold gadgetSwap
+      rw [if_pos origin]
+    have notHidden := gadget_not_hidden input d (diffPos (keyOf keys d)).1 (diffPos (keyOf keys d)).2
+      (b ^^ diffBit (keyOf keys d)) (fun same => off (origin.trans (same.symm.trans Prod.mk.eta)))
+    rw [swapped, zeroHidden_of_rest input (v ∘ indexSwap keys) _ notHidden]
+    show v (indexSwap keys (FixedIndex.gadget d _ _ _)) = _
+    rw [← swapped, indexSwap_involutive]
+  · rw [indexSwap_off keys d κ p b off origin,
+      zeroHidden_of_rest input (v ∘ indexSwap keys) _ (gadget_not_hidden input d κ p b origin)]
+    show v (indexSwap keys (.gadget d κ p b)) = _
+    rw [indexSwap_off keys d κ p b off origin]
+
+/-- At a digit's differing position the zeroed answers are zero. -/
+theorem zeroSwapped_target (keys : OutputKeys) (v : FixedIndex → Block) (d : Fin digitCount)
+    (b : Bool) :
+    zeroSwapped input keys v
+      (.gadget d (diffPos (keyOf keys d)).1 (diffPos (keyOf keys d)).2 b) = 0 := by
+  unfold zeroSwapped
+  have swapped : indexSwap keys (.gadget d (diffPos (keyOf keys d)).1 (diffPos (keyOf keys d)).2 b) =
+      hiddenIdx input (.inr (d, b ^^ diffBit (keyOf keys d))) := by
+    show FixedIndex.gadget d _ _ _ = FixedIndex.gadget d _ _ _
+    unfold gadgetSwap
+    by_cases same : ((diffPos (keyOf keys d)).1, (diffPos (keyOf keys d)).2) = originPos
+    · rw [if_pos same]
+      have target : diffPos (keyOf keys d) = originPos := Prod.mk.eta.symm.trans same
+      simp only [target]
+      rfl
+    · rw [if_neg same, if_pos Prod.mk.eta]
+      rfl
+  show zeroHidden input _ (indexSwap keys _) = 0
+  rw [swapped, zeroHidden_of_hidden]
+
+/-- **A digest is its answer at the digit's differing position XOR the swapped rest.** -/
+theorem digest_swap (keys : OutputKeys) (v : FixedIndex → Block) (d : Fin digitCount)
+    (point : AffineInput) (mac : InputMac) :
+    digest v d point mac =
+      v (.gadget d (diffPos (keyOf keys d)).1 (diffPos (keyOf keys d)).2
+        ((inputBits point (diffPos (keyOf keys d)).1).getLsb (diffPos (keyOf keys d)).2)) ^^^
+      digest (zeroSwapped input keys v) d point mac :=
+  digest_split_at v (zeroSwapped input keys v) d point mac (diffPos (keyOf keys d)).1
+    (diffPos (keyOf keys d)).2
+    (fun κ' p' b off => zeroSwapped_rest input keys v d κ' p' b
+      (fun same => off (same.trans Prod.mk.eta.symm)))
+    (zeroSwapped_target input keys v d _)
 
 end Hidden
 
@@ -520,22 +673,31 @@ def laneKey (key : InputMacKey) : Lane → Fin coordinateBitCount → Block × B
   | .pointY => Pipeline.bitKeyOf (Programs.whitenKeyOf pads key) .y
 
 /-- **F4's context off the curve**, from the output keys and the rest: the true rows and `ρ`, the
-fold joins and the digests with the hidden answers zeroed, the gadget slots and codes. (The keys
+fold joins and the digests with the hidden answers zeroed (the digests read through the index
+swap), the gadget slots and codes; the two digests of a digit share no hidden answer. (The keys
 are a parameter so that no proof ever unfolds the scalar's digits.) -/
 def offContext (keys : OutputKeys) (o : Outer input) : JointContext where
-  rows d := Coordinates.rows (keys.get d).offset.coordinates
-    (digitEndomorphismBase (keys.get d).digit) (o.2.1 d).value
-  rho d := o.2.1 d
+  rows d := Coordinates.rows (keyOf keys d).offset.coordinates
+    (digitEndomorphismBase (keyOf keys d).digit) (o.2.1 d).1.value (o.2.1 d).2.value
+  rho d := (o.2.1 d).1
   foldVisible _ lane slot := foldJoin (zeroHidden input o.2.2.2.2) lane slot
     (zeroAt (laneKey pads (labelKey o.2.2.1 o.2.2.2.1) lane) slot)
-  gadgetVisible _ d := match digitEndomorphismBase (keys.get d).digit with
-    | none => 0
-    | some phi => digest (zeroHidden input o.2.2.2.2) d
-        ((Programs.transformKeyOf pads (labelKey o.2.2.1 o.2.2.2.1)).encodeAffine
-          (Exception.exceptionalInput phi (keys.get d).offset.coordinates))
-  gadgetSlot d := (digitEndomorphismBase (keys.get d).digit).map fun phi =>
-    Exception.exceptionIndex (Exception.exceptionalInput phi (keys.get d).offset.coordinates)
-  gadgetCode d := Exception.digitCode (keys.get d).digit
+  gadgetVisible _ d := match digitEndomorphismBase (keyOf keys d).digit with
+    | none => (0, 0)
+    | some phi =>
+      (digest (zeroHidden input o.2.2.2.2 ∘ indexSwap keys) d
+          (Exception.exceptionalInput phi (keyOf keys d).offset.coordinates)
+          ((Programs.transformKeyOf pads (labelKey o.2.2.1 o.2.2.2.1)).encodeAffine
+            (Exception.exceptionalInput phi (keyOf keys d).offset.coordinates)),
+        digest (zeroHidden input o.2.2.2.2 ∘ indexSwap keys) d
+          (Exception.tripleInput phi (keyOf keys d).offset.coordinates)
+          ((Programs.transformKeyOf pads (labelKey o.2.2.1 o.2.2.2.1)).encodeAffine
+            (Exception.tripleInput phi (keyOf keys d).offset.coordinates)))
+  gadgetSlot d := (digitEndomorphismBase (keyOf keys d).digit).map fun phi =>
+    (Exception.slotOf false (Exception.exceptionalInput phi (keyOf keys d).offset.coordinates),
+      Exception.slotOf true (Exception.tripleInput phi (keyOf keys d).offset.coordinates))
+  gadgetMix _ := (false, false)
+  gadgetCode d := Exception.digitCode (keyOf keys d).digit
 
 theorem public_ext {a b : Public} (curve : a.curve = b.curve) (rows : a.rows = b.rows)
     (exception : a.exception = b.exception) (cx : a.curveXHot = b.curveXHot)
@@ -547,25 +709,56 @@ theorem public_ext {a b : Public} (curve : a.curve = b.curve) (rows : a.rows = b
   subst curve rows exception cx cy px py scale
   rfl
 
-theorem entryOf_gadgetEntry (v : FixedIndex → Block) (d : Fin digitCount) (key : OutputKey)
+theorem entryOf_gadgetEntry2 (keys : OutputKeys) (v : FixedIndex → Block) (d : Fin digitCount)
     (inputKey : InputMacKey) (pad : Exception.Entry) :
-    entryOf v d key inputKey pad = gadgetEntry
-      ((digitEndomorphismBase key.digit).map fun phi =>
-        Exception.exceptionIndex (Exception.exceptionalInput phi key.offset.coordinates))
-      (Exception.digitCode key.digit)
-      (match digitEndomorphismBase key.digit with
-        | none => 0
-        | some phi => digest (zeroHidden input (splitAlong (hiddenIdx input)
-            (hiddenIdx_injective input) v).2) d
-              (inputKey.encodeAffine (Exception.exceptionalInput phi key.offset.coordinates)))
-      pad (v (hiddenIdx input (.inr d))) := by
+    entryOf v d (keyOf keys d) inputKey pad = gadgetEntry2
+      ((digitEndomorphismBase (keyOf keys d).digit).map fun phi =>
+        (Exception.slotOf false (Exception.exceptionalInput phi (keyOf keys d).offset.coordinates),
+          Exception.slotOf true (Exception.tripleInput phi (keyOf keys d).offset.coordinates)))
+      (false, false) (Exception.digitCode (keyOf keys d).digit)
+      (match digitEndomorphismBase (keyOf keys d).digit with
+        | none => (0, 0)
+        | some phi =>
+          (digest (zeroSwapped input keys v) d
+              (Exception.exceptionalInput phi (keyOf keys d).offset.coordinates)
+              (inputKey.encodeAffine (Exception.exceptionalInput phi (keyOf keys d).offset.coordinates)),
+            digest (zeroSwapped input keys v) d
+              (Exception.tripleInput phi (keyOf keys d).offset.coordinates)
+              (inputKey.encodeAffine (Exception.tripleInput phi (keyOf keys d).offset.coordinates))))
+      pad ((v ∘ indexSwap keys) (hiddenIdx input (.inr (d, false))),
+        (v ∘ indexSwap keys) (hiddenIdx input (.inr (d, true)))) := by
+  have spec := fun phi (found : digitEndomorphismBase (keyOf keys d).digit = some phi) =>
+    diffPos_spec (keyOf keys d) phi found
   unfold entryOf
-  cases digitEndomorphismBase key.digit with
+  cases found : digitEndomorphismBase (keyOf keys d).digit with
   | none => rfl
   | some phi =>
-      show Exception.writeEntry pad _ (Exception.lowByte (digest v d _) ^^^ _) =
-        Exception.writeEntry pad _ (Exception.lowByte (_ ^^^ _) ^^^ _)
-      rw [digest_split input v d]
+    have first : (v ∘ indexSwap keys) (hiddenIdx input (.inr (d, false))) =
+        v (.gadget d (diffPos (keyOf keys d)).1 (diffPos (keyOf keys d)).2
+          ((inputBits (Exception.exceptionalInput phi (keyOf keys d).offset.coordinates)
+            (diffPos (keyOf keys d)).1).getLsb (diffPos (keyOf keys d)).2)) := by
+      show v (indexSwap keys (gadgetIdx d false)) = _
+      rw [indexSwap_origin, Bool.false_xor]
+      unfold diffBit
+      rw [found]
+    have second : (v ∘ indexSwap keys) (hiddenIdx input (.inr (d, true))) =
+        v (.gadget d (diffPos (keyOf keys d)).1 (diffPos (keyOf keys d)).2
+          ((inputBits (Exception.tripleInput phi (keyOf keys d).offset.coordinates)
+            (diffPos (keyOf keys d)).1).getLsb (diffPos (keyOf keys d)).2)) := by
+      show v (indexSwap keys (gadgetIdx d true)) = _
+      rw [indexSwap_origin, Bool.true_xor, spec phi found]
+    have firstDigest := (digest_swap input keys v d
+        (Exception.exceptionalInput phi (keyOf keys d).offset.coordinates)
+        (inputKey.encodeAffine (Exception.exceptionalInput phi (keyOf keys d).offset.coordinates))).trans
+      (congrArg (· ^^^ _) first.symm)
+    have secondDigest := (digest_swap input keys v d
+        (Exception.tripleInput phi (keyOf keys d).offset.coordinates)
+        (inputKey.encodeAffine (Exception.tripleInput phi (keyOf keys d).offset.coordinates))).trans
+      (congrArg (· ^^^ _) second.symm)
+    have xorZero : ∀ a : Block, a ^^^ 0 = a := fun a => BitVec.xor_zero
+    simp only [gadgetEntry2, gadgetEntry, mixCoins, Option.map_some, Bool.false_eq_true, ite_false,
+      xorZero]
+    rw [firstDigest, secondDigest]
 
 theorem cellsSource_exception (cells : PublicCells) (key : InputMacKey) :
     (cellsSource cells key).publicValue.exception = Vector.ofFn cells.2.2.2 := rfl
@@ -603,22 +796,30 @@ theorem tablePub_cells (coins : Coins) (v : FixedIndex → Block) (T : Tape) (ke
     (keysEq : FieldMacToECMac.outputKeys construction scalar.value coins.offsets = keys) :
     tablePub scalar coins pads v T =
       (cellsSource (publicOf (offContext input pads keys
-          (omegaEquiv input (coins, v, masksOf VectorSite.lane T)).1)
-        (omegaEquiv input (coins, v, masksOf VectorSite.lane T)).2) key).publicValue := by
+          (omegaEquiv input scalar (coins, v, masksOf VectorSite.lane T)).1)
+        (omegaEquiv input scalar (coins, v, masksOf VectorSite.lane T)).2) key).publicValue := by
   unfold tablePub
   rw [keysEq]
-  have outerEq : (omegaEquiv input (coins, v, masksOf VectorSite.lane T)).1 =
-      (⟨coins.offsets, coins.offsetsClamped⟩, fun d => (coins.pointRandomness.get d).rho,
+  have twistKeys : coinKeys scalar (coinsSplit coins) = keys :=
+    (coinKeys_coinsSplit scalar coins).trans keysEq
+  have outerEq : (omegaEquiv input scalar (coins, v, masksOf VectorSite.lane T)).1 =
+      (⟨coins.offsets, coins.offsetsClamped⟩,
+        fun d => ((coins.pointRandomness.get d).rho, (coins.pointRandomness.get d).tau),
         coins.inputZero, coins.inputDelta,
-        (splitAlong (hiddenIdx input) (hiddenIdx_injective input) v).2) := rfl
-  have coinsEq : (omegaEquiv input (coins, v, masksOf VectorSite.lane T)).2 =
+        (splitAlong (hiddenIdx input) (hiddenIdx_injective input)
+          (v ∘ indexSwap (coinKeys scalar (coinsSplit coins)))).2) := rfl
+  have coinsEq : (omegaEquiv input scalar (coins, v, masksOf VectorSite.lane T)).2 =
       (fun d => ((maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).1 d,
           ((coins.pointRandomness.get d).x,
           (coins.pointRandomness.get d).y, (coins.pointRandomness.get d).z)),
         ((maskSiteEquiv (maskCoordEquiv (masksOf VectorSite.lane T))).2, coins.bridgeKey,
           ⟨coins.curveMask.value, coins.curveMask.nonzero⟩, coins.curveR1, coins.curveR2),
         (fun ℓ s => v (hiddenIdx input (.inl (ℓ, s))),
-          fun d => (coins.exceptionPad.get d, v (hiddenIdx input (.inr d))))) := rfl
+          fun d => (coins.exceptionPad.get d,
+            ((v ∘ indexSwap (coinKeys scalar (coinsSplit coins))) (hiddenIdx input (.inr (d, false))),
+            (v ∘ indexSwap (coinKeys scalar (coinsSplit coins))) (hiddenIdx input (.inr (d, true))))))) :=
+    rfl
+  rw [twistKeys] at outerEq coinsEq
   rw [outerEq, coinsEq]
   set O := tableOracle (fixedTable v T)
   set H := tableHash (fixedTable v T)
@@ -642,7 +843,7 @@ theorem tablePub_cells (coins : Coins) (v : FixedIndex → Block) (T : Tape) (ke
     have rowsGet : ∀ i : Fin outputMacCount,
         (FieldMacToECMac.rowsForOutputKeys keys coins.pointRandomness).get i =
           Coordinates.rows (keys.get i).offset.coordinates (digitEndomorphismBase (keys.get i).digit)
-            (coins.pointRandomness.get i).rho.value := by
+            (coins.pointRandomness.get i).rho.value (coins.pointRandomness.get i).tau.value := by
       intro i
       unfold FieldMacToECMac.rowsForOutputKeys
       exact Vector.get_ofFn _ i
@@ -652,16 +853,16 @@ theorem tablePub_cells (coins : Coins) (v : FixedIndex → Block) (T : Tape) (ke
     unfold Programs.gadgetM
     rw [FreeQuery.eval_vector]
     refine ofFn_congr_digit _ _ fun d => ?_
-    rw [garbleEntryM_table, entryOf_gadgetEntry input v d]
-    rfl
+    rw [garbleEntryM_table]
+    exact entryOf_gadgetEntry2 input keys v d _ _
   · rw [(assemble_hot _ _ _ _ _ _ _ _ _ _ _).1, (cellsSource_hot _ _).1, laneHotJoins_fixed]
-    exact congrArg Vector.ofFn (funext fun s => foldJoin_split input v .curveX s _)
+    exact congrArg Vector.ofFn (funext fun s => foldJoin_split input (v ∘ indexSwap keys) .curveX s _)
   · rw [(assemble_hot _ _ _ _ _ _ _ _ _ _ _).2.1, (cellsSource_hot _ _).2.1, laneHotJoins_fixed]
-    exact congrArg Vector.ofFn (funext fun s => foldJoin_split input v .curveY s _)
+    exact congrArg Vector.ofFn (funext fun s => foldJoin_split input (v ∘ indexSwap keys) .curveY s _)
   · rw [(assemble_hot _ _ _ _ _ _ _ _ _ _ _).2.2.1, (cellsSource_hot _ _).2.2.1, laneHotJoins_fixed]
-    exact congrArg Vector.ofFn (funext fun s => foldJoin_split input v .pointX s _)
+    exact congrArg Vector.ofFn (funext fun s => foldJoin_split input (v ∘ indexSwap keys) .pointX s _)
   · rw [(assemble_hot _ _ _ _ _ _ _ _ _ _ _).2.2.2, (cellsSource_hot _ _).2.2.2, laneHotJoins_fixed]
-    exact congrArg Vector.ofFn (funext fun s => foldJoin_split input v .pointY s _)
+    exact congrArg Vector.ofFn (funext fun s => foldJoin_split input (v ∘ indexSwap keys) .pointY s _)
   · have pointSlopes : ∀ d : Fin digitCount, Biquadratic.slopes (coins.pointRandomness.get d).x
         (coins.pointRandomness.get d).y (coins.pointRandomness.get d).z
           (Pipeline.digitValues PX.offsets PY.offsets d) =

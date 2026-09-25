@@ -6,9 +6,9 @@ obligation `Solution.ciphertextSize` -- `(encoding.encode (garble …).1).length
 -- reduces to `Wire.encoding_length` alone. The plan source is
 `2026-09-17-planB.md`, sections D.5 and Tasks 11, 12 and 19.
 
-Layout tactic constraint: `Wire.chunkWord` is built on `Encoding.natural 23273`, so any defeq
+Layout tactic constraint: `Wire.chunkWord` is built on `Encoding.natural 20384`, so any defeq
 check that reaches `List.length` of a concrete chunk word makes the kernel unfold a
-23,273-fold structural recursion and abort. Every size fact below therefore goes through the
+20,384-fold structural recursion and abort. Every size fact below therefore goes through the
 `SizedBy` lemmas of `Construction/PGS/Encoding.lean`; nothing here normalizes an encoding.
 -/
 
@@ -23,19 +23,19 @@ open BN254
 
 /-- Every Plan B public value has the declared ciphertext size. -/
 theorem ciphertextSize (value : Public) :
-    (encoding.encode value).length = 1348634 :=
+    (encoding.encode value).length = 1103204 :=
   garble_length value
 
-/-- The construction-facing corollary: every garbling of every tape is `1348634` bytes, because
+/-- The construction-facing corollary: every garbling of every tape is `1103204` bytes, because
 every inhabitant of `Public` is. -/
 theorem garbledCircuit_length [FieldCertificate] [GroupCertificate]
     (parameter : Nat) (scalar : NonZeroScalar) (randomness : Garbling.Randomness) :
     (encoding.encode
       ((Garbling.garbledCircuit construction).garble parameter scalar randomness).1).length =
-      1348634 :=
+      1103204 :=
   ciphertextSize _
 
 /-- The constant the Plan B `Solution.ciphertextBytes` field carries. -/
-theorem ciphertextBytesConstant_eq : ciphertextBytesConstant = 1348634 := rfl
+theorem ciphertextBytesConstant_eq : ciphertextBytesConstant = 1103204 := rfl
 
 end Kriterion.ArgoMAC.PlanB.Wire

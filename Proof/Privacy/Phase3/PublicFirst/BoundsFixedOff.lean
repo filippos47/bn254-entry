@@ -415,10 +415,10 @@ theorem offLevelIn_le (scalar : NonZeroScalar) (source : Stage1Source) (input : 
 
 /-- **No gadget pair off the curve.** -/
 theorem offGadget_le (scalar : NonZeroScalar) (source : Stage1Source) (input : AffineInput)
-    (d : Fin digitCount) (κ : Coord) (pos : Fin coordinateBitCount) (x : Block) :
+    (d : Fin digitCount) (κ : Coord) (pos : Fin coordinateBitCount) (b : Bool) (x : Block) :
     ∑' o, privateStage2U uniformMaskTape (designedShadow scalar) scalar source input none o *
-        ind ((outcomePoints o).fixedIn (.gadget d κ pos) x) ≤ 0 := by
-  refine le_trans (off_const_le scalar source input (fun p => p.fixedIn (.gadget d κ pos) x) False
+        ind ((outcomePoints o).fixedIn (.gadget d κ pos b) x) ≤ 0 := by
+  refine le_trans (off_const_le scalar source input (fun p => p.fixedIn (.gadget d κ pos b) x) False
     fun first tape o member hit => ?_) (le_of_eq (ind_neg id))
   obtain ⟨y, found⟩ := Option.ne_none_iff_exists'.mp hit
   obtain ⟨lane, _, c, s, small, e, _, h, iEq, _⟩ :=

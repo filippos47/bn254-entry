@@ -4,10 +4,11 @@
 `serialize` pushes the wire bits in reverse wire order; each `emitWord address width` pushes the
 low `width` bits of `RAM[address]`, least significant on top. `memSem_serialize`: the serializer
 is deterministic, leaves the RAM and the other stacks unchanged, and leaves stack `3` holding
-`serialBits RAM` (curve and rows, bytes, fold joins, the `56` scale chunk words, each least
-significant bit first) on top of the old stack. A chunk word is its `733` scale cells, the first
-`732` as `254` bits and the last as `256` bits: the word's two zero padding bits are the top bits
-of its last cell (`chunkWordBits`, `memSem_serializeChunk`).
+`serialBits RAM` (curve and rows, bytes, fold joins, the `52` scale chunk words, each least
+significant bit first) on top of the old stack. A chunk word is its `642` scale cells, the first
+`641` as `254` bits and the last as `256` bits, then two explicit zero bits: the word's four zero
+padding bits are the top bits of its last cell and the two pushed zeros (`chunkWordBits`,
+`memSem_serializeChunk`).
 -/
 
 import Proof.Simulator.Stage1Cells
@@ -110,14 +111,15 @@ theorem memSem_emitBlock (width : Nat) (small : width ≤ 256) (top : Nat) :
           omega
 
 /-- **The serialized bits of one chunk word** (chunk `chunk`, counted from the bottom): the
-chunk's first `732` scale cells as `254` bits each, then its last cell as `256` bits. -/
+chunk's first `641` scale cells as `254` bits each, then its last cell as `256` bits, then two
+zero bits. -/
 def chunkWordBits (ram : Word → Word) (chunk : Nat) : List Bool :=
-  (List.ofFn fun index : Fin 732 =>
-      bitRun (ram (word (scaleCellBase + 733 * chunk + index.val))) 0 254).flatten ++
-    bitRun (ram (word (scaleCellBase + 733 * chunk + 732))) 0 256
+  (List.ofFn fun index : Fin 641 =>
+      bitRun (ram (word (scaleCellBase + 642 * chunk + index.val))) 0 254).flatten ++
+    (bitRun (ram (word (scaleCellBase + 642 * chunk + 641))) 0 256 ++ [false, false])
 
 /-- **The serialized bits of a RAM**: curve and rows (`256` bits each), the exception bytes
-(`8`), the fold joins (`128`), the `56` chunk words (`chunkWordBits`), each least significant bit
+(`8`), the fold joins (`128`), the `52` chunk words (`chunkWordBits`), each least significant bit
 first. -/
 def serialBits (ram : Word → Word) : List Bool :=
   (List.ofFn fun index : Fin (curveCellCount + rowCellCount) =>
@@ -126,51 +128,67 @@ def serialBits (ram : Word → Word) : List Bool :=
       bitRun (ram (word (exceptionBase + index.val))) 0 8).flatten ++
     ((List.ofFn fun index : Fin hotBlockCount =>
       bitRun (ram (word (hotBase + index.val))) 0 128).flatten ++
-    (List.ofFn fun chunk : Fin 56 => chunkWordBits ram chunk.val).flatten))
+    (List.ofFn fun chunk : Fin 52 => chunkWordBits ram chunk.val).flatten))
 
-/-- **One chunk word.** `serializeChunk r` emits chunk `55 − r`: its last cell (`256` bits) first,
-then its other `732` cells from the top down, which leaves the word's bits in wire order. -/
-theorem memSem_serializeChunk (step : Nat) (small : step < 56) (memory : Memory) :
+omit [FieldCertificate] in
+/-- One pushed zero bit on the response stack. -/
+theorem emits_pushZero (memory : Memory) : Emits memory (pushOn memory 3 false) [false] :=
+  ⟨rfl, by simp [pushOn], fun stack other => by simp [pushOn, Function.update_of_ne other]⟩
+
+/-- A pushed bit, then the rest. -/
+theorem memSem_push_seq (bit : Bool) (rest : Prog) (memory : Memory) :
+    (Prog.seq (.op (.push 3 bit)) rest).memSem memory = rest.memSem (pushOn memory 3 bit) := by
+  rw [memSem_seq]
+  exact PMF.pure_bind _ _
+
+/-- **One chunk word.** `serializeChunk r` emits chunk `51 − r`: two zero bits, its last cell
+(`256` bits), then its other `641` cells from the top down, which leaves the word's bits in wire
+order. -/
+theorem memSem_serializeChunk (step : Nat) (small : step < 52) (memory : Memory) :
     ∃ after, (Stage1.serializeChunk step).memSem memory = PMF.pure (some after) ∧
-      Emits memory after (chunkWordBits memory.ram (55 - step)) := by
-  have lastCell : fieldBase + fieldCellCount - 1 - 733 * step =
-      scaleCellBase + 733 * (55 - step) + 732 := by
+      Emits memory after (chunkWordBits memory.ram (51 - step)) := by
+  have lastCell : fieldBase + fieldCellCount - 1 - 642 * step =
+      scaleCellBase + 642 * (51 - step) + 641 := by
     unfold fieldCellCount scaleCellBase curveCellCount rowCellCount scaleCellCount
     omega
   have blockCell : ∀ index : Nat,
-      fieldBase + fieldCellCount - 1 - 733 * step - 1 + 1 - 732 + index =
-        scaleCellBase + 733 * (55 - step) + index := by
+      fieldBase + fieldCellCount - 1 - 642 * step - 1 + 1 - 641 + index =
+        scaleCellBase + 642 * (51 - step) + index := by
     intro index
     unfold fieldCellCount scaleCellBase curveCellCount rowCellCount scaleCellCount
     omega
+  set pushed := pushOn (pushOn memory 3 false) 3 false with pushedDef
+  have emitsPushed : Emits memory pushed ([false] ++ [false]) :=
+    (emits_pushZero memory).trans (emits_pushZero _)
   obtain ⟨middle, runLast, emitsLast⟩ :=
-    memSem_emitWord (fieldBase + fieldCellCount - 1 - 733 * step) 256 le_rfl memory
+    memSem_emitWord (fieldBase + fieldCellCount - 1 - 642 * step) 256 le_rfl pushed
   obtain ⟨after, runBlock, emitsBlock⟩ := memSem_emitBlock 254 (by norm_num)
-    (fieldBase + fieldCellCount - 1 - 733 * step - 1) 732
+    (fieldBase + fieldCellCount - 1 - 642 * step - 1) 641
     (by unfold fieldCellCount curveCellCount rowCellCount scaleCellCount; omega) middle
   refine ⟨after, ?_, ?_⟩
   · unfold Stage1.serializeChunk
-    rw [memSem_seq, runLast, PMF.pure_bind]
+    rw [memSem_push_seq, memSem_push_seq, ← pushedDef, memSem_seq, runLast, PMF.pure_bind]
     exact runBlock
-  · have joined := emitsLast.trans emitsBlock
-    have block : (List.ofFn fun index : Fin 732 =>
-        bitRun (middle.ram (word (fieldBase + fieldCellCount - 1 - 733 * step - 1 + 1 - 732 +
+  · have joined := (emitsPushed.trans emitsLast).trans emitsBlock
+    have pushedRam : pushed.ram = memory.ram := rfl
+    have block : (List.ofFn fun index : Fin 641 =>
+        bitRun (middle.ram (word (fieldBase + fieldCellCount - 1 - 642 * step - 1 + 1 - 641 +
           index.val))) 0 254) =
-        List.ofFn fun index : Fin 732 =>
-          bitRun (memory.ram (word (scaleCellBase + 733 * (55 - step) + index.val))) 0 254 := by
+        List.ofFn fun index : Fin 641 =>
+          bitRun (memory.ram (word (scaleCellBase + 642 * (51 - step) + index.val))) 0 254 := by
       congr 1
       funext index
-      rw [emitsLast.1, blockCell index.val]
-    rw [block, lastCell] at joined
+      rw [emitsLast.1, pushedRam, blockCell index.val]
+    rw [block, pushedRam, lastCell] at joined
     unfold chunkWordBits
     exact joined
 
 /-- **The chunk words**: the first `count` steps emit the top `count` chunk words, in wire order. -/
 theorem memSem_serializeChunks :
-    ∀ (count : Nat), count ≤ 56 → ∀ memory : Memory,
+    ∀ (count : Nat), count ≤ 52 → ∀ memory : Memory,
       ∃ after, (Prog.rep count Stage1.serializeChunk).memSem memory = PMF.pure (some after) ∧
         Emits memory after (List.ofFn fun index : Fin count =>
-          chunkWordBits memory.ram (56 - count + index.val)).flatten
+          chunkWordBits memory.ram (52 - count + index.val)).flatten
   | 0, _, memory => ⟨memory, by rw [Prog.rep]; rfl, by simpa using Emits.refl memory⟩
   | count + 1, bound, memory => by
       obtain ⟨middle, run, emits⟩ := memSem_serializeChunks count (by omega) memory
@@ -181,18 +199,18 @@ theorem memSem_serializeChunks :
       · have joined := emits.trans emitsStep
         rw [emits.1] at joined
         have words : (List.ofFn fun index : Fin (count + 1) =>
-            chunkWordBits memory.ram (56 - (count + 1) + index.val)).flatten =
-            chunkWordBits memory.ram (55 - count) ++ (List.ofFn fun index : Fin count =>
-              chunkWordBits memory.ram (56 - count + index.val)).flatten := by
+            chunkWordBits memory.ram (52 - (count + 1) + index.val)).flatten =
+            chunkWordBits memory.ram (51 - count) ++ (List.ofFn fun index : Fin count =>
+              chunkWordBits memory.ram (52 - count + index.val)).flatten := by
           rw [List.ofFn_succ, List.flatten_cons]
-          have head : 56 - (count + 1) + (0 : Fin (count + 1)).val = 55 - count := by
+          have head : 52 - (count + 1) + (0 : Fin (count + 1)).val = 51 - count := by
             simp only [Fin.val_zero]
             omega
           have tail : (fun index : Fin count =>
-              chunkWordBits memory.ram (56 - (count + 1) + index.succ.val)) =
-              fun index : Fin count => chunkWordBits memory.ram (56 - count + index.val) := by
+              chunkWordBits memory.ram (52 - (count + 1) + index.succ.val)) =
+              fun index : Fin count => chunkWordBits memory.ram (52 - count + index.val) := by
             funext index
-            have same : 56 - (count + 1) + index.succ.val = 56 - count + index.val := by
+            have same : 52 - (count + 1) + index.succ.val = 52 - count + index.val := by
               simp only [Fin.val_succ]
               omega
             rw [same]
@@ -218,7 +236,7 @@ theorem memSem_serialize (memory : Memory) :
       (curveCellCount + rowCellCount) = fieldBase := by
     rw [Nat.add_assoc]
     exact top_sub _ _ (by decide)
-  obtain ⟨afterScale, runScale, emitsScale⟩ := memSem_serializeChunks 56 le_rfl memory
+  obtain ⟨afterScale, runScale, emitsScale⟩ := memSem_serializeChunks 52 le_rfl memory
   obtain ⟨afterHot, runHot, emitsHot⟩ := memSem_emitBlock 128 (by norm_num)
     (hotBase + hotBlockCount - 1) hotBlockCount
     (block_le _ _ _ le_rfl (by unfold hotBlockCount; decide)) afterScale

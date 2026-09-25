@@ -4,7 +4,7 @@
 `B-output-aware-simulator.md` §1.5, `B-review.md` (3), and the phase-4 batched sampler
 (`A1-batched-sampler-design.md` §1.3, §3): before anything else, the proof replaces **every**
 garbler switch-mask vector — all four lanes, all `56` chunks, all `2 ^ b_c` switches of each chunk:
-`1,396` vectors per lane, `5,584` in all (`card_vectorSite`) — by an independent uniform vector of
+`1,588` vectors per lane, `6,352` in all (`card_vectorSite`) — by an independent uniform vector of
 `F_p ^ laneCount lane`. The swap is **non-adaptive**: it is a statement about the whole tape, made
 before stage 1, and it never mentions the adversary's input or which vectors it will later be
 unable to compute.
@@ -23,13 +23,13 @@ to the range (`ScaleTable`) and the rest (`OtherTable`). Every scale input lies 
 `bridgeInput t`, lies outside it (`scaleRange_le_bridgeInput_val`); the `bin-to-hot` fold and the
 gadget read the fixed-key oracle. So the one-hot labels are a function of the **rest** of the tape
 (the coins, the fixed-key and EncPRF oracles, and the hash table off the range), and at those
-labels the garbler reads the scale table at `Σ_ℓ 1396 · limbCount ℓ = 1,020,476` pairwise distinct
+labels the garbler reads the scale table at `Σ_ℓ 1588 · limbCount ℓ = 1,017,908` pairwise distinct
 points (`limbInput_injective`, from `scaleInput_injective`).
 
 * `realTape coinsLaw` — the coins, independent of a uniform hash oracle. This is the eager tape of
   the real game, restricted to its hash oracle.
 * `swappedTape coinsLaw label` — the same, except that the scale table is drawn by `swapKernel`
-  at the points the labels name: first the `5,584` vectors, iid uniform; then the limbs at the
+  at the points the labels name: first the `6,352` vectors, iid uniform; then the limbs at the
   points uniformly among those that make these vectors (`fibreLaw masksOf`, jointly the product of
   the per-vector fibres `{h : sampleLane n k h = Y}`); every other entry of the scale table
   uniform, untouched.
@@ -41,7 +41,7 @@ of the tape,
 
 ```
 d( realTape.map observe , swappedTape.map observe )  ≤  Σ_site laneDelta site.lane
-                                                     =  1396 · Σ_lane laneDelta lane
+                                                     =  1588 · Σ_lane laneDelta lane
 ```
 
 (`sum_vectorSite_laneDelta`), which is the Glue's `maskSwapError` (`GameSwap.maskSwapError_eq`).
@@ -422,17 +422,17 @@ theorem sum_vectorSite {M : Type} [AddCommMonoid M] (f : VectorSite → M) :
   rw [Fintype.sum_sigma]
   rfl
 
-/-- `Σ_c 2 ^ b_c = 4 + 32 · 32 + 23 · 16 = 1,396` at the ragged-first profile, from the generic
+/-- `Σ_c 2 ^ b_c = 4 + 48 · 32 + 3 · 16 = 1,588` at the ragged-first profile, from the generic
 chunk sum `Params.sum_chunkWidth`: the number of switch vectors of one lane. It is
 `Glue.laneVectorCount` (`GameSwap.laneVectorCount_eq`). -/
-theorem sum_twoPow_chunkWidth : ∑ chunk : Fin chunkCount, 2 ^ chunkWidth chunk = 1396 := by
+theorem sum_twoPow_chunkWidth : ∑ chunk : Fin chunkCount, 2 ^ chunkWidth chunk = 1588 := by
   rw [sum_chunkWidth (fun width => 2 ^ width)]
   rfl
 
-/-- **Every lane has `1,396` vector sites**: a sum over the sites of a function of the lane is
-`1396 •` its sum over the lanes. -/
+/-- **Every lane has `1,588` vector sites**: a sum over the sites of a function of the lane is
+`1588 •` its sum over the lanes. -/
 theorem sum_vectorSite_lane {M : Type} [AddCommMonoid M] (f : Lane → M) :
-    ∑ site : VectorSite, f site.lane = ∑ lane : Lane, 1396 • f lane := by
+    ∑ site : VectorSite, f site.lane = ∑ lane : Lane, 1588 • f lane := by
   rw [sum_vectorSite]
   refine Finset.sum_congr rfl fun lane _ => ?_
   rw [← sum_twoPow_chunkWidth, Finset.sum_smul]
@@ -440,15 +440,15 @@ theorem sum_vectorSite_lane {M : Type} [AddCommMonoid M] (f : Lane → M) :
   show ∑ _switch : Fin (2 ^ chunkWidth chunk), f lane = _
   rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin]
 
-/-- **`#VectorSite = 5,584`**: `4` lanes, `1,396` vectors each. -/
-theorem card_vectorSite : Fintype.card VectorSite = 5584 := by
+/-- **`#VectorSite = 6,352`**: `4` lanes, `1,588` vectors each. -/
+theorem card_vectorSite : Fintype.card VectorSite = 6352 := by
   have lanes := sum_vectorSite_lane (M := ℕ) fun _ => 1
   rw [Fintype.card_eq_sum_ones, lanes, Finset.sum_const, Finset.card_univ, card_lane]
   rfl
 
-/-- **The whole swap bias**: `Σ_site laneDelta site.lane = 1396 · Σ_lane laneDelta lane`. -/
+/-- **The whole swap bias**: `Σ_site laneDelta site.lane = 1588 · Σ_lane laneDelta lane`. -/
 theorem sum_vectorSite_laneDelta :
-    ∑ site : VectorSite, laneDelta site.lane = 1396 * ∑ lane : Lane, laneDelta lane := by
+    ∑ site : VectorSite, laneDelta site.lane = 1588 * ∑ lane : Lane, laneDelta lane := by
   rw [sum_vectorSite_lane, Finset.mul_sum]
   refine Finset.sum_congr rfl fun lane _ => ?_
   rw [nsmul_eq_mul, Nat.cast_ofNat]
@@ -549,7 +549,7 @@ def limbInput (label : VectorSite → Block) (slot : LimbSite) : ScaleInput :=
   ⟨scaleInput slot.1.lane slot.1.chunk slot.1.switch.val slot.2.val (label slot.1),
     scaleInput_val_lt_scaleRange _ _ _ _ _⟩
 
-/-- **One hash input per limb slot**, whatever the labels: the `1,020,476` inputs are pairwise
+/-- **One hash input per limb slot**, whatever the labels: the `1,017,908` inputs are pairwise
 distinct (`scaleInput_injective`: distinct lanes, chunks, switches or limbs never share one). -/
 theorem limbInput_injective (label : VectorSite → Block) :
     Function.Injective (limbInput label) := by

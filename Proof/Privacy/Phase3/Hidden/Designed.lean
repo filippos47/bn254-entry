@@ -10,7 +10,7 @@ entry the index is the vector site its key names, never its label:
 |---|---|
 | fold gate `(ℓ, c, step, r, half)` | `r ≠` the active parent `chunk_c(u) mod 2^step`, and (`ℓ` a curve lane, or `u` on the curve) |
 | scale input of `(ℓ, c, j)` (any limb, label) | `j ≠ chunk_c(u)`, and as for fold gates |
-| gadget `(o, κ, pos)` | `u` on the curve, and `u`'s bit at `(κ, pos)` equals digit `o`'s exceptional input's |
+| gadget `(o, κ, pos, b)` | `u` on the curve, and `u`'s bit at `(κ, pos)` is `b` |
 | hash off the scale range (the bridge input) | `u` on the curve |
 | EncPRF | never (`visibleEntries` has none) |
 
@@ -62,9 +62,8 @@ def designedIndex (scalar : NonZeroScalar) (tape : Coins × Oracle) (input : Aff
   | .hot ℓ c fold entry _ =>
       decide (entry.val ≠ (chunkOf (inputBits input ℓ.coord) c).val % 2 ^ fold.val) &&
         (laneIsCurve ℓ || validate input)
-  | .gadget o κ position =>
-      validate input &&
-        decide ((inputBits input κ).getLsb position = exceptionalBit scalar tape.1.offsets o κ position)
+  | .gadget _ κ position bit =>
+      validate input && decide ((inputBits input κ).getLsb position = bit)
 
 /-- **The designed vector sites at an input**: the inactive switches, of a curve lane or on the
 curve. -/

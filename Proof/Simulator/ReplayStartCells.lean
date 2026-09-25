@@ -67,7 +67,7 @@ theorem fieldWord_zero : fieldWord (0 : BaseField) = 0 := by
   rfl
 
 theorem rtree_initStores (memory : Memory) (zero : memory.registers rA = 0) :
-    ∀ count, count ≤ 733 → ∃ after,
+    ∀ count, count ≤ 642 → ∃ after,
       rtree (Prog.rep count fun index => storeAt (accBase + index) rA) memory = .pure (some after) ∧
       (∀ e, e < count → after.ram (word (accBase + e)) = fieldWord 0) ∧
       (∀ address, (∀ e, e < count → address ≠ word (accBase + e)) →
@@ -101,14 +101,14 @@ theorem rtree_initStores (memory : Memory) (zero : memory.registers rA = 0) :
 /-- **The accumulator clear.** -/
 theorem rtree_initAcc (memory : Memory) : ∃ after,
     rtree Replay.initAcc memory = .pure (some after) ∧
-      (∀ e, e < 733 → after.ram (word (accBase + e)) = fieldWord 0) ∧
-      (∀ address, (∀ e, e < 733 → address ≠ word (accBase + e)) →
+      (∀ e, e < 642 → after.ram (word (accBase + e)) = fieldWord 0) ∧
+      (∀ address, (∀ e, e < 642 → address ≠ word (accBase + e)) →
         after.ram address = memory.ram address) ∧
       after.bits = memory.bits := by
   unfold Replay.initAcc
   rw [rtree_cst_seq]
   obtain ⟨after, run, cells, frame, bitsSame, _⟩ :=
-    rtree_initStores (setReg memory rA (word 0)) (by rw [reg_same]; rfl) 733 le_rfl
+    rtree_initStores (setReg memory rA (word 0)) (by rw [reg_same]; rfl) 642 le_rfl
   exact ⟨after, run, cells, fun address outside => by rw [frame address outside]; rfl,
     by rw [bitsSame]; rfl⟩
 
@@ -144,11 +144,11 @@ theorem restore_y (input : AffineInput) (labels : LamportSignature) (i : Fin coo
 omit [FieldCertificate] in
 theorem readCurveY_eq (values : Fin elementCount → BaseField) (e : Fin curveElementCountY) :
     Pipeline.readCurveY values e =
-      values ⟨731 + e.val, by have := e.isLt; unfold curveElementCountY at this; unfold elementCount; omega⟩ := by
+      values ⟨640 + e.val, by have := e.isLt; unfold curveElementCountY at this; unfold elementCount; omega⟩ := by
   unfold Pipeline.readCurveY Pipeline.yCurvePart Pipeline.yPart
   congr 1
   apply Fin.ext
-  show elementCountX + (pointElementCountY + e.val) = 731 + e.val
+  show elementCountX + (pointElementCountY + e.val) = 640 + e.val
   unfold elementCountX pointElementCountY
   omega
 
@@ -166,7 +166,7 @@ theorem hot_small (row : Nat) (small : row < 4) (s : Fin foldStepCount) :
   omega
 
 omit [FieldCertificate] in
-theorem scale_small (c : Fin chunkCount) (slot : Nat) (small : slot < 733) :
+theorem scale_small (c : Fin chunkCount) (slot : Nat) (small : slot < 642) :
     scaleCellBase + elementCount * c.val + slot < 2 ^ 45 := by
   have := c.isLt
   unfold chunkCount at this
@@ -205,10 +205,10 @@ theorem laneCells_curveX (cells : ReplayStart source input labels start)
     rfl
   scaleCells c e := by
     have small : e.val < 3 := e.isLt
-    show memory.ram (word (scaleCellBase + elementCount * c.val + 455 + e.val)) = _
-    rw [frame (word (scaleCellBase + elementCount * c.val + 455 + e.val))
-        (offReplay_of_lt (by rw [Nat.add_assoc]; exact scale_small c (455 + e.val) (by omega))),
-      Nat.add_assoc (scaleCellBase + elementCount * c.val), cells.scaleCells c ⟨455 + e.val, by
+    show memory.ram (word (scaleCellBase + elementCount * c.val + 364 + e.val)) = _
+    rw [frame (word (scaleCellBase + elementCount * c.val + 364 + e.val))
+        (offReplay_of_lt (by rw [Nat.add_assoc]; exact scale_small c (364 + e.val) (by omega))),
+      Nat.add_assoc (scaleCellBase + elementCount * c.val), cells.scaleCells c ⟨364 + e.val, by
         unfold elementCount; omega⟩]
     simp only [unpack_scale]
     rfl
@@ -235,10 +235,10 @@ theorem laneCells_curveY (cells : ReplayStart source input labels start)
     rfl
   scaleCells c e := by
     have small : e.val < 2 := e.isLt
-    show memory.ram (word (scaleCellBase + elementCount * c.val + 731 + e.val)) = _
-    rw [frame (word (scaleCellBase + elementCount * c.val + 731 + e.val))
-        (offReplay_of_lt (by rw [Nat.add_assoc]; exact scale_small c (731 + e.val) (by omega))),
-      Nat.add_assoc (scaleCellBase + elementCount * c.val), cells.scaleCells c ⟨731 + e.val, by
+    show memory.ram (word (scaleCellBase + elementCount * c.val + 640 + e.val)) = _
+    rw [frame (word (scaleCellBase + elementCount * c.val + 640 + e.val))
+        (offReplay_of_lt (by rw [Nat.add_assoc]; exact scale_small c (640 + e.val) (by omega))),
+      Nat.add_assoc (scaleCellBase + elementCount * c.val), cells.scaleCells c ⟨640 + e.val, by
         unfold elementCount; omega⟩]
     simp only [unpack_scale]
     rw [readCurveY_eq (source.joins c) e]
@@ -262,7 +262,7 @@ theorem laneCells_pointX (cells : ReplayStart source input labels start) (white 
       (offReplay_of_lt (hot_small 2 (by omega) s)), cells.hotPX s]
     rfl
   scaleCells c e := by
-    have small : e.val < 455 := e.isLt
+    have small : e.val < 364 := e.isLt
     show memory.ram (word (scaleCellBase + elementCount * c.val + 0 + e.val)) = _
     rw [frame (word (scaleCellBase + elementCount * c.val + 0 + e.val))
         (offReplay_of_lt (by rw [Nat.add_assoc]; exact scale_small c (0 + e.val) (by omega))),
@@ -291,10 +291,10 @@ theorem laneCells_pointY (cells : ReplayStart source input labels start) (white 
     rfl
   scaleCells c e := by
     have small : e.val < 273 := e.isLt
-    show memory.ram (word (scaleCellBase + elementCount * c.val + 458 + e.val)) = _
-    rw [frame (word (scaleCellBase + elementCount * c.val + 458 + e.val))
-        (offReplay_of_lt (by rw [Nat.add_assoc]; exact scale_small c (458 + e.val) (by omega))),
-      Nat.add_assoc (scaleCellBase + elementCount * c.val), cells.scaleCells c ⟨458 + e.val, by
+    show memory.ram (word (scaleCellBase + elementCount * c.val + 367 + e.val)) = _
+    rw [frame (word (scaleCellBase + elementCount * c.val + 367 + e.val))
+        (offReplay_of_lt (by rw [Nat.add_assoc]; exact scale_small c (367 + e.val) (by omega))),
+      Nat.add_assoc (scaleCellBase + elementCount * c.val), cells.scaleCells c ⟨367 + e.val, by
         unfold elementCount; omega⟩]
     simp only [unpack_scale]
     rfl

@@ -2,7 +2,7 @@
 **The valid arm's oracle operations** (`valid_ops`): every operation of `Stage2.valid` satisfies
 `ValidOracle` — fixed-key forward queries (`query 0`, the fold), EncPRF forward queries
 (`query 2`, the whitening pads), hash queries (`query 4`, the scale limbs and the bridge) and hash
-programs (`program 4`, the `452` designated limbs), all on the fixed operand registers; no lookup.
+programs (`program 4`, the `362` designated limbs), all on the fixed operand registers; no lookup.
 
 The big-integer blocks are oracle-free: digit extraction is plain (`plain_digitsOf`,
 `IsPlain.noOracle`) and the preimage sampler draws coins only (`noOracle_preimageSampler`).

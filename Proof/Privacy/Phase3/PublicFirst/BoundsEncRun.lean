@@ -111,15 +111,15 @@ theorem evalPadsM_forwardOnly (keys : WhiteningKeys) (bits : BitInput) :
       AllQ.ite ((padM_forwardOnly _ _ _ _).bind fun _ => .pure _) (.pure _)).bind fun _ => .pure _
 
 theorem gadgetDigestM_forwardOnly (output : Fin FieldMacToECMac.outputMacCount)
-    (coordinate : EncPRF.Coordinate) (mac : CoordinateMac) :
-    AllQ ForwardOnly (Programs.gadgetDigestM output coordinate mac) :=
+    (coordinate : EncPRF.Coordinate) (bits : CoordinateBits) (mac : CoordinateMac) :
+    AllQ ForwardOnly (Programs.gadgetDigestM output coordinate bits mac) :=
   (AllQ.vector fun _ => hashM_forwardOnly _ _).bind fun _ => .pure _
 
-theorem unlockM_forwardOnly (table : FieldMacToECMac.Table) (input : AffineInput) (mac : InputMac) :
-    AllQ ForwardOnly (Programs.unlockM table input mac) :=
+theorem masksM_forwardOnly (input : AffineInput) (mac : InputMac) :
+    AllQ ForwardOnly (Programs.masksM input mac) :=
   AllQ.vector fun _ =>
-    ((gadgetDigestM_forwardOnly _ _ _).bind fun _ =>
-      (gadgetDigestM_forwardOnly _ _ _).bind fun _ => .pure _).bind fun _ => .pure _
+    ((gadgetDigestM_forwardOnly _ _ _ _).bind fun _ =>
+      (gadgetDigestM_forwardOnly _ _ _ _).bind fun _ => .pure _).bind fun _ => .pure _
 
 theorem onCurveM_forwardOnly [FieldCertificate] [GroupCertificate] (table : Public)
     (bits : BitInput) (mac : InputMac) : AllQ ForwardOnly (Programs.onCurveM table bits mac) :=
@@ -129,7 +129,7 @@ theorem onCurveM_forwardOnly [FieldCertificate] [GroupCertificate] (table : Publ
         (evalPadsM_forwardOnly _ _).bind fun _ =>
           (evalLaneM_forwardOnly _ _ _ _ _).bind fun _ =>
             (evalLaneM_forwardOnly _ _ _ _ _).bind fun _ =>
-              (unlockM_forwardOnly _ _ _).bind fun _ => .pure _
+              (masksM_forwardOnly _ _).bind fun _ => .pure _
 
 theorem shadowOnM_forwardOnly [FieldCertificate] [GroupCertificate] (table : Public)
     (bits : BitInput) (mac : InputMac) : AllQ ForwardOnly (shadowOnM table bits mac) :=

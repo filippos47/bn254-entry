@@ -13,9 +13,12 @@ So a uniform source publishes `cellsSource` of uniform cells (`tsum_source_cells
 
 Also here: **splitting a uniform function along an injective map** (`splitAlong`), the fixed-key
 indices off the curve that hide a published cell (`hiddenIdx`: the active parent's first gate half
-of every paid fold step, one gadget position per digit) and those system A reads (`ViewIdx`: both
-halves of every curve-lane gate off the active parent, at every paid step), and the garbler's
-randomness on a table as the rest and F4's coins (`omegaEquiv`).
+of every paid fold step, both bits of one gadget position per digit) and those system A reads
+(`ViewIdx`: both halves of every curve-lane gate off the active parent, at every paid step), and
+the garbler's randomness on a table as the rest and F4's coins (`omegaEquiv`). A digit's two
+digests read different answers only where its two exceptional inputs differ, so `omegaEquiv`
+first moves each digit's differing position to the hidden one (`indexSwap`, an involution that
+depends on the offsets and fixes every fold gate).
 -/
 
 import Proof.Privacy.Phase3.PublicFirst.LawsOffTable
@@ -33,6 +36,8 @@ open Kriterion.ArgoMAC.Phase3.Glue (Stage1Source)
 open scoped ENNReal
 
 noncomputable section
+
+theorem baseTwo_ne_zero : (2 : BaseField) ≠ 0 := by decide
 
 /-! ### 1. The flat fold slots -/
 
@@ -216,19 +221,19 @@ theorem activeParent_lt (lane : Lane) (slot : Fin foldStepCount) :
   Nat.mod_lt _ (Nat.two_pow_pos _)
 
 /-- The hidden coins among the fixed-key answers: the active parent's first gate half at every
-(lane, paid step) (the fold join's hidden material) and one gadget position per digit (the
-digest's hidden part). -/
-abbrev HiddenIdx := (Lane × Fin foldStepCount) ⊕ Fin digitCount
+(lane, paid step) (the fold join's hidden material) and both answers at one gadget position per
+digit (the two digests' hidden parts). -/
+abbrev HiddenIdx := (Lane × Fin foldStepCount) ⊕ (Fin digitCount × Bool)
 
-/-- The gadget position whose answer hides a digit's digest. -/
-def gadgetIdx (d : Fin digitCount) : FixedIndex :=
-  .gadget d .x ⟨0, by unfold PlanB.coordinateBits; omega⟩
+/-- The gadget position whose two answers hide a digit's two digests (after `indexSwap`). -/
+def gadgetIdx (d : Fin digitCount) (bit : Bool) : FixedIndex :=
+  .gadget d .x ⟨0, by unfold PlanB.coordinateBits; omega⟩ bit
 
 /-- The hidden coins' indices. -/
 def hiddenIdx : HiddenIdx → FixedIndex
   | .inl p =>
     hotIndexNat p.1 (slotChunk p.2) (slotOffset p.2 + 1) (activeParent input p.1 p.2) false
-  | .inr d => gadgetIdx d
+  | .inr p => gadgetIdx p.1 p.2
 
 theorem entry_lt_twoPow {n e : Nat} (small : n < chunkBits) (entry : e < 2 ^ n) :
     e < 2 ^ chunkBits :=
@@ -240,7 +245,7 @@ theorem hot_hidden {lane : Lane} {slot : Fin foldStepCount} {e : Nat} {half : Bo
     (small : e < 2 ^ (slotOffset slot + 1)) {h : HiddenIdx}
     (same : hiddenIdx input h = hotIndexNat lane (slotChunk slot) (slotOffset slot + 1) e half) :
     h = .inl (lane, slot) ∧ e = activeParent input lane slot ∧ half = false := by
-  rcases h with ⟨ℓ, s⟩ | d
+  rcases h with ⟨ℓ, s⟩ | ⟨d, b⟩
   · obtain ⟨rfl, chunk, step, entry, rfl⟩ := hotIndexNat_inj (slotStep_lt_chunkBits s)
       (slotStep_lt_chunkBits slot)
       (entry_lt_twoPow (slotStep_lt_chunkBits s) (activeParent_lt input ℓ s))
@@ -250,12 +255,13 @@ theorem hot_hidden {lane : Lane} {slot : Fin foldStepCount} {e : Nat} {half : Bo
   · simp only [hiddenIdx, gadgetIdx, hotIndexNat, reduceCtorEq] at same
 
 theorem hiddenIdx_injective : Function.Injective (hiddenIdx input) := by
-  rintro (⟨ℓ, s⟩ | d) h' same
+  rintro (⟨ℓ, s⟩ | ⟨d, b⟩) h' same
   · exact (hot_hidden input (activeParent_lt input ℓ s) same.symm).1.symm
-  · rcases h' with ⟨ℓ', s'⟩ | d'
+  · rcases h' with ⟨ℓ', s'⟩ | ⟨d', b'⟩
     · simp only [hiddenIdx, gadgetIdx, hotIndexNat, reduceCtorEq] at same
-    · simp only [hiddenIdx, gadgetIdx, FixedIndex.gadget.injEq] at same
-      rw [same.1]
+    · simp only [hiddenIdx, gadgetIdx, FixedIndex.gadget.injEq, true_and] at same
+      obtain ⟨rfl, rfl⟩ := same
+      rfl
 
 /-- **A view gate**: a half of a curve lane's gate at a paid fold step, off the step's active
 parent — what system A asks off the curve. -/
@@ -303,6 +309,162 @@ theorem viewRest_injective : Function.Injective (viewRest input) := by
 
 end Indices
 
+/-! ### 4b. Moving each digit's differing position to the hidden one -/
+
+section Swap
+
+/-- The origin position `(x, 0)`, where the hidden gadget answers sit. -/
+def originPos : Coord × Fin PlanB.coordinateBits := (.x, ⟨0, by unfold PlanB.coordinateBits; omega⟩)
+
+/-- A position where a key's two exceptional inputs differ (`originPos` if there is none, as for
+digit zero). -/
+def diffPos (key : OutputKey) : Coord × Fin PlanB.coordinateBits :=
+  match digitEndomorphismBase key.digit with
+  | none => originPos
+  | some phi =>
+    if h : ∃ q : Coord × Fin PlanB.coordinateBits,
+        (inputBits (Exception.exceptionalInput phi key.offset.coordinates) q.1).getLsb q.2 ≠
+          (inputBits (Exception.tripleInput phi key.offset.coordinates) q.1).getLsb q.2
+    then Classical.choose h else originPos
+
+/-- The doubling input's bit at the differing position (`false` for digit zero). -/
+def diffBit (key : OutputKey) : Bool :=
+  match digitEndomorphismBase key.digit with
+  | none => false
+  | some phi =>
+    (inputBits (Exception.exceptionalInput phi key.offset.coordinates) (diffPos key).1).getLsb
+      (diffPos key).2
+
+/-- **One digit's gadget swap**: the origin and the differing position trade places, the bit
+shifted by `diffBit`, so that the origin's two indices are the doubling and the sign-zero digests'
+own answers at the differing position. -/
+def gadgetSwap (key : OutputKey) (κ : Coord) (p : Fin PlanB.coordinateBits) (b : Bool) :
+    Coord × Fin PlanB.coordinateBits × Bool :=
+  if (κ, p) = originPos then ((diffPos key).1, (diffPos key).2, b ^^ diffBit key)
+  else if (κ, p) = diffPos key then (originPos.1, originPos.2, b ^^ diffBit key)
+  else (κ, p, b)
+
+theorem gadgetSwap_twice (key : OutputKey) (κ : Coord) (p : Fin PlanB.coordinateBits) (b : Bool) :
+    gadgetSwap key (gadgetSwap key κ p b).1 (gadgetSwap key κ p b).2.1 (gadgetSwap key κ p b).2.2 =
+      (κ, p, b) := by
+  unfold gadgetSwap
+  by_cases origin : (κ, p) = originPos
+  · rw [if_pos origin]
+    dsimp only
+    by_cases same : diffPos key = originPos
+    · rw [if_pos (by rw [Prod.mk.eta, same]), same, ← origin]
+      simp
+    · rw [if_neg (by rw [Prod.mk.eta]; exact same), if_pos (Prod.mk.eta), ← origin]
+      simp
+  · rw [if_neg origin]
+    by_cases target : (κ, p) = diffPos key
+    · rw [if_pos target]
+      dsimp only
+      rw [if_pos (Prod.mk.eta), ← target]
+      simp
+    · rw [if_neg target]
+      dsimp only
+      rw [if_neg origin, if_neg target]
+
+/-- Digit `d`'s key. -/
+def keyOf (keys : OutputKeys) (d : Fin digitCount) : OutputKey := keys.get ⟨d.val, d.isLt⟩
+
+/-- **The index swap** of the output keys: each digit's `gadgetSwap`; every fold gate is fixed. -/
+def indexSwap (keys : OutputKeys) : FixedIndex → FixedIndex
+  | .gadget d κ p b =>
+    .gadget d (gadgetSwap (keyOf keys d) κ p b).1 (gadgetSwap (keyOf keys d) κ p b).2.1
+      (gadgetSwap (keyOf keys d) κ p b).2.2
+  | index => index
+
+theorem indexSwap_involutive (keys : OutputKeys) : Function.Involutive (indexSwap keys) := by
+  intro index
+  cases index with
+  | gadget d κ p b =>
+    show FixedIndex.gadget d _ _ _ = _
+    rw [gadgetSwap_twice]
+  | hot lane c fold entry half => rfl
+
+theorem indexSwap_hot (keys : OutputKeys) (lane : Lane) (c : Fin chunkCount) (fold : Fin chunkBits)
+    (entry : Fin (2 ^ chunkBits)) (half : Bool) :
+    indexSwap keys (.hot lane c fold entry half) = .hot lane c fold entry half := rfl
+
+/-- The swap sends the origin's two indices to the differing position. -/
+theorem indexSwap_origin (keys : OutputKeys) (d : Fin digitCount) (b : Bool) :
+    indexSwap keys (gadgetIdx d b) =
+      .gadget d (diffPos (keyOf keys d)).1 (diffPos (keyOf keys d)).2 (b ^^ diffBit (keyOf keys d)) := by
+  show FixedIndex.gadget d _ _ _ = _
+  unfold gadgetSwap
+  rw [if_pos (show ((Coord.x, ⟨0, _⟩) : Coord × Fin PlanB.coordinateBits) = originPos from rfl)]
+
+/-- The swap keeps each digit's other positions off the origin. -/
+theorem indexSwap_off (keys : OutputKeys) (d : Fin digitCount) (κ : Coord)
+    (p : Fin PlanB.coordinateBits) (b : Bool) (off : (κ, p) ≠ diffPos (keyOf keys d))
+    (notOrigin : (κ, p) ≠ originPos) :
+    indexSwap keys (.gadget d κ p b) = .gadget d κ p b := by
+  show FixedIndex.gadget d _ _ _ = _
+  unfold gadgetSwap
+  rw [if_neg notOrigin, if_neg off]
+
+/-- The two exceptional inputs of a nonzero digit differ: `2K ≠ K` as affine points, since
+`K.y ≠ 0`. -/
+theorem exceptionalInput_ne_triple [GroupCertificate] (phi : BaseField) (phiSix : phi ^ 6 = 1)
+    (offset : AffineInput) (onCurve : OnCurve offset) :
+    Exception.exceptionalInput phi offset ≠ Exception.tripleInput phi offset := by
+  intro same
+  have phiNe : phi ≠ 0 := fun zero => by
+    rw [zero, zero_pow (by norm_num)] at phiSix
+    exact zero_ne_one phiSix
+  have yNe := JacobianMixed.noAffineYZero offset onCurve
+  have xs := congrArg AffineInput.x same
+  have ys := congrArg AffineInput.y same
+  simp only [Exception.tripleInput, Exception.exceptionalInput, Exception.doubleOffset] at xs ys
+  have xEq := mul_left_cancel₀ (pow_ne_zero 2 phiNe) xs
+  have yEq := mul_left_cancel₀ (pow_ne_zero 3 phiNe) ys
+  rw [← xEq, sub_self, mul_zero, zero_sub] at yEq
+  have twice : (2 : BaseField) * offset.y = 0 := by linear_combination yEq
+  exact yNe ((mul_eq_zero.mp twice).resolve_left baseTwo_ne_zero)
+
+/-- Two inputs with the same bits everywhere are equal. -/
+theorem affine_eq_of_bits {first second : AffineInput}
+    (same : ∀ q : Coord × Fin PlanB.coordinateBits,
+      (inputBits first q.1).getLsb q.2 = (inputBits second q.1).getLsb q.2) : first = second := by
+  have coordinate : ∀ (a b : BaseField), (∀ p : Fin PlanB.coordinateBits,
+      (coordinateBits a).getLsb p = (coordinateBits b).getLsb p) → a = b := by
+    intro a b bits
+    have vectors : coordinateBits a = coordinateBits b :=
+      BitVec.eq_of_getLsbD_eq fun i small => bits ⟨i, small⟩
+    have values := congrArg BitVec.toNat vectors
+    rw [coordinateBitsToNat, coordinateBitsToNat] at values
+    exact ZMod.val_injective _ values
+  obtain ⟨x₁, y₁⟩ := first
+  obtain ⟨x₂, y₂⟩ := second
+  rw [coordinate x₁ x₂ fun p => same (.x, p), coordinate y₁ y₂ fun p => same (.y, p)]
+
+/-- **At the differing position the two exceptional inputs have different bits.** -/
+theorem diffPos_spec [GroupCertificate] (key : OutputKey) (phi : BaseField)
+    (found : digitEndomorphismBase key.digit = some phi) :
+    (inputBits (Exception.tripleInput phi key.offset.coordinates) (diffPos key).1).getLsb
+        (diffPos key).2 = !diffBit key := by
+  have exists_diff : ∃ q : Coord × Fin PlanB.coordinateBits,
+      (inputBits (Exception.exceptionalInput phi key.offset.coordinates) q.1).getLsb q.2 ≠
+        (inputBits (Exception.tripleInput phi key.offset.coordinates) q.1).getLsb q.2 := by
+    by_contra none
+    push Not at none
+    exact exceptionalInput_ne_triple phi (digitEndomorphismBasePowSix _ _ found) _
+      key.offset.onCurve (affine_eq_of_bits none)
+  unfold diffBit diffPos
+  rw [found]
+  dsimp only
+  rw [dif_pos exists_diff]
+  have spec := Classical.choose_spec exists_diff
+  revert spec
+  cases (inputBits (Exception.exceptionalInput phi key.offset.coordinates)
+      (Classical.choose exists_diff).1).getLsb (Classical.choose exists_diff).2 <;>
+    cases (inputBits (Exception.tripleInput phi key.offset.coordinates)
+      (Classical.choose exists_diff).1).getLsb (Classical.choose exists_diff).2 <;> simp
+
+end Swap
+
 /-! ### 5. The coins of the off-curve garbler on a table, as F4's coins and the rest -/
 
 section Omega
@@ -340,41 +502,49 @@ def coinsSplit : Coins ≃ CoinsParts where
 /-- The fixed-key indices that hide nothing. -/
 abbrev RestIdx := {i : FixedIndex // i ∉ Set.range (hiddenIdx input)}
 
-/-- **What F4's coins leave out**: the offsets, the `ρ`s, the labels and `Δ`, the other answers. -/
-abbrev Outer := ClampedOffsets × (Fin digitCount → NonZeroBase) ×
+/-- **What F4's coins leave out**: the offsets, the `(ρ, τ)`s, the labels and `Δ`, the other
+answers. -/
+abbrev Outer := ClampedOffsets × (Fin digitCount → NonZeroBase × NonZeroBase) ×
   (Coord → Fin coordinateBitCount → Block) × (Coord → Block) × (RestIdx input → Block)
 
 /-- **The coins' fields, the fixed-key answers and the masks are the rest and F4's coins.** -/
 def regroup : CoinsParts × (FixedIndex → Block) × MaskVectors ≃ Outer input × JointCoins where
   toFun ω :=
-    ((ω.1.1, fun d => (ω.1.2.1 d).rho, ω.1.2.2.2.2.2.2.2.1, ω.1.2.2.2.2.2.2.2.2,
-        (splitAlong (hiddenIdx input) (hiddenIdx_injective input) ω.2.1).2),
+    ((ω.1.1, fun d => ((ω.1.2.1 d).rho, (ω.1.2.1 d).tau), ω.1.2.2.2.2.2.2.2.1,
+        ω.1.2.2.2.2.2.2.2.2, (splitAlong (hiddenIdx input) (hiddenIdx_injective input) ω.2.1).2),
       (fun d => ((maskSiteEquiv (maskCoordEquiv ω.2.2)).1 d,
           ((ω.1.2.1 d).x, (ω.1.2.1 d).y, (ω.1.2.1 d).z)),
         ((maskSiteEquiv (maskCoordEquiv ω.2.2)).2, ω.1.2.2.2.1,
           ⟨ω.1.2.2.2.2.1.value, ω.1.2.2.2.2.1.nonzero⟩,
           ω.1.2.2.2.2.2.1, ω.1.2.2.2.2.2.2.1),
         (fun ℓ s => ω.2.1 (hiddenIdx input (.inl (ℓ, s))),
-          fun d => (ω.1.2.2.1 d, ω.2.1 (hiddenIdx input (.inr d))))))
+          fun d => (ω.1.2.2.1 d, (ω.2.1 (hiddenIdx input (.inr (d, false))),
+            ω.2.1 (hiddenIdx input (.inr (d, true))))))))
   invFun p :=
-    ((p.1.1, fun d => ⟨p.1.2.1 d, (p.2.1 d).2.1, (p.2.1 d).2.2.1, (p.2.1 d).2.2.2⟩,
+    ((p.1.1, fun d => ⟨(p.1.2.1 d).1, (p.1.2.1 d).2, (p.2.1 d).2.1, (p.2.1 d).2.2.1,
+          (p.2.1 d).2.2.2⟩,
         fun d => (p.2.2.2.2 d).1, p.2.2.1.2.1, ⟨p.2.2.1.2.2.1.1, p.2.2.1.2.2.1.2⟩,
         p.2.2.1.2.2.2.1, p.2.2.1.2.2.2.2, p.1.2.2.1, p.1.2.2.2.1),
       (splitAlong (hiddenIdx input) (hiddenIdx_injective input)).symm
-        (Sum.elim (fun q => p.2.2.2.1 q.1 q.2) (fun d => (p.2.2.2.2 d).2), p.1.2.2.2.2),
+        (Sum.elim (fun q => p.2.2.2.1 q.1 q.2)
+          (fun q => if q.2 then (p.2.2.2.2 q.1).2.2 else (p.2.2.2.2 q.1).2.1), p.1.2.2.2.2),
       maskCoordEquiv.symm (maskSiteEquiv.symm (fun d => (p.2.1 d).1, p.2.2.1.1)))
   left_inv ω := by
     obtain ⟨⟨offsets, pR, pad, t, mask, r1, r2, Z, Δ⟩, v, m⟩ := ω
     have hidden : (Sum.elim
         (fun q : Lane × Fin foldStepCount => v (hiddenIdx input (.inl (q.1, q.2))))
-        (fun d => v (hiddenIdx input (.inr d)))) =
+        (fun q : Fin digitCount × Bool => if q.2 then v (hiddenIdx input (.inr (q.1, true)))
+          else v (hiddenIdx input (.inr (q.1, false))))) =
         (splitAlong (hiddenIdx input) (hiddenIdx_injective input) v).1 := by
       funext q
-      rcases q with ⟨ℓ, s⟩ | d <;> rfl
+      rcases q with ⟨ℓ, s⟩ | ⟨d, b⟩
+      · rfl
+      · cases b <;> rfl
     refine Prod.ext rfl (Prod.ext ?_ ?_)
     · show (splitAlong (hiddenIdx input) (hiddenIdx_injective input)).symm
         (Sum.elim (fun q : Lane × Fin foldStepCount => v (hiddenIdx input (.inl (q.1, q.2))))
-          (fun d => v (hiddenIdx input (.inr d))),
+          (fun q : Fin digitCount × Bool => if q.2 then v (hiddenIdx input (.inr (q.1, true)))
+            else v (hiddenIdx input (.inr (q.1, false)))),
          (splitAlong (hiddenIdx input) (hiddenIdx_injective input) v).2) = v
       rw [hidden, Prod.mk.eta, Equiv.symm_apply_apply]
     · show maskCoordEquiv.symm (maskSiteEquiv.symm ((maskSiteEquiv (maskCoordEquiv m)).1,
@@ -394,15 +564,50 @@ def regroup : CoinsParts × (FixedIndex → Block) × MaskVectors ≃ Outer inpu
     · exact Prod.ext (congrFun (congrArg Prod.fst masks) d) rfl
     · exact congrArg Prod.snd masks
     · exact splitAlong_symm_image (hiddenIdx input) (hiddenIdx_injective input) _ _ (.inl (ℓ, s))
-    · exact Prod.ext rfl
-        (splitAlong_symm_image (hiddenIdx input) (hiddenIdx_injective input) _ _ (.inr d))
+    · exact Prod.ext rfl (Prod.ext
+        (splitAlong_symm_image (hiddenIdx input) (hiddenIdx_injective input) _ _ (.inr (d, false)))
+        (splitAlong_symm_image (hiddenIdx input) (hiddenIdx_injective input) _ _ (.inr (d, true))))
 
 /-- The garbler's coins on a table, its fixed-key answers and the masks of its limbs. -/
 abbrev Omega := Coins × (FixedIndex → Block) × MaskVectors
 
-/-- **The garbler's randomness is the rest and F4's coins.** -/
+variable [GroupCertificate] (scalar : NonZeroScalar)
+
+/-- The output keys of some coins' fields. -/
+def coinKeys (parts : CoinsParts) : OutputKeys :=
+  FieldMacToECMac.outputKeys construction scalar.value parts.1.1
+
+/-- The swap fixes every view gate. -/
+theorem indexSwap_view (keys : OutputKeys) (w : ViewIdx input) :
+    indexSwap keys (viewIdx input w) = viewIdx input w := by
+  obtain ⟨lane, chunk, step, entry, half, -, -, -, -, -, eq⟩ := w.2
+  rw [show viewIdx input w = w.1 from rfl, eq]
+  rfl
+
+theorem coinKeys_coinsSplit (coins : Kriterion.ArgoMAC.Scheme.Coins) :
+    coinKeys scalar (coinsSplit coins) =
+      FieldMacToECMac.outputKeys construction scalar.value coins.offsets := rfl
+
+/-- **The answers read through the index swap** of the coins' keys (an involution). -/
+def twist : CoinsParts × (FixedIndex → Block) × MaskVectors ≃
+    CoinsParts × (FixedIndex → Block) × MaskVectors where
+  toFun ω := (ω.1, ω.2.1 ∘ indexSwap (coinKeys scalar ω.1), ω.2.2)
+  invFun ω := (ω.1, ω.2.1 ∘ indexSwap (coinKeys scalar ω.1), ω.2.2)
+  left_inv ω := by
+    obtain ⟨parts, v, m⟩ := ω
+    refine Prod.ext rfl (Prod.ext (funext fun i => ?_) rfl)
+    show v (indexSwap _ (indexSwap _ i)) = v i
+    rw [indexSwap_involutive]
+  right_inv ω := by
+    obtain ⟨parts, v, m⟩ := ω
+    refine Prod.ext rfl (Prod.ext (funext fun i => ?_) rfl)
+    show v (indexSwap _ (indexSwap _ i)) = v i
+    rw [indexSwap_involutive]
+
+/-- **The garbler's randomness is the rest and F4's coins**, the answers read through the index
+swap. -/
 def omegaEquiv : Omega ≃ Outer input × JointCoins :=
-  (coinsSplit.prodCongr (Equiv.refl _)).trans (regroup input)
+  (coinsSplit.prodCongr (Equiv.refl _)).trans ((twist scalar).trans (regroup input))
 
 end Omega
 

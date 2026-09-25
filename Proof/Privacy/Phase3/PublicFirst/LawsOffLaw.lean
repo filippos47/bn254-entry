@@ -182,11 +182,11 @@ abbrev offShape : JointShape := JointShape.ofInput input
 def pubOf (coins : Coins) (v : FixedIndex → Block) (m : MaskVectors) : Public :=
   (cellsSource (publicOf (offContext input pads
       (FieldMacToECMac.outputKeys construction scalar.value coins.offsets)
-      (omegaEquiv input (coins, v, m)).1) (omegaEquiv input (coins, v, m)).2) defaultKey).publicValue
+      (omegaEquiv input scalar (coins, v, m)).1) (omegaEquiv input scalar (coins, v, m)).2) defaultKey).publicValue
 
 /-- The garbler's randomness, read back from the rest and F4's coins. -/
 theorem omega_symm (o : Outer input) (jc : JointCoins) :
-    let ω := (omegaEquiv input).symm (o, jc)
+    let ω := (omegaEquiv input scalar).symm (o, jc)
     pubOf scalar input pads ω.1 ω.2.1 ω.2.2 = (cellsSource (publicOf (offContext input pads
         (FieldMacToECMac.outputKeys construction scalar.value o.1.1) o) jc) defaultKey).publicValue ∧
       ω.1.inputMacKey.encode (BitInput.ofAffine input) =
@@ -195,12 +195,14 @@ theorem omega_symm (o : Outer input) (jc : JointCoins) :
       curveVisible (offShape input) (maskSiteEquiv (maskCoordEquiv ω.2.2)).2 =
         (visibleOf (offShape input) jc).2 := by
   intro ω
-  have back : omegaEquiv input (ω.1, ω.2.1, ω.2.2) = (o, jc) := (omegaEquiv input).apply_symm_apply _
+  have back : omegaEquiv input scalar (ω.1, ω.2.1, ω.2.2) = (o, jc) := (omegaEquiv input scalar).apply_symm_apply _
   refine ⟨?_, rfl, funext fun w => ?_, ?_⟩
   · unfold pubOf
     rw [back]
     rfl
-  · exact splitAlong_symm_rest (hiddenIdx input) (hiddenIdx_injective input) _ _ (viewRest input w)
+  · show ((regroup input).symm (o, jc)).2.1 (indexSwap _ (viewIdx input w)) = _
+    rw [indexSwap_view]
+    exact splitAlong_symm_rest (hiddenIdx input) (hiddenIdx_injective input) _ _ (viewRest input w)
   · show curveVisible (offShape input)
       (maskSiteEquiv (maskCoordEquiv (maskCoordEquiv.symm (maskSiteEquiv.symm _)))).2 = _
     rw [Equiv.apply_symm_apply, Equiv.apply_symm_apply]
@@ -236,11 +238,11 @@ theorem published_law
     refine tsum_congr fun coins => congrArg _ ?_
     rw [tsum_uniform_prod (α := FixedIndex → Block) (β := MaskVectors) (fun p => G (coins, p))]
   have inner : ∀ o : Outer input, ∑' jc, PMF.uniformOfFintype JointCoins jc *
-      G ((omegaEquiv input).symm (o, jc)) =
+      G ((omegaEquiv input scalar).symm (o, jc)) =
       ∑' cells, PMF.uniformOfFintype PublicCells cells *
         ∑' vis, PMF.uniformOfFintype (CurveVisible (offShape input)) vis * H o (cells, ((fun _ => fun _ _ => 0), vis)) := by
     intro o
-    have pointwise : ∀ jc, G ((omegaEquiv input).symm (o, jc)) =
+    have pointwise : ∀ jc, G ((omegaEquiv input scalar).symm (o, jc)) =
         H o ((publicOf (offContext input pads
           (FieldMacToECMac.outputKeys construction scalar.value o.1.1) o) jc, visibleOf (offShape input) jc)) := by
       intro jc
@@ -264,7 +266,7 @@ theorem published_law
     intro cells vis
     rw [tsum_uniform_prod (α := ClampedOffsets)]
     simp only [H]
-    rw [tsum_const_uniform, tsum_uniform_prod (α := Fin digitCount → NonZeroBase)]
+    rw [tsum_const_uniform, tsum_uniform_prod (α := Fin digitCount → NonZeroBase × NonZeroBase)]
     dsimp only
     rw [tsum_const_uniform, tsum_uniform_prod (α := Coord → Fin coordinateBitCount → Block)]
     dsimp only
@@ -279,8 +281,8 @@ theorem published_law
         ((labelKey Z Δ).encode (BitInput.ofAffine input)) w vis)
   calc _ = ∑' ω : Omega, PMF.uniformOfFintype Omega ω * G ω := triple
     _ = ∑' o, PMF.uniformOfFintype (Outer input) o * ∑' jc, PMF.uniformOfFintype JointCoins jc *
-          G ((omegaEquiv input).symm (o, jc)) := by
-        rw [tsum_equiv_uniform (omegaEquiv input) G,
+          G ((omegaEquiv input scalar).symm (o, jc)) := by
+        rw [tsum_equiv_uniform (omegaEquiv input scalar) G,
           tsum_uniform_prod (α := Outer input) (β := JointCoins)]
     _ = ∑' o, PMF.uniformOfFintype (Outer input) o * ∑' cells, PMF.uniformOfFintype PublicCells cells *
           ∑' vis, PMF.uniformOfFintype (CurveVisible (offShape input)) vis *

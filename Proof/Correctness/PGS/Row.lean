@@ -6,7 +6,7 @@ This file discharges the projectivized garbling scheme's delivery hypothesis (pl
 that the switch systems deliver `slope * coordinate + offset` as a named `Prop`,
 `Pipeline.Delivers`, whose statement is character for character `evalCoord_garbleCoord`. Here
 it is supplied, for every tape and every one of the four lanes at once. With it,
-`Pipeline.evaluateEncoded` and `Garbling.evaluateEncodeRows` become unconditional: the 733
+`Pipeline.evaluateEncoded` and `Garbling.evaluateEncodeRows` become unconditional: the 642
 values the evaluator obtains are exactly the `a_e * coord + K e` the row layer expects.
 -/
 

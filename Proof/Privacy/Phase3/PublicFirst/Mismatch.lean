@@ -2,11 +2,11 @@
 **Phase 3, P1e — two of P1b's shape mismatches between F4 and the games: (a) and (d).**
 
 * **(a) `pack`/`assembleWord`.** `HW` publishes the scale joins of a uniform source as
-  `pack (source.joins chunk)` over the whole `elementCount = 733` word; the real garbler publishes
+  `pack (source.joins chunk)` over the whole `elementCount = 642` word; the real garbler publishes
   `pack (assembleWord pointX curveX pointY curveY)` of its four lanes' joins. `assembleWord` is a
   **bijection** of the four lane vectors onto the word's slots (`wordEquiv`: `readPointX`/
   `readCurveX`/`readPointY`/`readCurveY` invert it — `assembleWord_read`;
-  `733 = 455 + 3 + 273 + 2`, no padding slot; the word's two bits above the slots are always
+  `642 = 364 + 3 + 273 + 2`, no padding slot; the word's four bits above the slots are always
   zero), so uniform source joins are uniform lane joins (`uniform_joins_lanes`), and a source built
   from lane joins publishes exactly the garbler's scale words (`publicValue_scale_assemble`).
 * **(d) `κ` against `κ⁻¹`.** F4's designated solve divides by `κ` (`simDesignated`), the Glue's

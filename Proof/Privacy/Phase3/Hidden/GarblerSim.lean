@@ -218,69 +218,53 @@ theorem garbler_padsM (T : TapeShift) (scalar : NonZeroScalar) (tape : Coins × 
 
 /-! ### The gadget -/
 
-theorem garbler_gadgetDigestM (T : TapeShift) (scalar : NonZeroScalar) (tape : Coins × Oracle)
-    (output : Fin digitCount) (coordinate : EncPRF.Coordinate) (mac mac' : CoordinateMac)
-    (shift : Fin coordinateBitCount → Block) (macs : ∀ i, mac'.get i = mac.get i ^^^ shift i)
-    (shifts : ∀ i, indexShift T scalar tape.1 (.gadget output (Pipeline.gadgetCoord coordinate) i) =
-      (shift i, shift i))
-    (good : ∀ i, mac.get i = garblerPointOf scalar tape (.gadget output (Pipeline.gadgetCoord coordinate) i)) :
+theorem garbler_gadgetPairsM (T : TapeShift) (scalar : NonZeroScalar) (tape : Coins × Oracle)
+    (output : Fin digitCount) (coordinate : EncPRF.Coordinate) (key key' : CoordinateMacKey)
+    (shift : Fin coordinateBitCount → Bool → Block)
+    (labels : ∀ i bit, BitAdaptor.encode key'[i.val] bit = BitAdaptor.encode key[i.val] bit ^^^ shift i bit)
+    (shifts : ∀ i bit, indexShift T scalar tape.1
+      (.gadget output (Pipeline.gadgetCoord coordinate) i bit) = (shift i bit, shift i bit))
+    (good : ∀ i bit, BitAdaptor.encode key[i.val] bit = garblerPointOf scalar tape
+      (.gadget output (Pipeline.gadgetCoord coordinate) i bit)) :
     Sim (publicAnswer tape.2) (publicAnswer (shiftTape T scalar tape).2) (GarbleRel T scalar tape)
-      (fun v v' => v' = v) (Programs.gadgetDigestM output coordinate mac)
-      (Programs.gadgetDigestM output coordinate mac') := by
-  unfold Programs.gadgetDigestM
-  have shifted : (fun index : Fin coordinateBitCount =>
-      Programs.hashM (.gadget output (Pipeline.gadgetCoord coordinate) index) (mac'.get index)) =
-      fun index => Programs.hashM (.gadget output (Pipeline.gadgetCoord coordinate) index)
-        (mac.get index ^^^ shift index) := by
-    funext index
-    rw [macs index]
-  rw [shifted]
-  refine Sim.bind (Sim.vector coordinateBitCount
-    (R := fun index v v' => v = PlanB.hash tape.2.1 (.gadget output (Pipeline.gadgetCoord coordinate) index)
-      (mac.get index) ∧ v' = v ^^^ shift index ^^^ shift index) _ _ fun index => ?_)
-    fun values values' related => Sim.pure' ?_
-  · have oracle := shiftOracle_fixed T scalar tape (.gadget output (Pipeline.gadgetCoord coordinate) index)
-      (mac.get index)
-    have entry := garbleRel_fixed T scalar tape (.gadget output (Pipeline.gadgetCoord coordinate) index)
-      (mac.get index) (good index)
-    rw [shifts index] at oracle entry
-    exact sim_hashM tape.2 (shiftTape T scalar tape).2 _ _ _ _ oracle entry
-  · have same : ∀ index, values'.get index = values.get index := fun index => by
-      rw [(related index).2, xor_cancel_right]
-    simp only [same]
+      (fun v v' => v' = v) (Programs.gadgetPairsM output coordinate key)
+      (Programs.gadgetPairsM output coordinate key') := by
+  have one : ∀ (i : Fin coordinateBitCount) (bit : Bool),
+      Sim (publicAnswer tape.2) (publicAnswer (shiftTape T scalar tape).2) (GarbleRel T scalar tape)
+        (fun v v' => v' = v)
+        (Programs.hashM (.gadget output (Pipeline.gadgetCoord coordinate) i bit)
+          (BitAdaptor.encode key[i.val] bit))
+        (Programs.hashM (.gadget output (Pipeline.gadgetCoord coordinate) i bit)
+          (BitAdaptor.encode key'[i.val] bit)) := by
+    intro i bit
+    rw [labels i bit]
+    have oracle := shiftOracle_fixed T scalar tape
+      (.gadget output (Pipeline.gadgetCoord coordinate) i bit) (BitAdaptor.encode key[i.val] bit)
+    have entry := garbleRel_fixed T scalar tape
+      (.gadget output (Pipeline.gadgetCoord coordinate) i bit) (BitAdaptor.encode key[i.val] bit)
+      (good i bit)
+    rw [shifts i bit] at oracle entry
+    exact Sim.mono (sim_hashM tape.2 (shiftTape T scalar tape).2 _ _ _ _ oracle entry)
+      fun v v' related => by rw [related.2, xor_cancel_right]
+  unfold Programs.gadgetPairsM
+  refine Sim.mono (Sim.vector coordinateBitCount (R := fun _ v v' => v' = v) _ _ fun i =>
+    Sim.bind (one i false) fun zero zero' sameZero => Sim.bind (one i true) fun first first' sameFirst =>
+      Sim.pure' (by rw [sameZero, sameFirst])) fun values values' related => ?_
+  exact Vector.ext fun i small => by
+    have := related ⟨i, small⟩
+    simpa [Vector.get_eq_getElem] using this
 
-theorem garbler_gadgetMaskM (T : TapeShift) (scalar : NonZeroScalar) (tape : Coins × Oracle)
-    (output : Fin digitCount) (mac mac' : InputMac)
-    (shiftX shiftY : Fin coordinateBitCount → Block)
-    (macsX : ∀ i, mac'.x.get i = mac.x.get i ^^^ shiftX i)
-    (macsY : ∀ i, mac'.y.get i = mac.y.get i ^^^ shiftY i)
-    (shiftsX : ∀ i, indexShift T scalar tape.1 (.gadget output .x i) = (shiftX i, shiftX i))
-    (shiftsY : ∀ i, indexShift T scalar tape.1 (.gadget output .y i) = (shiftY i, shiftY i))
-    (goodX : ∀ i, mac.x.get i = garblerPointOf scalar tape (.gadget output .x i))
-    (goodY : ∀ i, mac.y.get i = garblerPointOf scalar tape (.gadget output .y i)) :
-    Sim (publicAnswer tape.2) (publicAnswer (shiftTape T scalar tape).2) (GarbleRel T scalar tape)
-      (fun v v' => v' = v) (Programs.gadgetMaskM output mac) (Programs.gadgetMaskM output mac') := by
-  unfold Programs.gadgetMaskM
-  refine Sim.bind (garbler_gadgetDigestM T scalar tape output .x mac.x mac'.x shiftX macsX shiftsX goodX)
-    fun first first' hfirst => Sim.bind
-      (garbler_gadgetDigestM T scalar tape output .y mac.y mac'.y shiftY macsY shiftsY goodY)
-      fun second second' hsecond => Sim.pure' ?_
-  rw [hfirst, hsecond]
-
-/-- The selected label of a shifted, transformed key moves by the gadget shift. -/
-theorem transform_select_shift (T : TapeShift) (coins : Coins) (pads pads' : Programs.Pads)
+/-- Both labels of a shifted, transformed key move by the gadget shift of their bit. -/
+theorem transform_label_shift (T : TapeShift) (coins : Coins) (pads pads' : Programs.Pads)
     (padsShift : ∀ coordinate index bit, pads' coordinate index bit = pads coordinate index bit ^^^ T.key2)
-    (input : AffineInput) (index : Fin coordinateBitCount) :
-    ((Programs.transformKeyOf pads' (shiftCoins T coins).inputMacKey).encodeAffine input).x.get index =
-      ((Programs.transformKeyOf pads coins.inputMacKey).encodeAffine input).x.get index ^^^
-        (T.key2 ^^^ T.zero .x index ^^^
-          (if (coordinateBits input.x).getLsb index then T.delta .x else 0)) ∧
-    ((Programs.transformKeyOf pads' (shiftCoins T coins).inputMacKey).encodeAffine input).y.get index =
-      ((Programs.transformKeyOf pads coins.inputMacKey).encodeAffine input).y.get index ^^^
-        (T.key2 ^^^ T.zero .y index ^^^
-          (if (coordinateBits input.y).getLsb index then T.delta .y else 0)) := by
-  simp only [InputMacKey.encodeAffine, InputMacKey.encode, encodeCoordinate, BitInput.ofAffine,
-    Programs.transformKeyOf, Coins.inputMacKey, shiftCoins, Vector.get_ofFn, Vector.getElem_ofFn,
+    (index : Fin coordinateBitCount) (bit : Bool) :
+    BitAdaptor.encode (Programs.transformKeyOf pads' (shiftCoins T coins).inputMacKey).x[index.val] bit =
+      BitAdaptor.encode (Programs.transformKeyOf pads coins.inputMacKey).x[index.val] bit ^^^
+        (T.key2 ^^^ T.zero .x index ^^^ (if bit then T.delta .x else 0)) ∧
+    BitAdaptor.encode (Programs.transformKeyOf pads' (shiftCoins T coins).inputMacKey).y[index.val] bit =
+      BitAdaptor.encode (Programs.transformKeyOf pads coins.inputMacKey).y[index.val] bit ^^^
+        (T.key2 ^^^ T.zero .y index ^^^ (if bit then T.delta .y else 0)) := by
+  simp only [Programs.transformKeyOf, Coins.inputMacKey, shiftCoins, Vector.getElem_ofFn,
     BitAdaptor.encode, encrypt, Cryptography.xor, padsShift]
   constructor
   · split <;> ac_rfl
@@ -303,25 +287,20 @@ theorem garbler_garbleEntryM (T : TapeShift) (scalar : NonZeroScalar) (tape : Co
   split
   · exact Sim.pure' rfl
   · rename_i phi found
-    have macs := transform_select_shift T tape.1 pads pads' padsShift
-      (Exception.exceptionalInput phi (digitKey scalar tape.1.offsets output).offset.coordinates)
-    refine Sim.bind (garbler_gadgetMaskM T scalar tape output _ _ _ _ (fun i => (macs i).1)
-      (fun i => (macs i).2) ?_ ?_ ?_ ?_) fun mask mask' same => Sim.pure' ?_
-    · intro i
-      show (gadgetShift T scalar tape.1 output .x i, gadgetShift T scalar tape.1 output .x i) = _
-      simp only [gadgetShift, exceptionalBit, found, coordValue']
-    · intro i
-      show (gadgetShift T scalar tape.1 output .y i, gadgetShift T scalar tape.1 output .y i) = _
-      simp only [gadgetShift, exceptionalBit, found, coordValue']
-    · intro i
-      show _ = gadgetLabel scalar tape output .x i
-      simp only [gadgetLabel, found, padsEq]
-      rfl
-    · intro i
-      show _ = gadgetLabel scalar tape output .y i
-      simp only [gadgetLabel, found, padsEq]
-      rfl
-    · rw [same]
+    have labels := transform_label_shift T tape.1 pads pads' padsShift
+    refine Sim.bind (garbler_gadgetPairsM T scalar tape output .x _ _ _ (fun i bit => (labels i bit).1)
+        (fun i bit => by simp only [indexShift, gadgetShift, Pipeline.gadgetCoord])
+        (fun i bit => by
+          simp only [garblerPointOf, gadgetLabel, found, padsEq, Programs.transformKeyOf_realPads,
+            EncPRF.whiteningKeys, Pipeline.gadgetCoord]))
+      fun xPairs xPairs' sameX => Sim.bind
+        (garbler_gadgetPairsM T scalar tape output .y _ _ _ (fun i bit => (labels i bit).2)
+          (fun i bit => by simp only [indexShift, gadgetShift, Pipeline.gadgetCoord])
+          (fun i bit => by
+            simp only [garblerPointOf, gadgetLabel, found, padsEq, Programs.transformKeyOf_realPads,
+              EncPRF.whiteningKeys, Pipeline.gadgetCoord]))
+        fun yPairs yPairs' sameY => Sim.pure' ?_
+    rw [sameX, sameY]
 
 theorem garbler_gadgetM (T : TapeShift) (scalar : NonZeroScalar) (tape : Coins × Oracle)
     (pads pads' : Programs.Pads)

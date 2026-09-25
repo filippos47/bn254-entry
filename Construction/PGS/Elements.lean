@@ -9,21 +9,20 @@ import Construction.PGS.Params
 
 namespace Kriterion.ArgoMAC.PlanB
 
-/-- The x-type element slots of one digit: two on the `X` row, two on the `Y` row,
-one on the `Z` row. The `Y` row's `mixed` rides on `y` and its `cubic` on `x²`. -/
+/-- The x-type element slots of one digit: two on the `X` row, one on the sign row (the
+`Y` slot), one on the `Z` row. The sign row's `cubic` rides on `x²`. -/
 inductive XElement
   | rowX_x7
   | rowX_x9
-  | rowY_mixed
   | rowY_cubic
   | rowZ_x9
 deriving DecidableEq
 
 instance : Fintype XElement :=
-  ⟨{.rowX_x7, .rowX_x9, .rowY_mixed, .rowY_cubic, .rowZ_x9}, fun value => by
+  ⟨{.rowX_x7, .rowX_x9, .rowY_cubic, .rowZ_x9}, fun value => by
     cases value <;> simp⟩
 
-/-- The y-type element slots of one digit: one on the `X` row and two on the `Y` row. -/
+/-- The y-type element slots of one digit: one on the `X` row and two on the sign row. -/
 inductive YElement
   | rowX_y10
   | rowY_y8
@@ -53,20 +52,18 @@ instance : Fintype CurveYElement :=
   ⟨{.y4, .y6}, fun value => by cases value <;> simp⟩
 
 /-- The number of x-type element slots one digit consumes. -/
-abbrev xSlotsPerDigit : Nat := 5
+abbrev xSlotsPerDigit : Nat := 4
 
 /-- The number of y-type element slots one digit consumes. -/
 abbrev ySlotsPerDigit : Nat := 3
 
 /-- The slot of an x-type element inside its digit. The three row collectors (`rowX_x9`,
-`rowY_cubic`, `rowZ_x9`) sit at slots `1`, `3`, `4`, and the two free elements (`rowX_x7`,
-`rowY_mixed`) at slots `0`, `2`. -/
+`rowY_cubic`, `rowZ_x9`) sit at slots `1`, `2`, `3`, and the free element `rowX_x7` at slot `0`. -/
 def XElement.slot : XElement → Fin xSlotsPerDigit
   | .rowX_x7 => 0
   | .rowX_x9 => 1
-  | .rowY_mixed => 2
-  | .rowY_cubic => 3
-  | .rowZ_x9 => 4
+  | .rowY_cubic => 2
+  | .rowZ_x9 => 3
 
 /-- The slot of a y-type element inside its digit. -/
 def YElement.slot : YElement → Fin ySlotsPerDigit
@@ -74,7 +71,7 @@ def YElement.slot : YElement → Fin ySlotsPerDigit
   | .rowY_y8 => 1
   | .rowY_y10 => 2
 
-/-- The slot of a curve x-type element after the `91 * 5` digit slots. -/
+/-- The slot of a curve x-type element after the `91 * 4` digit slots. -/
 def CurveXElement.slot : CurveXElement → Fin 3
   | .x3 => 0
   | .x5 => 1
@@ -93,7 +90,7 @@ theorem CurveXElement.slot_injective : Function.Injective CurveXElement.slot := 
 
 theorem CurveYElement.slot_injective : Function.Injective CurveYElement.slot := by decide
 
-/-- The `pointX` lane's element index: `91 * 5` digit slots.
+/-- The `pointX` lane's element index: `91 * 4` digit slots.
 
 The curve check lives in its *own* lane (system A), so the point lanes carry the digit slots
 alone; the two families no longer share a vector. -/

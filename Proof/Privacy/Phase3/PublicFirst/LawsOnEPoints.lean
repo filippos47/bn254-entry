@@ -276,31 +276,27 @@ theorem fixedOnce_of_onceIn {α : Type} {X : Set FixedIndex} {Y : Set Cell}
   | fixed X Y index input next inside rest ih => exact .fixed X index input next inside ih
   | cell X Y cell label next inside rest ih => exact .other X _ next trivial ih
 
-theorem gadgetMaskM_once (output : Fin FieldMacToECMac.outputMacCount) (mac : InputMac) :
-    FixedOnce (digitSet output) (Programs.gadgetMaskM output mac) := by
-  have apart : Disjoint {index | ∃ position, index = FixedIndex.gadget output
-        (Pipeline.gadgetCoord .x) position}
-      {index | ∃ position, index = FixedIndex.gadget output (Pipeline.gadgetCoord .y) position} := by
-    rw [Set.disjoint_left]
-    rintro i ⟨p, rfl⟩ ⟨p', same⟩
+theorem gadgetMaskM_once (output : Fin FieldMacToECMac.outputMacCount) (input : AffineInput)
+    (mac : InputMac) : FixedOnce (digitSet output) (Programs.gadgetMaskM output input mac) := by
+  have apart : Disjoint (coordSet output .x) (coordSet output .y ∪ ∅) := by
+    rw [Set.union_empty, Set.disjoint_left]
+    rintro i ⟨p, b, rfl⟩ ⟨p', b', same⟩
     injection same with sameOutput sameCoord
     cases sameCoord
-  refine ((gadgetDigestM_once output .x _).bind (fun _ => (gadgetDigestM_once output .y _).bind
-    (fun _ => .pure ∅ _) (Set.disjoint_empty _)) ?_).mono ?_
-  · rw [Set.union_empty]
-    exact apart
-  · rintro i (⟨p, rfl⟩ | ⟨p, rfl⟩ | hi)
-    · exact ⟨_, p, rfl⟩
-    · exact ⟨_, p, rfl⟩
-    · exact hi.elim
+  refine ((gadgetDigestM_once output .x _ _).bind (fun _ => (gadgetDigestM_once output .y _ _).bind
+    (fun _ => .pure ∅ _) (Set.disjoint_empty _)) apart).mono ?_
+  rintro i (⟨p, b, rfl⟩ | ⟨p, b, rfl⟩ | hi)
+  · exact ⟨_, p, b, rfl⟩
+  · exact ⟨_, p, b, rfl⟩
+  · exact hi.elim
 
-theorem unlockM_once (table : FieldMacToECMac.Table) (point : AffineInput) (mac : InputMac) :
-    FixedOnce {index | ∃ output, index ∈ digitSet output} (Programs.unlockM table point mac) := by
+theorem masksM_once (point : AffineInput) (mac : InputMac) :
+    FixedOnce {index | ∃ output, index ∈ digitSet output} (Programs.masksM point mac) := by
   refine (FixedOnce.vector FieldMacToECMac.outputMacCount digitSet _
-    (fun output => ((gadgetMaskM_once output mac).bind (fun _ => .pure ∅ _)
+    (fun output => ((gadgetMaskM_once output point mac).bind (fun _ => .pure ∅ _)
       (Set.disjoint_empty _)).mono (by rw [Set.union_empty])) (fun o o' ne => by
       rw [Set.disjoint_left]
-      rintro i ⟨κ, p, rfl⟩ ⟨κ', p', same⟩
+      rintro i ⟨κ, p, b, rfl⟩ ⟨κ', p', b', same⟩
       injection same with sameOutput
       exact ne sameOutput)).mono ?_
   rintro i ⟨_, ⟨o, rfl⟩, hi⟩
@@ -316,7 +312,7 @@ theorem laneSets_apart (first second : Lane) (ne : first ≠ second) :
 theorem laneSet_gadgets (lane : Lane) :
     Disjoint (onceLaneSet lane) {index | ∃ output, index ∈ digitSet output} := by
   rw [Set.disjoint_left]
-  rintro i ⟨c, f, e, h, rfl⟩ ⟨o, κ, p, same⟩
+  rintro i ⟨c, f, e, h, rfl⟩ ⟨o, κ, p, b, same⟩
   cases same
 
 /-- **`shadowOnceM` asks every fixed-key index at most once.** -/
@@ -356,7 +352,7 @@ theorem fixedOnce_shadowOnce (P : Public) (bits : BitInput) (mac : InputMac) :
       (OnLaw.gadgetPart P bits mac r) := by
     intro r
     unfold OnLaw.gadgetPart
-    exact ((unlockM_once _ _ _).bind (fun _ => .pure ∅ _) (Set.disjoint_empty _)).mono
+    exact ((masksM_once _ _).bind (fun _ => .pure ∅ _) (Set.disjoint_empty _)).mono
       (by rw [Set.union_empty])
   refine (prefixOnce.bind (fun hashed => (padsOnce _).bind (fun _ =>
     (((restOnce hashed).bind gadgetOnce ?_).bind (fun _ => .pure ∅ _) (Set.disjoint_empty _)))

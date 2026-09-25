@@ -56,11 +56,11 @@ def padsAt (P : Public) (E : PermutationOracle EncPRF.PermutationIndex Block) (H
 
 /-- The shadow's point at a gadget position, on a table. -/
 def gpt (P : Public) (mac : InputMac) (A : Table) (k : GPos) : Block :=
-  macAt (Programs.transformMacOf (padsAt input P A.1 A.2.1 A.2.2.2) mac) k.2.1 k.2.2
+  macAt (Programs.transformMacOf (padsAt input P A.1 A.2.1 A.2.2.2) mac) k.2.1 k.2.2.1
 
 /-- A gadget question at its point, or any other forward or hash question. -/
 def GadAt (P : Public) (mac : InputMac) (A : Table) : PublicQuery FixedIndex EncPRF.PermutationIndex → Prop
-  | .fixedForward (.gadget o κ p) x => x = gpt input P mac A (o, κ, p)
+  | .fixedForward (.gadget o κ p b) x => x = gpt input P mac A (o, κ, p, b)
   | .fixedInverse _ _ => False
   | .encInverse _ _ => False
   | _ => True
@@ -71,7 +71,7 @@ theorem gadAt_of (P : Public) (mac : InputMac) (A : Table)
   cases q with
   | fixedForward index x =>
       cases index with
-      | gadget o κ p => exact absurd rfl (h.2 o κ p x)
+      | gadget o κ p b => exact absurd rfl (h.2 o κ p b x)
       | hot _ _ _ _ _ => trivial
   | fixedInverse _ _ => exact h.1.elim
   | encInverse _ _ => exact h.1.elim
@@ -138,10 +138,10 @@ theorem shadow_gadAt (a : ∀ q : PublicQuery FixedIndex EncPRF.PermutationIndex
     refine Guess.AsksOnly.bind_eq _ (Guess.AsksOnly.of_queryOnly (OnLaw.queryOnly_mono
       (queryOnly_and (preM_onQ input P mac) (OnLaw.notGadget_preM _ _ _)) (gadAt_of input P mac A))) rfl ?_
     unfold OnLaw.gadgetPart
-    refine Guess.AsksOnly.bind ((Guess.AsksOnly.of_queryOnly (Guess.unlockM_asks _ _ _)).mono ?_)
+    refine Guess.AsksOnly.bind ((Guess.AsksOnly.of_queryOnly (Guess.masksM_asks _ _)).mono ?_)
       (Guess.AsksOnly.pure' _)
     rintro q ⟨o, κ, p, rfl⟩
-    show _ = gpt input P mac A (o, κ, p)
+    show _ = gpt input P mac A (o, κ, p, _)
     unfold gpt
     rw [preM_pads input a A reads hE hH P mac]
 
@@ -149,25 +149,18 @@ theorem shadow_gadAt (a : ∀ q : PublicQuery FixedIndex EncPRF.PermutationIndex
 
 /-- The fresh table values of the translations. -/
 def wOf (P : Public) (mac : InputMac) (A : Table) (v : GPos → Block) : FixedIndex → Block
-  | .gadget o κ p => gpt input P mac A (o, κ, p) ^^^ v (o, κ, p)
+  | .gadget o κ p b => gpt input P mac A (o, κ, p, b) ^^^ v (o, κ, p, b)
   | _ => 0
 
 theorem freshPos_iff (K : FieldMacToECMac.SuccessfulOffsets) (k : GPos) :
-    freshPos scalar K input k = true ↔ ¬ Planted scalar input K k.1 k.2.1 k.2.2 := by
-  obtain ⟨o, κ, p⟩ := k
-  have hk : Hidden.digitKey scalar K o = outputKeyOf scalar K o := rfl
-  have planted : Planted scalar input K o κ p ↔ freshPos scalar K input (o, κ, p) = false := by
+    freshPos scalar K input k = true ↔ ¬ Planted scalar input K k.1 k.2.1 k.2.2.1 k.2.2.2 := by
+  obtain ⟨o, κ, p, b⟩ := k
+  have planted : Planted scalar input K o κ p b ↔ freshPos scalar K input (o, κ, p, b) = false := by
     rw [OnLaw.freshPos_false]
-    show _ ↔ (digitEndomorphismBase (Hidden.digitKey scalar K o).digit).isSome = true ∧
-      (inputBits input κ).getLsb p = Hidden.exceptionalBit scalar K o κ p
-    unfold Hidden.exceptionalBit Planted
-    rw [hk]
-    generalize outputKeyOf scalar K o = key
-    cases hphi : digitEndomorphismBase key.digit with
-    | none => simp
-    | some phi =>
-        simp only [Option.isSome_some, true_and, Option.some.injEq, exists_eq_left']
-        cases κ <;> exact eq_comm
+    show _ ↔ (digitEndomorphismBase (outputKeyOf scalar K o).digit).isSome = true ∧
+      (inputBits input κ).getLsb p = b
+    unfold Planted
+    rw [Option.isSome_iff_exists]
   rw [planted, Bool.not_eq_false]
 
 open Classical in
@@ -195,17 +188,19 @@ theorem freshAnswer_table (K : FieldMacToECMac.SuccessfulOffsets) (P : Public) (
   cases q with
   | fixedForward index x =>
       cases index with
-      | gadget o κ p =>
-          have point : x = gpt input P mac A (o, κ, p) := agree
-          have lhs : freshAnswer (freshPos scalar K input) v (tableAnswer A) (.fixedForward (.gadget o κ p) x) =
-              if freshPos scalar K input (o, κ, p) then x ^^^ v (o, κ, p) else A.2.2.1 (.gadget o κ p) := rfl
-          have rhs : tableAnswer (freshen scalar input K A (wOf input P mac A v)) (.fixedForward (.gadget o κ p) x) =
-              if FreshQ scalar input K (.gadget o κ p) then gpt input P mac A (o, κ, p) ^^^ v (o, κ, p)
-              else A.2.2.1 (.gadget o κ p) := rfl
-          have fresh : FreshQ scalar input K (.gadget o κ p) ↔ freshPos scalar K input (o, κ, p) = true :=
-            (freshPos_iff scalar input K (o, κ, p)).symm
+      | gadget o κ p b =>
+          have point : x = gpt input P mac A (o, κ, p, b) := agree
+          have lhs : freshAnswer (freshPos scalar K input) v (tableAnswer A) (.fixedForward (.gadget o κ p b) x) =
+              if freshPos scalar K input (o, κ, p, b) then x ^^^ v (o, κ, p, b)
+              else A.2.2.1 (.gadget o κ p b) := rfl
+          have rhs : tableAnswer (freshen scalar input K A (wOf input P mac A v))
+              (.fixedForward (.gadget o κ p b) x) =
+              if FreshQ scalar input K (.gadget o κ p b) then gpt input P mac A (o, κ, p, b) ^^^ v (o, κ, p, b)
+              else A.2.2.1 (.gadget o κ p b) := rfl
+          have fresh : FreshQ scalar input K (.gadget o κ p b) ↔ freshPos scalar K input (o, κ, p, b) = true :=
+            (freshPos_iff scalar input K (o, κ, p, b)).symm
           rw [lhs, rhs]
-          by_cases hf : freshPos scalar K input (o, κ, p) = true
+          by_cases hf : freshPos scalar K input (o, κ, p, b) = true
           · rw [if_pos (fresh.mpr hf), if_pos hf, point]
           · rw [if_neg (fun h => hf (fresh.mp h)), if_neg hf]
       | hot ℓ c f e h => exact (freshen_hot scalar input K A _ ℓ c f e h x).symm
@@ -218,7 +213,7 @@ theorem freshAnswer_table (K : FieldMacToECMac.SuccessfulOffsets) (P : Public) (
 
 /-- Fixed-key answers from gadget values. -/
 def extG (u : GPos → Block) : FixedIndex → Block
-  | .gadget o κ p => u (o, κ, p)
+  | .gadget o κ p b => u (o, κ, p, b)
   | _ => 0
 
 open Classical in
@@ -228,7 +223,7 @@ theorem freshen_extG (K : FieldMacToECMac.SuccessfulOffsets) (A : Table) (w : Fi
   show (if FreshQ scalar input K i then w i else A.2.2.1 i) =
     (if FreshQ scalar input K i then extG (w ∘ gIdx) i else A.2.2.1 i)
   cases i with
-  | gadget o κ p => rfl
+  | gadget o κ p b => rfl
   | hot lane c fold entry half =>
       rw [if_neg (show ¬ FreshQ scalar input K (.hot lane c fold entry half) from id),
         if_neg (show ¬ FreshQ scalar input K (.hot lane c fold entry half) from id)]

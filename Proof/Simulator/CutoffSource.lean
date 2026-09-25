@@ -1,7 +1,7 @@
 /-
 **The machine's stage-1 source law against the uniform source.**
 
-The machine's draws are `42,052` field cells (bounded rejection), `546` bytes, `792` fold-join
+The machine's draws are `34,297` field cells (bounded rejection), `1,092` bytes, `808` fold-join
 blocks and the `1016`-block key (fair coins). `sourceOfDraws` reads them as a `Stage1Source`, and
 this reading is a bijection from the exact draws (`drawsEquiv`), so exact draws give the uniform
 source (`idealSource_eq`). The field cells are the only cut-off draws: `source_close`.
@@ -36,24 +36,23 @@ def rowField (row : RowGamma) : Nat → BaseField
   | 3 => row.xC4
   | 4 => row.yC0
   | 5 => row.yC2
-  | 6 => row.yC3
-  | 7 => row.yC4
-  | 8 => row.yC5
-  | 9 => row.zC0
+  | 6 => row.yC4
+  | 7 => row.yC5
+  | 8 => row.zC0
   | _ => row.zC1
 
-theorem digit_lt (index : Nat) (above : 3 ≤ index) (below : index < 1004) :
-    (index - 3) / 11 < digitCount := by
+theorem digit_lt (index : Nat) (above : 3 ≤ index) (below : index < 913) :
+    (index - 3) / 10 < digitCount := by
   unfold digitCount
   omega
 
 theorem chunk_lt (index : Nat) (below : index < fieldCellCount) :
-    (index - 1004) / 733 < chunkCount := by
+    (index - 913) / 642 < chunkCount := by
   unfold chunkCount
   rw [fieldCellCount_eq] at below
   omega
 
-theorem slot_lt (index : Nat) : (index - 1004) % 733 < elementCount := by
+theorem slot_lt (index : Nat) : (index - 913) % 642 < elementCount := by
   unfold elementCount
   omega
 
@@ -62,13 +61,13 @@ def cellsOf (source : Stage1Source) (index : Fin fieldCellCount) : BaseField :=
   if small : index.val < 3 then
     (if index.val = 0 then source.curve.1 else if index.val = 1 then source.curve.2.1
       else source.curve.2.2)
-  else if below : index.val < 1004 then
-    rowField (source.rows.get ⟨(index.val - 3) / 11, digit_lt index.val (by omega) below⟩)
-      ((index.val - 3) % 11)
-  else source.joins ⟨(index.val - 1004) / 733, chunk_lt index.val index.isLt⟩
-    ⟨(index.val - 1004) % 733, slot_lt index.val⟩
+  else if below : index.val < 913 then
+    rowField (source.rows.get ⟨(index.val - 3) / 10, digit_lt index.val (by omega) below⟩)
+      ((index.val - 3) % 10)
+  else source.joins ⟨(index.val - 913) / 642, chunk_lt index.val index.isLt⟩
+    ⟨(index.val - 913) % 642, slot_lt index.val⟩
 
-theorem byteDigit_lt (index : Fin exceptionByteCount) : index.val / 6 < digitCount := by
+theorem byteDigit_lt (index : Fin exceptionByteCount) : index.val / 12 < digitCount := by
   have := index.isLt
   unfold exceptionByteCount at this
   unfold digitCount
@@ -76,30 +75,30 @@ theorem byteDigit_lt (index : Fin exceptionByteCount) : index.val / 6 < digitCou
 
 /-- The bytes of a source. -/
 def bytesOf (source : Stage1Source) (index : Fin exceptionByteCount) : Fin (2 ^ 8) :=
-  ((source.exception.get ⟨index.val / 6, byteDigit_lt index⟩).get
-    ⟨index.val % 6, Nat.mod_lt _ (by norm_num)⟩).toFin
+  ((source.exception.get ⟨index.val / 12, byteDigit_lt index⟩).get
+    ⟨index.val % 12, Nat.mod_lt _ (by norm_num)⟩).toFin
 
 theorem hotChunk_lt (index : Nat) (offset : Nat) (above : offset ≤ index)
-    (below : index < offset + 198) : index - offset < foldStepCount := by
+    (below : index < offset + 202) : index - offset < foldStepCount := by
   unfold foldStepCount
   omega
 
-theorem hotIndex_lt (index : Fin hotBlockCount) : index.val < 594 + 198 := by
+theorem hotIndex_lt (index : Fin hotBlockCount) : index.val < 606 + 202 := by
   have := index.isLt
   unfold hotBlockCount at this
   omega
 
 /-- The fold-join blocks of a source. -/
 def hotOf (source : Stage1Source) (index : Fin hotBlockCount) : Fin (2 ^ 128) :=
-  if first : index.val < 198 then
+  if first : index.val < 202 then
     (source.curveXHot.get ⟨index.val - 0, hotChunk_lt index.val 0 (by omega) (by omega)⟩).toFin
-  else if second : index.val < 396 then
-    (source.curveYHot.get ⟨index.val - 198, hotChunk_lt index.val 198 (by omega) (by omega)⟩).toFin
-  else if third : index.val < 594 then
-    (source.pointXHot.get ⟨index.val - 396, hotChunk_lt index.val 396 (by omega) (by omega)⟩).toFin
+  else if second : index.val < 404 then
+    (source.curveYHot.get ⟨index.val - 202, hotChunk_lt index.val 202 (by omega) (by omega)⟩).toFin
+  else if third : index.val < 606 then
+    (source.pointXHot.get ⟨index.val - 404, hotChunk_lt index.val 404 (by omega) (by omega)⟩).toFin
   else
-    (source.pointYHot.get ⟨index.val - 594,
-      hotChunk_lt index.val 594 (by omega) (hotIndex_lt index)⟩).toFin
+    (source.pointYHot.get ⟨index.val - 606,
+      hotChunk_lt index.val 606 (by omega) (hotIndex_lt index)⟩).toFin
 
 /-- A label of a key pair. -/
 def labelOf (key : BitAdaptor.Key) (half : Nat) : Block :=
@@ -128,7 +127,7 @@ theorem total_apply {count : Nat} {α : Type} (zero : α) (family : Fin count �
 
 /-! ### The cells of a source, by position -/
 
-theorem cell_lt (index : Nat) (below : index < 42052) : index < fieldCellCount := by
+theorem cell_lt (index : Nat) (below : index < 34297) : index < fieldCellCount := by
   rw [fieldCellCount_eq]
   exact below
 
@@ -148,25 +147,25 @@ theorem cellsOf_curve2 (source : Stage1Source) :
   simp [cellsOf]
 
 theorem cellsOf_row (source : Stage1Source) (digit : Fin digitCount) (field : Nat)
-    (small : field < 11) :
-    total 0 (cellsOf source) (3 + 11 * digit.val + field) =
+    (small : field < 10) :
+    total 0 (cellsOf source) (3 + 10 * digit.val + field) =
       rowField (source.rows.get digit) field := by
   have digitSmall : digit.val < 91 := digit.isLt
   rw [total_apply _ _ _ (cell_lt _ (by omega))]
   unfold cellsOf
   rw [dif_neg (by simp only; omega), dif_pos (by simp only; omega)]
-  simp only [show (3 + 11 * digit.val + field - 3) / 11 = digit.val by omega,
-    show (3 + 11 * digit.val + field - 3) % 11 = field by omega, Fin.eta]
+  simp only [show (3 + 10 * digit.val + field - 3) / 10 = digit.val by omega,
+    show (3 + 10 * digit.val + field - 3) % 10 = field by omega, Fin.eta]
 
 theorem cellsOf_join (source : Stage1Source) (chunk : Fin chunkCount) (slot : Fin elementCount) :
-    total 0 (cellsOf source) (1004 + 733 * chunk.val + slot.val) = source.joins chunk slot := by
-  have chunkSmall : chunk.val < 56 := chunk.isLt
-  have slotSmall : slot.val < 733 := slot.isLt
+    total 0 (cellsOf source) (913 + 642 * chunk.val + slot.val) = source.joins chunk slot := by
+  have chunkSmall : chunk.val < 52 := chunk.isLt
+  have slotSmall : slot.val < 642 := slot.isLt
   rw [total_apply _ _ _ (cell_lt _ (by omega))]
   unfold cellsOf
   rw [dif_neg (by simp only; omega), dif_neg (by simp only; omega)]
-  have first : (1004 + 733 * chunk.val + slot.val - 1004) / 733 = chunk.val := by omega
-  have second : (1004 + 733 * chunk.val + slot.val - 1004) % 733 = slot.val := by omega
+  have first : (913 + 642 * chunk.val + slot.val - 913) / 642 = chunk.val := by omega
+  have second : (913 + 642 * chunk.val + slot.val - 913) % 642 = slot.val := by omega
   exact congrArg₂ source.joins (Fin.ext first) (Fin.ext second)
 
 /-! ### The bytes, blocks and key of a source, by position -/
@@ -176,20 +175,20 @@ theorem bitVec_ofNat_toNat {width : Nat} (value : BitVec width) :
   apply BitVec.eq_of_toNat_eq
   simp [Nat.mod_eq_of_lt value.isLt]
 
-theorem bytesOf_at (source : Stage1Source) (digit : Fin digitCount) (slot : Fin 6) :
-    total 0 (fun index => (bytesOf source index).val) (6 * digit.val + slot.val) =
+theorem bytesOf_at (source : Stage1Source) (digit : Fin digitCount) (slot : Fin 12) :
+    total 0 (fun index => (bytesOf source index).val) (12 * digit.val + slot.val) =
       ((source.exception.get digit).get slot).toNat := by
   have digitSmall : digit.val < 91 := digit.isLt
-  have slotSmall : slot.val < 6 := slot.isLt
+  have slotSmall : slot.val < 12 := slot.isLt
   rw [total_apply _ _ _ (by unfold exceptionByteCount; omega)]
   unfold bytesOf
-  have first : (6 * digit.val + slot.val) / 6 = digit.val := by omega
-  have second : (6 * digit.val + slot.val) % 6 = slot.val := by omega
+  have first : (12 * digit.val + slot.val) / 12 = digit.val := by omega
+  have second : (12 * digit.val + slot.val) % 12 = slot.val := by omega
   simp only [BitVec.val_toFin]
-  exact congrArg BitVec.toNat (congrArg₂ (fun (d : Fin digitCount) (e : Fin 6) =>
+  exact congrArg BitVec.toNat (congrArg₂ (fun (d : Fin digitCount) (e : Fin 12) =>
     (source.exception.get d).get e) (Fin.ext first) (Fin.ext second))
 
-theorem hot_lt (offset : Nat) (chunk : Fin foldStepCount) (small : offset ≤ 594) :
+theorem hot_lt (offset : Nat) (chunk : Fin foldStepCount) (small : offset ≤ 606) :
     offset + chunk.val < hotBlockCount := by
   have := chunk.isLt
   unfold foldStepCount at this
@@ -198,42 +197,42 @@ theorem hot_lt (offset : Nat) (chunk : Fin foldStepCount) (small : offset ≤ 59
 
 theorem hotOf_curveX (source : Stage1Source) (chunk : Fin foldStepCount) :
     total 0 (fun index => (hotOf source index).val) chunk.val = (source.curveXHot.get chunk).toNat := by
-  have small : chunk.val < 198 := chunk.isLt
+  have small : chunk.val < 202 := chunk.isLt
   rw [total_apply _ _ _ (by simpa using hot_lt 0 chunk (by omega))]
   unfold hotOf
   rw [dif_pos (by simp only; omega)]
   simp only [BitVec.val_toFin, Nat.sub_zero]
 
 theorem hotOf_curveY (source : Stage1Source) (chunk : Fin foldStepCount) :
-    total 0 (fun index => (hotOf source index).val) (198 + chunk.val) =
+    total 0 (fun index => (hotOf source index).val) (202 + chunk.val) =
       (source.curveYHot.get chunk).toNat := by
-  have small : chunk.val < 198 := chunk.isLt
-  rw [total_apply _ _ _ (hot_lt 198 chunk (by omega))]
+  have small : chunk.val < 202 := chunk.isLt
+  rw [total_apply _ _ _ (hot_lt 202 chunk (by omega))]
   unfold hotOf
   rw [dif_neg (by simp only; omega), dif_pos (by simp only; omega)]
-  have index : 198 + chunk.val - 198 = chunk.val := by omega
+  have index : 202 + chunk.val - 202 = chunk.val := by omega
   simp only [BitVec.val_toFin]
   exact congrArg (fun (c : Fin foldStepCount) => (source.curveYHot.get c).toNat) (Fin.ext index)
 
 theorem hotOf_pointX (source : Stage1Source) (chunk : Fin foldStepCount) :
-    total 0 (fun index => (hotOf source index).val) (396 + chunk.val) =
+    total 0 (fun index => (hotOf source index).val) (404 + chunk.val) =
       (source.pointXHot.get chunk).toNat := by
-  have small : chunk.val < 198 := chunk.isLt
-  rw [total_apply _ _ _ (hot_lt 396 chunk (by omega))]
+  have small : chunk.val < 202 := chunk.isLt
+  rw [total_apply _ _ _ (hot_lt 404 chunk (by omega))]
   unfold hotOf
   rw [dif_neg (by simp only; omega), dif_neg (by simp only; omega), dif_pos (by simp only; omega)]
-  have index : 396 + chunk.val - 396 = chunk.val := by omega
+  have index : 404 + chunk.val - 404 = chunk.val := by omega
   simp only [BitVec.val_toFin]
   exact congrArg (fun (c : Fin foldStepCount) => (source.pointXHot.get c).toNat) (Fin.ext index)
 
 theorem hotOf_pointY (source : Stage1Source) (chunk : Fin foldStepCount) :
-    total 0 (fun index => (hotOf source index).val) (594 + chunk.val) =
+    total 0 (fun index => (hotOf source index).val) (606 + chunk.val) =
       (source.pointYHot.get chunk).toNat := by
-  have small : chunk.val < 198 := chunk.isLt
-  rw [total_apply _ _ _ (hot_lt 594 chunk (by omega))]
+  have small : chunk.val < 202 := chunk.isLt
+  rw [total_apply _ _ _ (hot_lt 606 chunk (by omega))]
   unfold hotOf
   rw [dif_neg (by simp only; omega), dif_neg (by simp only; omega), dif_neg (by simp only; omega)]
-  have index : 594 + chunk.val - 594 = chunk.val := by omega
+  have index : 606 + chunk.val - 606 = chunk.val := by omega
   simp only [BitVec.val_toFin]
   exact congrArg (fun (c : Fin foldStepCount) => (source.pointYHot.get c).toNat) (Fin.ext index)
 
@@ -294,8 +293,8 @@ theorem bitAdaptorKey_ext {first second : BitAdaptor.Key}
 
 theorem rowGamma_eq (row : RowGamma) :
     (⟨rowField row 0, rowField row 1, rowField row 2, rowField row 3, rowField row 4,
-      rowField row 5, rowField row 6, rowField row 7, rowField row 8, rowField row 9,
-      rowField row 10⟩ : RowGamma) = row := by
+      rowField row 5, rowField row 6, rowField row 7, rowField row 8, rowField row 9⟩ :
+      RowGamma) = row := by
   cases row
   rfl
 
@@ -312,7 +311,7 @@ theorem sourceOf_drawsOf (source : Stage1Source) : sourceOf (drawsOf source) = s
     simp only [Nat.add_zero] at row0
     rw [row0, row 1 (by omega), row 2 (by omega), row 3 (by omega), row 4 (by omega),
       row 5 (by omega), row 6 (by omega), row 7 (by omega), row 8 (by omega), row 9 (by omega),
-      row 10 (by omega), rowGamma_eq]
+      rowGamma_eq]
     simp only [Vector.get_eq_getElem]
   · apply Vector.ext
     intro digit bound
@@ -365,7 +364,7 @@ theorem sourceOf_drawsOf (source : Stage1Source) : sourceOf (drawsOf source) = s
 
 theorem cellsOf_sourceOf (draws : Draws) (index : Fin fieldCellCount) :
     cellsOf (sourceOf draws) index = draws.1 index := by
-  have indexSmall : index.val < 42052 := lt_of_lt_of_eq index.isLt fieldCellCount_eq
+  have indexSmall : index.val < 34297 := lt_of_lt_of_eq index.isLt fieldCellCount_eq
   unfold cellsOf
   by_cases small : index.val < 3
   · rw [dif_pos small]
@@ -379,22 +378,22 @@ theorem cellsOf_sourceOf (draws : Draws) (index : Fin fieldCellCount) :
       · rw [if_neg zero, if_neg one, total_apply _ _ _ (cell_lt 2 (by omega))]
         exact congrArg draws.1 (Fin.ext (by simp only; omega))
   · rw [dif_neg small]
-    by_cases below : index.val < 1004
+    by_cases below : index.val < 913
     · rw [dif_pos below]
-      have remainder : (index.val - 3) % 11 < 11 := Nat.mod_lt _ (by norm_num)
-      have position : 3 + 11 * ((index.val - 3) / 11) + (index.val - 3) % 11 = index.val := by
+      have remainder : (index.val - 3) % 10 < 10 := Nat.mod_lt _ (by norm_num)
+      have position : 3 + 10 * ((index.val - 3) / 10) + (index.val - 3) % 10 = index.val := by
         omega
-      have read : ∀ field, field < 11 →
-          rowField ((sourceOf draws).rows.get ⟨(index.val - 3) / 11,
+      have read : ∀ field, field < 10 →
+          rowField ((sourceOf draws).rows.get ⟨(index.val - 3) / 10,
             digit_lt index.val (by omega) below⟩) field =
-          total 0 draws.1 (3 + 11 * ((index.val - 3) / 11) + field) := by
+          total 0 draws.1 (3 + 10 * ((index.val - 3) / 10) + field) := by
         intro field fieldSmall
         simp only [sourceOf, sourceOfDraws, Vector.get_ofFn]
         interval_cases field <;> rfl
       rw [read _ remainder, total_apply _ _ _ (cell_lt _ (by omega))]
       exact congrArg draws.1 (Fin.ext position)
     · rw [dif_neg below]
-      have position : 1004 + 733 * ((index.val - 1004) / 733) + (index.val - 1004) % 733 =
+      have position : 913 + 642 * ((index.val - 913) / 642) + (index.val - 913) % 642 =
           index.val := by omega
       simp only [sourceOf, sourceOfDraws]
       rw [total_apply _ _ _ (cell_lt _ (by omega))]
@@ -402,10 +401,10 @@ theorem cellsOf_sourceOf (draws : Draws) (index : Fin fieldCellCount) :
 
 theorem bytesOf_sourceOf (draws : Draws) (index : Fin exceptionByteCount) :
     bytesOf (sourceOf draws) index = draws.2.1 index := by
-  have indexSmall : index.val < 546 := index.isLt
+  have indexSmall : index.val < 1092 := index.isLt
   unfold bytesOf
   simp only [sourceOf, sourceOfDraws, Vector.get_ofFn]
-  have position : 6 * (index.val / 6) + index.val % 6 = index.val := by omega
+  have position : 12 * (index.val / 12) + index.val % 12 = index.val := by omega
   rw [total_apply _ _ _ (by unfold exceptionByteCount; omega)]
   apply Fin.ext
   simp only [BitVec.toFin_ofNat, Fin.val_ofNat]
@@ -419,18 +418,18 @@ theorem blockFin_ofNat (value : Fin (2 ^ 128)) : (BitVec.ofNat 128 value.val).to
 
 theorem hotOf_sourceOf (draws : Draws) (index : Fin hotBlockCount) :
     hotOf (sourceOf draws) index = draws.2.2.1 index := by
-  have indexSmall : index.val < 792 := index.isLt
+  have indexSmall : index.val < 808 := index.isLt
   unfold hotOf
   simp only [sourceOf, sourceOfDraws, Vector.get_ofFn]
-  by_cases first : index.val < 198
+  by_cases first : index.val < 202
   · rw [dif_pos first, total_apply _ _ _ (by unfold hotBlockCount; omega), blockFin_ofNat]
     exact congrArg draws.2.2.1 (Fin.ext (by simp only; omega))
   · rw [dif_neg first]
-    by_cases second : index.val < 396
+    by_cases second : index.val < 404
     · rw [dif_pos second, total_apply _ _ _ (by unfold hotBlockCount; omega), blockFin_ofNat]
       exact congrArg draws.2.2.1 (Fin.ext (by simp only; omega))
     · rw [dif_neg second]
-      by_cases third : index.val < 594
+      by_cases third : index.val < 606
       · rw [dif_pos third, total_apply _ _ _ (by unfold hotBlockCount; omega), blockFin_ofNat]
         exact congrArg draws.2.2.1 (Fin.ext (by simp only; omega))
       · rw [dif_neg third, total_apply _ _ _ (by unfold hotBlockCount; omega), blockFin_ofNat]

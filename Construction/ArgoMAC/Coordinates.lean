@@ -49,15 +49,22 @@ def xCoefficients (offset : BN254.AffineInput) : Coefficients := {
   ySquared := 0
 }
 
-/-- `yCoefficients` is the degree-two form of `jacobianY` on the curve. -/
-def yCoefficients (offset : BN254.AffineInput) : Coefficients := {
-  constant := 9 * offset.y
+/-- `signCoefficients` is the sign row `S₀ = 4 b³ v² + 3 a b (27 - b²) u² + (b⁴ + 54 b² - 243) v - 36 b³`
+of an offset `K = (a, b)`, in the input `(u, v)`. On the curve `S₀ = L² · y_R` with `R = P + K` and
+`L = tangentLine` (`evaluateSign`): the square `L²` cancels the pole of `y_R` at `-K`, and the
+character of `S₀` is the character of `y_R`. Its support is `1, y, x², y²`. -/
+def signCoefficients (offset : BN254.AffineInput) : Coefficients := {
+  constant := -36 * offset.y ^ 3
   x := 0
-  y := -offset.x ^ 3 - 12
-  xy := -3 * offset.x ^ 2
-  xSquared := 3 * offset.x * offset.y
-  ySquared := offset.y
+  y := offset.y ^ 4 + 54 * offset.y ^ 2 - 243
+  xy := 0
+  xSquared := 3 * offset.x * offset.y * (27 - offset.y ^ 2)
+  ySquared := 4 * offset.y ^ 3
 }
+
+/-- `tangentLine` is `2 b v + 3 a² u + 9 - b²`, the tangent at `-K` scaled by `2 b`. -/
+def tangentLine (offset input : BN254.AffineInput) : BN254.BaseField :=
+  2 * offset.y * input.y + 3 * offset.x ^ 2 * input.x + 9 - offset.y ^ 2
 
 /-- `zCoefficients` is `jacobianZ`. -/
 def zCoefficients (offset : BN254.AffineInput) : Coefficients := {
@@ -77,14 +84,45 @@ theorem evaluateX (offset input : BN254.AffineInput)
   unfold BN254.OnCurve at offsetOnCurve inputOnCurve
   linear_combination (-1) * inputOnCurve + (-1) * offsetOnCurve
 
-/-- On the curve the Y row equals the Jacobian Y formula. -/
-theorem evaluateY (offset input : BN254.AffineInput)
+/-- On the curve the sign row times `Z³` is `L²` times the Jacobian Y formula: `S₀ = L² y_R`. -/
+theorem evaluateSign (offset input : BN254.AffineInput)
     (offsetOnCurve : BN254.OnCurve offset) (inputOnCurve : BN254.OnCurve input) :
-    evaluate (yCoefficients offset) input = jacobianY offset input := by
-  simp only [evaluate, yCoefficients, jacobianY, jacobianX]
+    evaluate (signCoefficients offset) input * jacobianZ offset input ^ 3 =
+      tangentLine offset input ^ 2 * jacobianY offset input := by
+  simp only [evaluate, signCoefficients, jacobianZ, jacobianY, jacobianX, tangentLine]
   unfold BN254.OnCurve at offsetOnCurve inputOnCurve
-  linear_combination (input.y - 2 * offset.y) * inputOnCurve +
-    (3 * input.y - offset.y) * offsetOnCurve
+  linear_combination (-24 * offset.x ^ 5 * offset.y * input.x + 9 * offset.x ^ 4 * offset.y *
+      input.x ^ 2 + 9 * offset.x ^ 4 * input.x ^ 2 * input.y + 8 * offset.x ^ 3 * offset.y ^ 3 -
+      8 * offset.x ^ 3 * offset.y ^ 2 * input.y - 72 * offset.x ^ 3 * offset.y + 54 * offset.x ^
+      2 * offset.y ^ 3 * input.x - 30 * offset.x ^ 2 * offset.y ^ 2 * input.x * input.y + 12 *
+      offset.x ^ 2 * offset.y * input.x * input.y ^ 2 - 18 * offset.x ^ 2 * offset.y * input.x +
+      54 * offset.x ^ 2 * input.x * input.y - 24 * offset.x * offset.y ^ 3 * input.x ^ 2 - 19 *
+      offset.y ^ 5 + 25 * offset.y ^ 4 * input.y - 16 * offset.y ^ 3 * input.y ^ 2 + 114 *
+      offset.y ^ 3 + 4 * offset.y ^ 2 * input.y ^ 3 - 114 * offset.y ^ 2 * input.y + 36 *
+      offset.y * input.y ^ 2 - 135 * offset.y + 81 * input.y) * inputOnCurve +
+    (-9 * offset.x ^ 4 * offset.y * input.x ^ 2 + 18 * offset.x ^ 4 * input.x ^ 2 * input.y - 27
+        * offset.x ^ 3 * input.x ^ 3 * input.y + 6 * offset.x ^ 2 * offset.y ^ 3 * input.x - 24 *
+        offset.x ^ 2 * offset.y ^ 2 * input.x * input.y + 51 * offset.x ^ 2 * offset.y * input.x
+        ^ 4 + 18 * offset.x ^ 2 * offset.y * input.x + 108 * offset.x ^ 2 * input.x * input.y - 3
+        * offset.x * offset.y ^ 3 * input.x ^ 2 + 9 * offset.x * offset.y ^ 2 * input.x ^ 2 *
+        input.y - 27 * offset.x * offset.y * input.x ^ 5 + 81 * offset.x * offset.y * input.x ^ 2
+        - 243 * offset.x * input.x ^ 2 * input.y - 1 * offset.y ^ 5 + 7 * offset.y ^ 4 * input.y
+        - 17 * offset.y ^ 3 * input.x ^ 3 - 42 * offset.y ^ 3 + 17 * offset.y ^ 2 * input.x ^ 3 *
+        input.y + 6 * offset.y ^ 2 * input.y - 9 * offset.y * input.x ^ 3 + 135 * offset.y + 81 *
+        input.x ^ 3 * input.y - 81 * input.y) * offsetOnCurve
+
+/-- The tangent at `-K` meets the curve again only at `2K`:
+`L · (2 b v - 3 a² u - 9 + b²) = (u - a)² (4 b² u - 9 a⁴ + 8 a b²)` on the curve. -/
+theorem tangentFactor (offset input : BN254.AffineInput)
+    (offsetOnCurve : BN254.OnCurve offset) (inputOnCurve : BN254.OnCurve input) :
+    tangentLine offset input *
+        (2 * offset.y * input.y - 3 * offset.x ^ 2 * input.x - 9 + offset.y ^ 2) =
+      (input.x - offset.x) ^ 2 *
+        (4 * offset.y ^ 2 * input.x - 9 * offset.x ^ 4 + 8 * offset.x * offset.y ^ 2) := by
+  simp only [tangentLine]
+  unfold BN254.OnCurve at offsetOnCurve inputOnCurve
+  linear_combination (4 * offset.y ^ 2) * inputOnCurve +
+    (-9 * offset.x ^ 3 + 18 * offset.x ^ 2 * input.x - offset.y ^ 2 + 27) * offsetOnCurve
 
 /-- The Z row equals the Jacobian Z formula everywhere. -/
 theorem evaluateZ (offset input : BN254.AffineInput) :
@@ -102,17 +140,6 @@ theorem exceptionalX (offset input : BN254.AffineInput)
   unfold BN254.OnCurve at offsetOnCurve
   linear_combination (-2) * offsetOnCurve
 
-/-- At `x = kx` the Y row is `4 (ky - y) ky^2`. -/
-theorem exceptionalY (offset input : BN254.AffineInput)
-    (offsetOnCurve : BN254.OnCurve offset) (inputOnCurve : BN254.OnCurve input)
-    (sameX : input.x = offset.x) :
-    evaluate (yCoefficients offset) input = 4 * (offset.y - input.y) * offset.y ^ 2 := by
-  simp only [evaluate, yCoefficients]
-  rw [sameX]
-  unfold BN254.OnCurve at offsetOnCurve inputOnCurve
-  rw [sameX] at inputOnCurve
-  linear_combination offset.y * inputOnCurve +
-    (4 * input.y - 4 * offset.y) * offsetOnCurve
 
 /-- At `x = kx` the Z row vanishes. -/
 theorem exceptionalZ (offset input : BN254.AffineInput) (sameX : input.x = offset.x) :
@@ -159,29 +186,31 @@ theorem evaluateScaleNone (randomizer : BN254.BaseField) (weight : Nat)
       fallback * randomizer ^ weight := by
   simp [scale, evaluate]
 
-/-- `Rows` contains the three Jacobian rows for one output MAC. -/
+/-- `Rows` contains the three rows for one output MAC: the Jacobian `X` and `Z` rows, and the
+sign row in the `y` slot. -/
 structure Rows where
   x : Coefficients
   y : Coefficients
   z : Coefficients
 
-/-- `rows` applies the digit endomorphism and the Jacobian weights of one randomizer. -/
+/-- `rows` applies the digit endomorphism, the Jacobian weights of `randomizer` to the `X` and `Z`
+rows, and the square of the independent `signRandomizer` to the sign row. -/
 def rows (offset : BN254.AffineInput) (endomorphismBase : Option BN254.BaseField)
-    (randomizer : BN254.BaseField) : Rows := {
+    (randomizer signRandomizer : BN254.BaseField) : Rows := {
   x := scale endomorphismBase randomizer 2 offset.x (xCoefficients offset)
-  y := scale endomorphismBase randomizer 3 offset.y (yCoefficients offset)
+  y := scale endomorphismBase signRandomizer 2 offset.y (signCoefficients offset)
   z := scale endomorphismBase randomizer 1 1 (zCoefficients offset)
 }
 
 theorem evaluateRowsSome (offset input : BN254.AffineInput)
-    (phi randomizer : BN254.BaseField) :
+    (phi randomizer signRandomizer : BN254.BaseField) :
     let transformed : BN254.AffineInput :=
       { x := phi ^ 4 * input.x, y := phi ^ 3 * input.y }
-    evaluate (rows offset (some phi) randomizer).x input =
+    evaluate (rows offset (some phi) randomizer signRandomizer).x input =
         randomizer ^ 2 * evaluate (xCoefficients offset) transformed ∧
-      evaluate (rows offset (some phi) randomizer).y input =
-        randomizer ^ 3 * evaluate (yCoefficients offset) transformed ∧
-      evaluate (rows offset (some phi) randomizer).z input =
+      evaluate (rows offset (some phi) randomizer signRandomizer).y input =
+        signRandomizer ^ 2 * evaluate (signCoefficients offset) transformed ∧
+      evaluate (rows offset (some phi) randomizer signRandomizer).z input =
         randomizer * evaluate (zCoefficients offset) transformed := by
   simp [rows, evaluateScaleSome]
 

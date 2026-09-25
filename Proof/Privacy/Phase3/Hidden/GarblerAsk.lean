@@ -5,7 +5,7 @@
 bridge input or a switch-mask limb), an EncPRF forward query, or a fixed-key forward query at
 
 * a fold gate of a paid step `1 ≤ n < b_c` of its chunk, at a parent `r < 2 ^ n` (step `0` is
-  free; chunk `0` has one paid step, every other chunk three),
+  free; chunk `0` has one paid step, a 5-bit chunk four and a 4-bit chunk three),
 * a gadget position of a digit with an exceptional input (`digitEndomorphismBase ≠ none`).
 
 `garblerTranscript_ask`: every garbler transcript entry has this shape.
@@ -34,7 +34,7 @@ def GarblerAsk (scalar : NonZeroScalar) (coins : Coins) :
     PublicQuery FixedIndex EncPRF.PermutationIndex → Prop
   | .fixedForward (.hot _ chunk fold entry _) _ =>
       1 ≤ fold.val ∧ fold.val < chunkWidth chunk ∧ entry.val < 2 ^ fold.val
-  | .fixedForward (.gadget o _ _) _ =>
+  | .fixedForward (.gadget o _ _ _) _ =>
       (digitEndomorphismBase (digitKey scalar coins.offsets o).digit).isSome = true
   | .encForward _ _ => True
   | .hash _ => True
@@ -97,11 +97,12 @@ theorem gadgetM_ask (scalar : NonZeroScalar) (coins : Coins) (inputKey : InputMa
         coins.offsets).get output).digit).isSome = true
       rw [found]
       rfl
-    have digest : ∀ coordinate mac, QueryOnly (GarblerAsk scalar coins)
-        (Programs.gadgetDigestM output coordinate mac) := fun coordinate mac =>
-      QueryOnly.bind (QueryOnly.vector _ fun index => hashM_ask _ _ digit) fun _ => QueryOnly.pure' _
-    exact QueryOnly.bind (QueryOnly.bind (digest _ _) fun _ => QueryOnly.bind (digest _ _) fun _ =>
-      QueryOnly.pure' _) fun _ => QueryOnly.pure' _
+    have pairs : ∀ coordinate key, QueryOnly (GarblerAsk scalar coins)
+        (Programs.gadgetPairsM output coordinate key) := fun coordinate key =>
+      QueryOnly.vector _ fun index => QueryOnly.bind (hashM_ask _ _ digit) fun _ =>
+        QueryOnly.bind (hashM_ask _ _ digit) fun _ => QueryOnly.pure' _
+    exact QueryOnly.bind (pairs _ _) fun _ => QueryOnly.bind (pairs _ _) fun _ =>
+      QueryOnly.pure' _
 
 /-- **The garbler asks only questions of the garbler's shape.** -/
 theorem garbleM_ask (scalar : NonZeroScalar) (coins : Coins) :

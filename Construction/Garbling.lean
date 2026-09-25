@@ -87,30 +87,52 @@ def encode (key : EncodingKey) (input : BitInput) : Labels := {
   inputMac := key.randomness.inputMacKey.encode input
 }
 
-/-- A homogeneous row decodes through its Jacobian coordinates, or through the gadget. -/
+/-- `fieldPower value exponent` is `value ^ exponent` by the challenge library's square-and-multiply
+`modularPower`, for exponents below `2 ^ 254`. -/
+def fieldPower (value : BaseField) (exponent : Nat) : BaseField :=
+  (modularPower baseFieldModulus 254 value.val exponent 1 : Nat)
+
+/-- The exponent of the quadratic character, `(p - 1) / 2`. -/
+def characterExponent : Nat := (baseFieldModulus - 1) / 2
+
+/-- The exponent of the square root of a square, `(p + 1) / 4`: `p ≡ 3 (mod 4)`. -/
+def rootExponent : Nat := (baseFieldModulus + 1) / 4
+
+/-- The group scalar `3 / 2`, as `3 * (r + 1) / 2`. -/
+def threeHalves : ScalarField := 3 * ((scalarFieldModulus + 1) / 2 : Nat)
+
+/-- A homogeneous row decodes through its `X` and `Z` rows and the sign row, or through the
+gadget. `x = X / Z²`; `y` is the square root of `x³ + 3` whose character is the sign row's
+(`S = τ² L² y`). The gadget covers the two inputs where this fails: `Z = 0 = X` (`Q = K`, the
+result is `2 Q`) and `S = 0 ≠ Z` (`Q = 2K`, the result is `(3/2) Q`); `Z = 0 ≠ X` is `Q = -K`. -/
 def decodeHomogeneous [FieldCertificate] [GroupCertificate]
-    (value : FieldMacToECMac.HomogeneousValue) (exceptionDigit : Digit)
+    (value : FieldMacToECMac.HomogeneousValue) (exceptionDigit tripleDigit : Digit)
     (inputPoint : Point) : Option Point :=
   if value.z = 0 then
-    if value.x = 0 ∧ value.y = 0 then
+    if value.x = 0 then
       some ((2 : ScalarField) • digitEndomorphism exceptionDigit inputPoint)
     else some 0
-  else decodePoint { x := value.x / value.z ^ 2, y := value.y / value.z ^ 3 }
+  else if value.y = 0 then
+    some (threeHalves • digitEndomorphism tripleDigit inputPoint)
+  else
+    let x := value.x / value.z ^ 2
+    let y := fieldPower value.y characterExponent * fieldPower (x ^ 3 + 3) rootExponent
+    decodePoint { x := x, y := y }
 
 def decodePointMacs [FieldCertificate] [GroupCertificate]
     (values : Vector FieldMacToECMac.HomogeneousValue FieldMacToECMac.outputMacCount)
-    (digits : Vector Digit FieldMacToECMac.outputMacCount) (inputPoint : Point) :
+    (digits tripleDigits : Vector Digit FieldMacToECMac.outputMacCount) (inputPoint : Point) :
     Option (List Point) :=
-  (List.zip values.toList digits.toList).mapM fun pair =>
-    decodeHomogeneous pair.1 pair.2 inputPoint
+  (List.zip values.toList (List.zip digits.toList tripleDigits.toList)).mapM fun pair =>
+    decodeHomogeneous pair.1 pair.2.1 pair.2.2 inputPoint
 
 def decodeResult [FieldCertificate] [GroupCertificate]
     (result : FieldMacToECMac.Result) : Option Point :=
   match decodePoint result.point with
   | none => none
   | some inputPoint =>
-      (decodePointMacs result.pointMacs result.exceptionDigits inputPoint).map
-        (pointHorner radix)
+      (decodePointMacs result.pointMacs result.exceptionDigits result.tripleDigits
+        inputPoint).map (pointHorner radix)
 
 def evaluate [FieldCertificate] [GroupCertificate] (oracle : EvaluationOracle)
     (table : PublicCircuit) (labels : Labels) : Option Point :=

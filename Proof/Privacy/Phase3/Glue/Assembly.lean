@@ -10,15 +10,15 @@ R = lazyRealGame … A                                   (the scored real game)
   = G0 = tapeRealGame A                                (step 2, `planB_lazy_real`, exact)
   →[H_swap.real,       ε_swap           ] G0U          (P1 MaskSwap: every mask vector uniform)
   →[H_joint.hidden,    L1(q₁+q₂)        ] G1U          (identical until a hidden entry is hit)
-  →[H_joint.publicFirst, L2 + ε_exc + ε_swap + ε_coin] HW (until a stage-1 hit or doubling; F4)
+  →[H_joint.publicFirst, L2 + ε_exc + ε_swap + ε_coin] HW (until a stage-1 hit or an exceptional input; F4)
   →[H_open.kernel,     ε_pt             ] H            (P1 Opening: the lift sampler)
-  →[H_abort.abort,     ε_abort(q₁)      ] I^U          (the 452 programs' abort mass, per query)
+  →[H_abort.abort,     ε_abort(q₁)      ] I^U          (the 362 programs' abort mass, per query)
   →[H_swap.ideal,      ε_swap + 0       ] I            (lazy refill, per derived mask vector)
   →[H_machine.law,     ε_cut            ] M            (P2: the closed machine)
 ```
 
-Here `ε_swap = maskSwapError = 1396 · Σ_lane laneDelta lane` (one copy of the vector sampler's
-bias over the `5,584` switch-mask vectors), `ε_coin = coincidenceError = 2^16/2^128` (the
+Here `ε_swap = maskSwapError = 1588 · Σ_lane laneDelta lane` (one copy of the vector sampler's
+bias over the `6,352` switch-mask vectors), `ε_coin = coincidenceError = 2^16/2^128` (the
 label-coincidence allowance of the designed sub-hop `G1U → G1U°`, charged once, in `G1U → HW`),
 and the refill charge `idealRefillError` is `0`.
 
@@ -248,7 +248,7 @@ structure OpeningBound (hybrids : Hybrids) : Prop where
   /-- `HW → H`: `ε_pt = 364/(r−1)`. -/
   kernel : HopBound hybrids.publicFirst hybrids.opened fun _ _ => outputKernelError
 
-/-- **`H_abort`**: the lazy-abort mass of the 452 designated hash programs, **charged per stage-1
+/-- **`H_abort`**: the lazy-abort mass of the 362 designated hash programs, **charged per stage-1
 query and per abort site.** The sites are a finite family; `count site ≥ 0` is the expected number
 of the adversary's stage-1 entries at the site, so `Σ count ≤ q₁`. Each such entry costs
 `abortQueryCharge q₁ = 1/(2^128 − q₁)`: a hash program needs only a fresh *input*, and a stage-1
@@ -259,7 +259,7 @@ part.
 The site type is existential so that `AbortBound` does not depend on the lazy-oracle development
 (which itself imports this module). P4's instance is `Lazy.AbortSite` (A1 §3):
 
-* the chunk-0 hash cells of lane `pointX`, `4·452` of them: the stage-1 hash entries that decode
+* the chunk-0 hash cells of lane `pointX`, `4·362` of them: the stage-1 hash entries that decode
   to `(pointX, chunk 0, switch < 4, limb)`, the candidate designated inputs (`CandidateSite`,
   pairwise distinct over (site, label) by `candidateIndex_injective`);
 * the chunk-0 hash cells of lane `curveX`, `4·4 = 16` of them: a stage-1 hit there makes system A
@@ -368,7 +368,7 @@ theorem planB_oracleAdaptivePrivacy (simulator : BoundedMachine.Simulator) (hybr
       letI := @Fintype.ofFinite EncPRF.PermutationIndex inferInstance
       letI := Classical.decEq PlanB.FixedIndex
       letI := Classical.decEq EncPRF.PermutationIndex
-      GarbledCircuit.OracleAdaptivePrivacy (@Scheme.scheme field group) PlanB.Wire.encoding 1348634
+      GarbledCircuit.OracleAdaptivePrivacy (@Scheme.scheme field group) PlanB.Wire.encoding 1103204
         (@uniformRandomTape Scheme.Coins (@Fintype.ofFinite Scheme.Coins inferInstance)
           Scheme.witness)
         (fun parameter scalar coins =>

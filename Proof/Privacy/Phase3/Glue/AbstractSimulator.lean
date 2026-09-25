@@ -6,7 +6,7 @@ kernels over the shared lazy oracle).
 
 **Stage 1** makes no oracle call. It draws a `Stage1Source` -- every published field in source
 form (the curve triple, the 91 row-constant records, the gadget bytes, the four fold-join vectors,
-and the `56 × 733` scale joins as *canonical* field elements) together with the Lamport key
+and the `52 × 642` scale joins as *canonical* field elements) together with the Lamport key
 (508 label pairs) -- and publishes `publicValue` of it: the scale joins packed by the construction's
 own `pack`, never a uniform `BitVec` word (design note B, F7). With every switch mask vector swapped
 to uniform before the game starts (P1's `G0 → G0U`), this is the construction's published law.
@@ -16,8 +16,8 @@ to uniform before the game starts (P1's `G0 → G0U`), this is the construction'
 * `none` (invalid input): return the selected labels, no oracle call (§1.7);
 * `some Q`: return the selected labels after the **opening** (A1 §4):
   1. run the honest evaluator's system A, the bridge hash (at `bridgeInput t`), the 508 whitening
-     pads and system B on the lazy oracle (`openingQueriesM`), *skipping* the **452 designated
-     hash queries** `hash (scaleInput pointX 0 j* i E*)`, `i < 452`, `j* = α₀ xor 1`
+     pads and system B on the lazy oracle (`openingQueriesM`), *skipping* the **362 designated
+     hash queries** `hash (scaleInput pointX 0 j* i E*)`, `i < 362`, `j* = α₀ xor 1`
      (`designatedInput`): each is answered virtually by `(0, 0)` and its label `E*` is recorded
      (`runIntercept`, `DesignatedRecord`). The designated vector `Y*` of `(pointX, chunk 0, j*)`
      is therefore `sampleLane` of zeros, i.e. `0`, during the replay: the replay's `pointX`
@@ -26,18 +26,19 @@ to uniform before the game starts (P1's `G0 → G0U`), this is the construction'
   2. draw the 90 tail digit points exactly as the construction's garbler draws its mask points --
      the `free` offsets of a uniform coin (`coinOffsetsLaw`), so no group-order fact is needed --
      then the head clamp `D_0 = Q − β • H(tail)` (group law only; it is `Q + clampedFirst tail`),
-     and the 91 lift randomisers `λ_d`; the target rows are `W_d = lift(D_d, λ_d)`
-     (`targetRows`);
-  3. draw the designated vector's **182 free coordinates** (the non-collectors `rowX_x7`,
-     `rowY_mixed` of each digit, `FreeSite`) uniformly, install them in the replay's values
+     and the 91 lift randomiser pairs `(λ_d, t_d)`; the target rows are
+     `W_d = lift(D_d, λ_d, t_d) = (λ_d² x, t_d² y, λ_d)` (`targetRows`);
+  3. draw the designated vector's **91 free coordinates** (the non-collector `rowX_x7` of each
+     digit, `FreeSite`) uniformly, install them in the replay's values
      (`freeFill`), and **solve the 273 collectors** `rowX_x9, rowY_cubic, rowZ_x9` against the
      evaluator's rows on those values (`freeRows`): `Y*[c] = κ · (W_d.c − R_d.c) · s_c`, where
      `s_c` inverts the collector's coefficient in its own row: `1` for `X` and `Z`, `(x · x)⁻¹`
-     for `Y`, whose collector `rowY_cubic` rides on `x²` (`collectorScale`, `collectorTargets`);
+     for the sign row, whose collector `rowY_cubic` rides on `x²` (`collectorScale`,
+     `collectorTargets`);
      `Y*` is `solvedVector`;
-  4. draw the designated switch's **452 hash answers** uniformly on the `sampleLane` fibre over
-     `Y*` (`idealPreimage`; the machine draws `V = enc(Y*) + p^455·t`, `t` uniform on the fibre);
-  5. **program** `hash (designatedInput j* i E*) := answer i` for `i < 452`, in order
+  4. draw the designated switch's **362 hash answers** uniformly on the `sampleLane` fibre over
+     `Y*` (`idealPreimage`; the machine draws `V = enc(Y*) + p^364·t`, `t` uniform on the fibre);
+  5. **program** `hash (designatedInput j* i E*) := answer i` for `i < 362`, in order
      (`programRequests`, `programAll`, `LazyOracle.program (.hash _)`). Programming the hash
      oracle needs only a fresh *input*; a used input, or a limb the replay never asked, aborts.
 
@@ -46,7 +47,7 @@ The samplers are a parameter (`Samplers`), exactly as the baseline's abstract id
 exact uniform laws; a machine realises bounded ones (rejection with a cutoff, `none` on failure).
 
 **The designated sites.** The input selects `j*` among the four switches of chunk 0, so a stage-1
-hash query can hit the designated inputs only at one of the `4 · 452` **candidate sites**
+hash query can hit the designated inputs only at one of the `4 · 362` **candidate sites**
 (`CandidateSite`: limb × chunk-0 switch) at the label `E*`; the candidate inputs
 `candidateIndex site label` are pairwise distinct over (site, label) (`candidateIndex_injective`,
 from `PlanB.scaleInput_injective`), so each stage-1 query is charged to one candidate site only.
@@ -72,7 +73,7 @@ noncomputable section
 structure Stage1Source where
   /-- The curve-membership constants. -/
   curve : BaseField × BaseField × BaseField
-  /-- The eleven row constants of each digit. -/
+  /-- The ten row constants of each digit. -/
   rows : Vector RowGamma digitCount
   /-- The gadget bytes. -/
   exception : Vector Exception.Entry digitCount
@@ -113,7 +114,7 @@ local instance vectorFinite {α : Type} [Finite α] {count : Nat} : Finite (Vect
 
 instance rowGammaFinite : Finite RowGamma :=
   Finite.of_injective (fun row : RowGamma => (row.xC0, row.xC1, row.xC2, row.xC4, row.yC0,
-      row.yC2, row.yC3, row.yC4, row.yC5, row.zC0, row.zC1)) (by
+      row.yC2, row.yC4, row.yC5, row.zC0, row.zC1)) (by
     intro first second equal
     cases first
     cases second
@@ -157,7 +158,7 @@ noncomputable instance nonZeroBaseFintype : Fintype NonZeroBase := Fintype.ofFin
 
 instance stage1SourceNonempty : Nonempty Stage1Source :=
   ⟨{ curve := (0, 0, 0)
-     rows := Vector.replicate _ ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0⟩
+     rows := Vector.replicate _ ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0⟩
      exception := Vector.replicate _ (Vector.replicate _ 0)
      curveXHot := Vector.replicate _ 0
      curveYHot := Vector.replicate _ 0
@@ -178,29 +179,30 @@ instance nonZeroBaseNonempty : Nonempty NonZeroBase := ⟨⟨1, one_ne_zero⟩�
 
 /-! ### The designated vector's coordinates
 
-The designated vector `Y*` is one `pointX` switch-mask vector, `455 = 91 · 5` coordinates. Per
+The designated vector `Y*` is one `pointX` switch-mask vector, `364 = 91 · 4` coordinates. Per
 digit, the three **collectors** `rowX_x9, rowY_cubic, rowZ_x9` (coefficients `1`, `x²`, `1` in
-their own rows) are solved from the target rows; the two **free** coordinates
-`rowX_x7, rowY_mixed` are drawn. -/
+their own rows) are solved from the target rows; the one **free** coordinate `rowX_x7` is
+drawn. -/
 
 /-- The three collectors of a digit, one per row: `rowX_x9`, `rowY_cubic`, `rowZ_x9`. -/
 def collectorElement : Fin 3 → XElement := ![.rowX_x9, .rowY_cubic, .rowZ_x9]
 
-/-- The two free (non-collector) elements of a digit: `rowX_x7`, `rowY_mixed`. -/
-def freeElement : Fin 2 → XElement := ![.rowX_x7, .rowY_mixed]
+/-- The free (non-collector) element of a digit: `rowX_x7`. -/
+def freeElement : Fin 1 → XElement := ![.rowX_x7]
 
 /-- The three collectors are distinct elements. -/
 theorem collectorElement_injective : Function.Injective collectorElement := by decide
 
-/-- The two free elements are distinct elements. -/
-theorem freeElement_injective : Function.Injective freeElement := by decide
+/-- The free element map is injective (it has one point). -/
+theorem freeElement_injective : Function.Injective freeElement :=
+  fun first second _ => Subsingleton.elim first second
 
-/-- A free coordinate of the designated vector: a digit and one of its two free elements. -/
-abbrev FreeSite := Fin digitCount × Fin 2
+/-- A free coordinate of the designated vector: a digit and its free element. -/
+abbrev FreeSite := Fin digitCount × Fin 1
 
 /-- The x-type element in each slot of a digit (the inverse of `XElement.slot`). -/
 def slotElement : Fin xSlotsPerDigit → XElement :=
-  ![.rowX_x7, .rowX_x9, .rowY_mixed, .rowY_cubic, .rowZ_x9]
+  ![.rowX_x7, .rowX_x9, .rowY_cubic, .rowZ_x9]
 
 theorem slotElement_slot (element : XElement) : slotElement element.slot = element := by
   cases element <;> rfl
@@ -255,7 +257,6 @@ def designatedVector (free : FreeSite → BaseField)
   match elementKind element with
   | .rowX_x7 => free (elementDigit element, 0)
   | .rowX_x9 => collectors (elementDigit element, 0)
-  | .rowY_mixed => free (elementDigit element, 1)
   | .rowY_cubic => collectors (elementDigit element, 1)
   | .rowZ_x9 => collectors (elementDigit element, 2)
 
@@ -271,7 +272,7 @@ theorem designatedVector_collector (free : FreeSite → BaseField)
 
 /-- The designated vector at a free element is the free coordinate. -/
 theorem designatedVector_free (free : FreeSite → BaseField)
-    (collectors : Fin digitCount × Fin 3 → BaseField) (digit : Fin digitCount) (slot : Fin 2) :
+    (collectors : Fin digitCount × Fin 3 → BaseField) (digit : Fin digitCount) (slot : Fin 1) :
     designatedVector free collectors (xElementIndex digit (freeElement slot)) =
       free (digit, slot) := by
   unfold designatedVector
@@ -280,19 +281,19 @@ theorem designatedVector_free (free : FreeSite → BaseField)
 
 /-! ### The samplers -/
 
-/-- The designated switch's `452` hash answers, one per limb. -/
+/-- The designated switch's `362` hash answers, one per limb. -/
 abbrev DesignatedLimbs := Fin (limbCount .pointX) → Block × Block
 
-/-- `452` limbs carry the `455` digits of the designated vector (`p^455 ≤ 2^(254·455)`). -/
+/-- `362` limbs carry the `364` digits of the designated vector (`p^364 ≤ 2^(254·364)`). -/
 theorem designated_fits : 254 * pointElementCountX ≤ 256 * limbCount .pointX := by decide
 
-/-- Every designated vector has a preimage among the `452` hash answers. -/
+/-- Every designated vector has a preimage among the `362` hash answers. -/
 theorem sampleLane_designated_surjective :
     Function.Surjective (sampleLane pointElementCountX (limbCount .pointX)) :=
   sampleLane_surjective_of_le _ _ designated_fits
 
-/-- **A uniform preimage of the designated vector**: the `452` hash answers drawn uniformly on the
-`sampleLane` fibre over the vector. It is the conditional law of `452` fresh uniform answers given
+/-- **A uniform preimage of the designated vector**: the `362` hash answers drawn uniformly on the
+`sampleLane` fibre over the vector. It is the conditional law of `362` fresh uniform answers given
 their vector (`Security.Phase3.uniform_eq_bind_fibreLaw`). It is, by `rfl`, the mask swap's
 per-site fibre law `siteFibreLaw .pointX`, the law of the designated site's limbs given its vector
 in the swapped tape (`MaskSwap.fibreLaw_masksOf_eq`: given all the vectors, the sites' limbs are
@@ -307,11 +308,12 @@ structure Samplers where
   source : PMF (Option Stage1Source)
   /-- The 90 tail digit points, as the construction's free offsets. -/
   tail : PMF (Option (Vector FieldMacToECMac.AffineOffset 90))
-  /-- The 91 lift randomisers `λ_d ∈ F_p^*`. -/
-  lift : PMF (Option (Fin digitCount → NonZeroBase))
-  /-- The designated vector's 182 free coordinates. -/
+  /-- The 91 lift randomiser pairs `(λ_d, t_d) ∈ (F_p^*)²`: `λ_d` scales the `X` and `Z` rows,
+  `t_d` the sign row. -/
+  lift : PMF (Option (Fin digitCount → NonZeroBase × NonZeroBase))
+  /-- The designated vector's 91 free coordinates. -/
   free : PMF (Option (FreeSite → BaseField))
-  /-- The designated switch's 452 hash answers, given the designated vector. -/
+  /-- The designated switch's 362 hash answers, given the designated vector. -/
   preimage : (Fin pointElementCountX → BaseField) → PMF (Option DesignatedLimbs)
 
 /-- **The construction's law of its mask points**: the offsets of a uniform coin. The garbler reads
@@ -325,7 +327,7 @@ uniform fibre preimage, and the tail points drawn by the construction's own offs
 def idealSamplers : Samplers where
   source := (PMF.uniformOfFintype Stage1Source).map some
   tail := coinOffsetsLaw.map fun offsets => some offsets.free
-  lift := (PMF.uniformOfFintype (Fin digitCount → NonZeroBase)).map some
+  lift := (PMF.uniformOfFintype (Fin digitCount → NonZeroBase × NonZeroBase)).map some
   free := (PMF.uniformOfFintype (FreeSite → BaseField)).map some
   preimage vector := (idealPreimage vector).map some
 
@@ -546,12 +548,13 @@ def openingQueriesM [FieldCertificate] (table : Public) (bits : BitInput) (mac :
 offsets, so no generator (and no `#Point = r` fact) is needed. -/
 def generator [FieldCertificate] : Point := (decodePoint ⟨1, 2⟩).getD 0
 
-/-- The Jacobian lift `(λ²X, λ³Y, λ)`, and `(λ², λ³, 0)` at the identity. -/
-def liftRow [FieldCertificate] (point : Point) (scale : BaseField) :
+/-- The sign-row lift `(λ²X, t²Y, λ)`, and `(λ², 0, 0)` at the identity (the sign row vanishes
+at `T = -K`, where the tangent at `-K` passes). -/
+def liftRow [FieldCertificate] (point : Point) (scale signScale : BaseField) :
     FieldMacToECMac.HomogeneousValue :=
   match point with
-  | .zero => ⟨scale ^ 2, scale ^ 3, 0⟩
-  | .some (x := x) (y := y) _ => ⟨scale ^ 2 * x, scale ^ 3 * y, scale⟩
+  | .zero => ⟨scale ^ 2, 0, 0⟩
+  | .some (x := x) (y := y) _ => ⟨scale ^ 2 * x, signScale ^ 2 * y, scale⟩
 
 /-- The 91 digit points: the 90 tail points are the given offsets' points, and the head is the
 clamp `Q − β • H(tail)`, stated with the group law only, so that `pointHorner β (D_0 :: tail) = Q`
@@ -571,11 +574,12 @@ theorem digitPoints_head [FieldCertificate] [GroupCertificate] (target : Point)
       target + FieldMacToECMac.clampedFirst tail := by
   simp only [digitPoints, dif_pos, FieldMacToECMac.clampedFirst, sub_eq_add_neg]
 
-/-- The target rows `W_d = lift(D_d, λ_d)`. -/
+/-- The target rows `W_d = lift(D_d, λ_d, t_d)`. -/
 def targetRows [FieldCertificate] [GroupCertificate] (target : Point)
-    (tail : Vector FieldMacToECMac.AffineOffset 90) (lift : Fin digitCount → NonZeroBase)
+    (tail : Vector FieldMacToECMac.AffineOffset 90)
+    (lift : Fin digitCount → NonZeroBase × NonZeroBase)
     (digit : Fin digitCount) : FieldMacToECMac.HomogeneousValue :=
-  liftRow (digitPoints target tail digit) (lift digit).value
+  liftRow (digitPoints target tail digit) (lift digit).1.value (lift digit).2.value
 
 /-! ### The designated vector: free coordinates, collector solve -/
 
@@ -617,8 +621,8 @@ def solvedVector (table : Public) (bits : BitInput) (pointX : Fin pointElementCo
     Fin pointElementCountX → BaseField :=
   designatedVector free (collectorTargets bits (freeRows table bits pointX pointY free) targets)
 
-/-- **The designated draws after the target rows**: the 182 free coordinates, the collector
-solve, and the 452 hash answers of the solved vector. -/
+/-- **The designated draws after the target rows**: the 91 free coordinates, the collector
+solve, and the 362 hash answers of the solved vector. -/
 def designatedLimbs (samplers : Samplers) (table : Public) (bits : BitInput)
     (pointX : Fin pointElementCountX → BaseField) (pointY : Fin pointElementCountY → BaseField)
     (targets : Fin digitCount → FieldMacToECMac.HomogeneousValue) :
@@ -641,7 +645,7 @@ def openingLimbs [FieldCertificate] [GroupCertificate] (samplers : Samplers) (ta
 
 /-! ### The programs -/
 
-/-- The `452` program requests, limb by limb: the designated input at the limb's recorded label
+/-- The `362` program requests, limb by limb: the designated input at the limb's recorded label
 (`none` if the replay never asked that limb) and the limb's drawn hash answer. -/
 def programRequests (bits : BitInput) (record : DesignatedRecord) (answers : DesignatedLimbs) :
     List (Option BaseField × (Block × Block)) :=
@@ -731,17 +735,17 @@ def idealHybrid : HybridGame := fun adversary parameter scalar =>
   planBIdealGame idealSamplers adversary parameter scalar ()
 
 /-- `M`: the library's ideal game with a closed machine, as a chain game. The byte count is the
-Plan B ciphertext size, `1,348,634` (`PlanB.Wire.ciphertextSize`). -/
+Plan B ciphertext size, `1,103,204` (`PlanB.Wire.ciphertextSize`). -/
 def machineHybrid (simulator : BoundedMachine.Simulator) : HybridGame :=
   fun adversary parameter scalar =>
-    LazySimulatorProtocol.idealGame Scheme.scheme Wire.encoding 1348634 simulator adversary
+    LazySimulatorProtocol.idealGame Scheme.scheme Wire.encoding 1103204 simulator adversary
       parameter scalar ()
 
 /-! ### The interface P2's machine must match -/
 
 /-- The machine's sampling-cutoff allowance, `I → M`. The planned samplers cut off far below it:
 the designated preimage's `t` sampler (80 attempts, each rejecting with mass `≤ 3/10`) aborts with
-mass `≤ 2^-138`, the source, tail, lift and 182 free-coordinate field samplers with far less. The
+mass `≤ 2^-138`, the source, tail, lift and 91 free-coordinate field samplers with far less. The
 allowance is relaxed to `2^-128`, so a machine has ample slack, and the budget still closes. -/
 def machineCutoffError : ℝ := 1 / 2 ^ 128
 

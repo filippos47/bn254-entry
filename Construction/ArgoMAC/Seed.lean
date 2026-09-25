@@ -328,7 +328,7 @@ def shift (key : Block) : Equiv Block Block := {
 
 /-! ### An injective code for the Plan B fixed-key index
 
-`hot` occupies `0 .. 4 * 56 * 5 * 2 ^ 5 * 2 - 1` and `gadget` the next `91 * 2 * 254`. Every
+`hot` occupies `0 .. 4 * 52 * 5 * 2 ^ 5 * 2 - 1` and `gadget` the next `91 * 2 * 254 * 2`. Every
 constructor's code is the mixed-radix value of its arguments, so the map is injective on the
 whole index type. The `hot` family runs over the four *lanes* -- two switch systems on each of
 the two coordinates. The `scale-hot` switch masks are hash queries (`PlanB.scaleInput`), not
@@ -349,13 +349,14 @@ def hotCode (lane : PlanB.Lane) (chunk fold entry : Nat) (half : Bool) : Nat :=
 def hotCount : Nat := 4 * PlanB.chunkCount * PlanB.chunkBits * 2 ^ PlanB.chunkBits * 2
 
 /-- The block index of a `gadget` permutation. -/
-def gadgetCode (digit : Nat) (coord : PlanB.Coord) (position : Nat) : Nat :=
-  hotCount + (digit * 2 + coordCode coord) * PlanB.coordinateBits + position
+def gadgetCode (digit : Nat) (coord : PlanB.Coord) (position : Nat) (bit : Bool) : Nat :=
+  hotCount + ((digit * 2 + coordCode coord) * PlanB.coordinateBits + position) * 2 +
+    (if bit then 1 else 0)
 
 /-- An injective code for the Plan B fixed-key index. -/
 def fixedKeyCode : PlanB.FixedIndex → Nat
   | .hot lane chunk fold entry half => hotCode lane chunk.val fold.val entry.val half
-  | .gadget digit coord position => gadgetCode digit.val coord position.val
+  | .gadget digit coord position bit => gadgetCode digit.val coord position.val bit
 
 /-- The `EncPRF` permutation index code. -/
 def encPRFCode (index : EncPRF.PermutationIndex) : Nat :=
@@ -369,13 +370,13 @@ def zeroLabelBase : PlanB.Coord → Nat
 def rowRandomness (seed : BitVec 256) (row : Nat) : FieldMacToECMac.RowRandomness :=
   let base := 60_000 + row * 16
   { rho := nonZeroBase (field seed base)
+    tau := nonZeroBase (field seed (base + 9))
     x := {
       r1 := field seed (base + 1)
       r2 := field seed (base + 2)
       r4 := field seed (base + 3) }
     y := {
       r2 := field seed (base + 4)
-      r3 := field seed (base + 5)
       r4 := field seed (base + 6)
       r5 := field seed (base + 7) }
     z := {
@@ -389,7 +390,7 @@ def randomness (seed : BitVec 256) : Garbling.Randomness := {
     exact offsets_clamped
   pointRandomness := Vector.ofFn fun row => rowRandomness seed row.val
   exceptionPad := Vector.ofFn fun row =>
-    Vector.ofFn fun slot => Exception.lowByte (block seed (200_000 + row.val * 6 + slot.val))
+    Vector.ofFn fun slot => Exception.lowByte (block seed (200_000 + row.val * 12 + slot.val))
   bridgeKey := field seed 1
   curveMask := nonZeroBase (field seed 2)
   curveR1 := field seed 3

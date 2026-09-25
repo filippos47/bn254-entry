@@ -1,7 +1,7 @@
 /-
 **The preimage sampler** (A1 §4 item 5; task T9a).
 
-Each attempt draws `t` from `70 + 256` fair coins, computes `V = t · p^n + enc` on `K` limbs by the
+Each attempt draws `t` from `hiWidth + 256 = 107 + 256` fair coins, computes `V = t · p^n + enc` on `K` limbs by the
 Horner passes, and keeps `t` iff nothing was kept and the top limb of `V` is `0`. After `R`
 attempts the kept `t` is recomputed into `V` and split into the `128`-bit halves a hash program
 takes; with nothing kept the run aborts.
@@ -9,9 +9,9 @@ takes; with nothing kept the run aborts.
 * `det_initFrom`, `det_keepTest`, `det_selectCell`, `det_flagStep`, `det_keepBlock`,
   `det_attemptTail`: the deterministic blocks;
 * `tAttempt_law`: one attempt, read through `scrub` (the scratch registers, the draw cells and the
-  working limbs blanked), is a uniform `326`-bit draw followed by `keepT`;
-* `attempts_law`: `R` attempts are `rejectLaw 326 accept R`, read through the kept draw;
-* `memSem_preimageSampler`: **the sampler's law** — `rejectLaw 326 accept R`, mapped to the final
+  working limbs blanked), is a uniform `363`-bit draw followed by `keepT`;
+* `attempts_law`: `R` attempts are `rejectLaw 363 accept R`, read through the kept draw;
+* `memSem_preimageSampler`: **the sampler's law** — `rejectLaw 363 accept R`, mapped to the final
   memory `samplerFinal` (the halves of `V = enc + p^n · t`, all scratch cleared);
 * `noOracle_preimageSampler`: the sampler touches no oracle, so on the lazy oracle its law is
   `memSem_preimageSampler` with the oracle state passed through (`sem_noOracle`).
@@ -490,7 +490,7 @@ theorem plain_attemptTail (work count digits yBase : Nat) :
       ⟨⟨trivial, trivial⟩, ⟨trivial, trivial⟩, trivial, trivial, trivial, ⟨trivial, trivial⟩, trivial⟩,
       ⟨⟨trivial, trivial⟩, trivial, ⟨trivial, trivial⟩, trivial⟩, trivial⟩, trivial⟩
 
-/-- **The law of one attempt**, read through `scrub`: a uniform `326`-bit draw `t`, then
+/-- **The law of one attempt**, read through `scrub`: a uniform `363`-bit draw `t`, then
 `keepT`. -/
 theorem tAttempt_law [BN254.FieldCertificate] (work count digits yBase : Nat)
     (layout : SamplerLayout work count digits yBase) (digitValues : Nat → Nat)
@@ -939,7 +939,7 @@ theorem noOracle_preimageSampler (work count digits yBase attempts : Nat) :
     (plain_finish work count digits yBase).noOracle, trivial⟩
 
 /-- **The law of the preimage sampler** (A1 §4 item 5): bounded rejection over
-`hiWidth + 256 = 326` coins with the machine's acceptance (`acceptTop`: the top working limb of
+`hiWidth + 256 = 363` coins with the machine's acceptance (`acceptTop`: the top working limb of
 `t · p^digits + enc` is `0`), `attempts` attempts, the kept `t` mapped to `samplerFinal`; an abort
 (`none`) iff every attempt was rejected. -/
 theorem memSem_preimageSampler [BN254.FieldCertificate] (work count digits yBase attempts : Nat)

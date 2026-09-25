@@ -3,7 +3,7 @@ Stage 2 of the Plan B simulator: the common prefix (parse, select the `508` labe
 stage-1 key), then one of two arms chosen by the output tag:
 
 * `invalid` (`f_k u = none`): emit the labels. No oracle instruction.
-* `valid`: the replay of the honest queries (`Replay.program`), the opening with its `452`
+* `valid`: the replay of the honest queries (`Replay.program`), the opening with its `362`
   hash programs (`Opening.program`), then emit the labels.
 -/
 

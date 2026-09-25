@@ -12,7 +12,8 @@ function of the tape (`AsksOnly`, `laneAsks`, `onCurveM_asks`):
 * the bridge hash at `bridgeInput t_eval`, `t_eval = t + mask·(x³ + 3 − y²)` (`reach_hashArg`: the
   evaluator's curve values are the garbler's, `Pipeline.curveValues_garble`);
 * EncPRF questions (the pads);
-* every gadget position of every digit, at the transformed label of `u`'s bit.
+* every gadget position of every digit, at the transformed label of `u`'s bit (the index names
+  the bit).
 
 It then shows that a coincidence is one of **the coincidence events** (`coincide_events`):
 
@@ -23,8 +24,9 @@ It then shows that a coincidence is one of **the coincidence events** (`coincide
   garbler's (else that parent is an earlier coincidence: `label_events`, by induction on the level).
   A coincidence at a fold gate `(n, r)` is a label event at level `n`, one at a switch `j` a label
   event at level `b_c`;
-* **a gadget event off the curve** per position and bit (`GadgetOff`), **a gadget collision on the
-  curve** per position (`GadgetOn`);
+* **a gadget event off the curve** per position and bit (`GadgetOff`). The family keeps **a gadget
+  collision on the curve** per position (`GadgetOn`), but no coincidence needs it: the index names
+  the bit, so at a valid input the reach's gadget question is always designed;
 * **the bridge event** (`BridgeHit`): off the curve the reach's bridge input `bridgeInput t_eval`
   is the garbler's `bridgeInput t` (`t_eval ≠ t`, but `bridgeInput` is `2`-to-`1`).
 -/
@@ -200,12 +202,13 @@ theorem evalPadsM_encOnly (keys : WhiteningKeys) (bits : BitInput) :
     QueryOnly.bind (QueryOnly.vector _ fun index => row .y bits.yBits index) fun _ =>
       QueryOnly.pure' _
 
-/-- The gadget asks every position of every digit at the given label. -/
-theorem unlockM_asks (table : FieldMacToECMac.Table) (input : AffineInput) (mac : InputMac) :
+/-- The gadget asks every position of every digit at the given label, at the input's bit. -/
+theorem masksM_asks (input : AffineInput) (mac : InputMac) :
     QueryOnly (fun q => ∃ (o : Fin digitCount) (κ : Coord) (position : Fin PlanB.coordinateBits),
-        q = .fixedForward (.gadget o κ position) (macAt mac κ position))
-      (Programs.unlockM table input mac) := by
-  unfold Programs.unlockM
+        q = .fixedForward (.gadget o κ position ((inputBits input κ).getLsb position))
+          (macAt mac κ position))
+      (Programs.masksM input mac) := by
+  unfold Programs.masksM
   refine QueryOnly.vector _ fun o => QueryOnly.bind ?_ fun _ => QueryOnly.pure' _
   unfold Programs.gadgetMaskM Programs.gadgetDigestM
   exact QueryOnly.bind (QueryOnly.bind (QueryOnly.vector _ fun index =>
@@ -247,7 +250,7 @@ def ReachAsk (O : Oracle) (table : Public) (bits : BitInput) (mac : InputMac)
   LaneAsk O.1 .pointY table.pointYHot (Pipeline.coordBits bits .y)
     (Pipeline.macLabels (Programs.whitenMacOf (reachPads O table bits mac) mac) .y) q ∨
   ∃ (o : Fin digitCount) (κ : Coord) (position : Fin PlanB.coordinateBits),
-    q = .fixedForward (.gadget o κ position)
+    q = .fixedForward (.gadget o κ position ((inputBits bits.toAffine κ).getLsb position))
       (macAt (Programs.transformMacOf (reachPads O table bits mac) mac) κ position)
 
 /-- **Every question of the reach is a `ReachAsk`.** -/
@@ -272,7 +275,7 @@ theorem onCurveM_asks (O : Oracle) (table : Public) (bits : BitInput) (mac : Inp
     fun q h => Or.inr (Or.inr (Or.inr (Or.inr (Or.inl h))))) ?_
   refine AsksOnly.bind ((laneAsks O .pointY _ _ _ _).mono
     fun q h => Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl h)))))) ?_
-  refine AsksOnly.bind ((AsksOnly.of_queryOnly (unlockM_asks _ _ _)).mono
+  refine AsksOnly.bind ((AsksOnly.of_queryOnly (masksM_asks _ _)).mono
     fun q h => Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr h)))))) (AsksOnly.pure' _)
 
 /-! ### 4. The reach on a tape, as a pure function of the tape -/
@@ -452,20 +455,17 @@ theorem encodeCoordinate_get (key : CoordinateMacKey) (bits : BitVec coordinateB
   simp only [encodeCoordinate, Vector.get_ofFn]
   rfl
 
-/-- The garbler's gadget label of a digit with an exceptional input is the transformed label at
-its exceptional bit. -/
+/-- The garbler's gadget label of a digit with an exceptional input, at an index's bit, is the
+transformed label at that bit. -/
 theorem gadgetLabel_eq (scalar : NonZeroScalar) (tape : Coins × Oracle) (o : Fin digitCount)
-    (κ : Coord) (position : Fin PlanB.coordinateBits)
+    (κ : Coord) (position : Fin PlanB.coordinateBits) (bit : Bool)
     (some : (digitEndomorphismBase (Hidden.digitKey scalar tape.1.offsets o).digit).isSome =
       true) :
-    Hidden.gadgetLabel scalar tape o κ position =
-      glabel tape κ position (Hidden.exceptionalBit scalar tape.1.offsets o κ position) := by
+    Hidden.gadgetLabel scalar tape o κ position bit = glabel tape κ position bit := by
   obtain ⟨phi, found⟩ := Option.isSome_iff_exists.mp some
-  unfold Hidden.gadgetLabel Hidden.exceptionalBit
+  unfold Hidden.gadgetLabel
   rw [found]
-  cases κ
-  · exact encodeCoordinate_get _ _ _
-  · exact encodeCoordinate_get _ _ _
+  cases κ <;> rfl
 
 /-- **On the curve the reach's gadget label is the garbler's at `u`'s bit.** -/
 theorem reachGadget_onCurve (tape : Coins × Oracle) (input : AffineInput)
@@ -677,32 +677,30 @@ theorem coincide_events (parameter : ℕ) (scalar : NonZeroScalar) (tape : Coins
   · exact laneCase .pointX a
   · exact laneCase .pointY a
   · obtain ⟨o, κ, position, eq⟩ := a
+    rw [BitInput.toAffineOfAffine] at eq
     obtain ⟨request, answer⟩ := e
     cases eq
-    have isGood : reachGadget tape input κ position = Hidden.gadgetLabel scalar tape o κ position :=
+    have isGood : reachGadget tape input κ position =
+        Hidden.gadgetLabel scalar tape o κ position ((inputBits input κ).getLsb position) :=
       good
     have some : (digitEndomorphismBase (Hidden.digitKey scalar tape.1.offsets o).digit).isSome =
         true := shape
     have isGood' : reachGadget tape input κ position =
-        glabel tape κ position (Hidden.exceptionalBit scalar tape.1.offsets o κ position) :=
-      isGood.trans (gadgetLabel_eq scalar tape o κ position some)
-    have shown : designedIndex scalar tape input (.gadget o κ position) =
+        glabel tape κ position ((inputBits input κ).getLsb position) :=
+      isGood.trans (gadgetLabel_eq scalar tape o κ position _ some)
+    have shown : designedIndex scalar tape input
+        (.gadget o κ position ((inputBits input κ).getLsb position)) =
         (validate input && decide ((inputBits input κ).getLsb position =
-          Hidden.exceptionalBit scalar tape.1.offsets o κ position)) := rfl
-    have hidden : designedIndex scalar tape input (.gadget o κ position) = false := notDesigned
+          (inputBits input κ).getLsb position)) := rfl
+    have hidden : designedIndex scalar tape input
+        (.gadget o κ position ((inputBits input κ).getLsb position)) = false := notDesigned
     rw [shown] at hidden
     cases valid : validate input
     · by_cases bridge : bridgeInput (evalKey tape.1 input) = bridgeInput tape.1.bridgeKey
       · exact Or.inr (Or.inr (Or.inr ⟨valid, bridge⟩))
       · exact Or.inr (Or.inl ⟨κ, position, _, valid, bridge, isGood'⟩)
-    · rw [valid, Bool.true_and, decide_eq_false_iff_not] at hidden
-      have onCurve := reachGadget_onCurve tape input valid κ position
-      rw [onCurve] at isGood'
-      refine Or.inr (Or.inr (Or.inl ⟨κ, position, ?_⟩))
-      unfold GadgetOn
-      revert isGood' hidden
-      cases (inputBits input κ).getLsb position <;>
-        cases Hidden.exceptionalBit scalar tape.1.offsets o κ position <;> simp_all
+    · rw [valid] at hidden
+      simp at hidden
 
 end
 

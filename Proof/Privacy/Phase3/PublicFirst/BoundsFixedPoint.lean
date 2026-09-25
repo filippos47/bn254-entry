@@ -142,7 +142,7 @@ theorem shadow_fixed_cases (ans : (request : Request) → request.Answer) (i : F
   · exact Or.inl ⟨.curveY, y'⟩
   · exact Or.inl ⟨.pointX, px⟩
   · exact Or.inl ⟨.pointY, py⟩
-  · exact Or.inr (mem_queriesAlong_allQ ans (unlockM_gadgetQ _ _ _) _ g)
+  · exact Or.inr (mem_queriesAlong_allQ ans (masksM_gadgetQ _ _) _ g)
 
 /-- **The shadow's hash questions**: the bridge input or a lane's. -/
 theorem shadow_hash_cases (ans : (request : Request) → request.Answer) (k : BaseField)
@@ -339,9 +339,9 @@ theorem final_used_le (i : FixedIndex) : (result.2.fixed i).used ≤ 1 := by
         lk (result.2.fixed i) x' = some y' → BitVec.ofFin x = BitVec.ofFin x' := by
       intro x y found x' y' found'
       rcases final_fixed source input tape ran member answers result resultMember i x y found with
-        ⟨lane, c, s, small, e, _, h, iEq, xEq⟩ | ⟨d, κ, pos, same⟩
+        ⟨lane, c, s, small, e, _, h, iEq, xEq⟩ | ⟨d, κ, pos, bit, same⟩
       · rcases final_fixed source input tape ran member answers result resultMember i x' y'
-          found' with ⟨lane', c', s', small', e', _, h', iEq', xEq'⟩ | ⟨d', κ', pos', same'⟩
+          found' with ⟨lane', c', s', small', e', _, h', iEq', xEq'⟩ | ⟨d', κ', pos', bit', same'⟩
         · obtain ⟨laneEq, chunkEq, stepEq, entryEq, _⟩ := hotIndexNat_inj
             (step_lt_chunkBits small) (step_lt_chunkBits small') (entry_lt_chunkBits small e)
             (entry_lt_chunkBits small' e') (iEq.symm.trans iEq')
@@ -354,7 +354,7 @@ theorem final_used_le (i : FixedIndex) : (result.2.fixed i).used ≤ 1 := by
           unfold hotIndexNat at iEq''
           cases iEq''
       · rcases final_fixed source input tape ran member answers result resultMember i x' y'
-          found' with ⟨lane', c', s', small', e', _, h', iEq', xEq'⟩ | ⟨d', κ', pos', same'⟩
+          found' with ⟨lane', c', s', small', e', _, h', iEq', xEq'⟩ | ⟨d', κ', pos', bit', same'⟩
         · injection same with iEq'' _
           rw [iEq'] at iEq''
           unfold hotIndexNat at iEq''
@@ -363,7 +363,7 @@ theorem final_used_le (i : FixedIndex) : (result.2.fixed i).used ≤ 1 := by
           injection same' with iEq' xEq'
           rw [xEq, xEq']
           rw [iEq] at iEq'
-          injection iEq' with dEq κEq posEq
+          injection iEq' with dEq κEq posEq bitEq
           have κSame : κ = κ' := by
             cases κ <;> cases κ' <;> first | rfl | cases κEq
           subst dEq

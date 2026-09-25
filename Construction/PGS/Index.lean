@@ -29,15 +29,18 @@ inductive FixedIndex
   XOR with the parent is a single permutation image. -/
   | hot (lane : Lane) (chunk : Fin chunkCount) (fold : Fin chunkBits)
       (entry : Fin (2 ^ chunkBits)) (half : Bool)
-  /-- Doubling-exception gadget: one permutation per (digit, coordinate, label position). -/
-  | gadget (digit : Fin digitCount) (coord : Coord) (position : Fin coordinateBits)
+  /-- Exception gadget: one permutation per (digit, coordinate, label position, label bit).
+  The bit names which of the position's two labels the permutation is asked at, so the garbler,
+  which digests the labels of two exceptional inputs per digit, still asks each index at one
+  point only: the label of its bit. The evaluator asks the index of its own bit. -/
+  | gadget (digit : Fin digitCount) (coord : Coord) (position : Fin coordinateBits) (bit : Bool)
 deriving DecidableEq, Fintype
 
 /-- The encryption-PRF index is unchanged from the baseline: the gate protects the 508 input
 labels, not the per-element offsets. -/
 abbrev EncIndex := EncPRF.PermutationIndex
 
-/-- `#FixedIndex = 4 * 56 * 5 * 2 ^ 5 * 2 + 91 * 2 * 254 = 71680 + 46228`.
+/-- `#FixedIndex = 4 * 52 * 5 * 2 ^ 5 * 2 + 91 * 2 * 254 * 2 = 66560 + 92456`.
 
 The `hot` family runs over the **four** lanes (two switch systems on each of the two
 coordinates), not the two coordinates, and carries the extra `half : Bool` of the repaired
@@ -46,7 +49,7 @@ counts construction queries per index, and each of the two halves is still queri
 
 The proof goes through the derived proxy equivalence and the cardinality of finite products
 and sums; no element of the type is ever enumerated. -/
-theorem card_fixedIndex : Fintype.card FixedIndex = 117908 := by
+theorem card_fixedIndex : Fintype.card FixedIndex = 159016 := by
   rw [← Fintype.card_congr FixedIndex.proxyTypeEquiv]
   simp only [Fintype.card_sum, Fintype.card_sigma, Fintype.card_fin, Finset.sum_const,
     Finset.card_univ, smul_eq_mul, card_lane, card_coord, Fintype.card_bool]

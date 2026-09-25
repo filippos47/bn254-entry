@@ -5,7 +5,7 @@
   `(pointX, 0, j*)` is not designated (`PlanB.scaleInput_injective`), and neither is the bridge
   input (`not_isDesignated_bridgeInput`: `bridgeInput t ≥ 2^150` lies above every scale input);
 * `clean_askHash`: such a question is asked of the lazy oracle, the record unchanged;
-* `interceptT_designatedMask`: the evaluator's `452` limb questions of the designated vector are
+* `interceptT_designatedMask`: the evaluator's `362` limb questions of the designated vector are
   all intercepted (`isDesignated_designatedInput`), answered by `(0, 0)`, and leave the record
   `fun _ => some E*`; the vector they give is `sampleLane` of zeros, i.e. `0`.
 -/
@@ -113,7 +113,7 @@ theorem interceptT_vector_designated (bits : BitInput) (label : Block) :
             | last => exact last hit.symm
             | cast index => exact earlier ⟨index, hit⟩
 
-/-- **The evaluator's designated vector, intercepted**: `sampleLane` of `452` zero answers, the
+/-- **The evaluator's designated vector, intercepted**: `sampleLane` of `362` zero answers, the
 record `fun _ => some E*`. -/
 theorem interceptT_designatedMask (bits : BitInput) (label : Block) (record : DesignatedRecord) :
     interceptT bits (Programs.switchMaskM .pointX chunkZero (designatedSwitch bits).val label)

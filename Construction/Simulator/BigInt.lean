@@ -17,11 +17,11 @@ machine has no integer division, so every routine here uses only `add`, `sub`, `
 * `macPasses`: the one big-integer Horner encoder, `E ← E · p + Y_e` from the top digit
   (multiply-accumulate with carries, no division): from the limbs of `E₀` it leaves those of
   `E₀ · p^n + Σ_e Y_e p^e`;
-* `preimageSampler`: `R = 80` constant-time attempts, each drawing `t` from `326` fair coins
-  (`70` high, `256` low), computing `V = t · p^455 + enc` on `453` limbs by `macPasses` from
+* `preimageSampler`: `R = 80` constant-time attempts, each drawing `t` from `363` fair coins
+  (`107` high, `256` low), computing `V = t · p^364 + enc` on `363` limbs by `macPasses` from
   `E₀ = t` (so `enc` itself is never formed) and accepting iff the top limb is `0`, i.e.
-  `V < 2^115712`; the first
-  accepted `t` is kept, `V` is recomputed from it and its `452` limbs are split into the `128`-bit
+  `V < 2^92672`; the first
+  accepted `t` is kept, `V` is recomputed from it and its `362` limbs are split into the `128`-bit
   halves a hash `.program` takes.
 
 Every routine is straight-line (`rep` unrolls; the sampler's only branch is the padded
@@ -78,12 +78,12 @@ def pinvNat : Nat := 47596463841404813209826107249352094849039378570607243914930
 
 /-- The sampler's attempts: `R = 80`. -/
 def samplerAttempts : Nat := 80
-/-- The coins of the high draw word: `326 = 70 + 256` coins per attempt. -/
-def hiWidth : Nat := 70
-/-- The designated vector's digits: `n = 455`. -/
-def samplerDigits : Nat := 455
-/-- The sampler's working limbs: `K = 453` (`452` programmed, one overflow limb). -/
-def samplerLimbs : Nat := 453
+/-- The coins of the high draw word: `363 = 107 + 256` coins per attempt. -/
+def hiWidth : Nat := 107
+/-- The designated vector's digits: `n = 364`. -/
+def samplerDigits : Nat := 364
+/-- The sampler's working limbs: `K = 363` (`362` programmed, one overflow limb). -/
+def samplerLimbs : Nat := 363
 
 /-! ### Blocks -/
 
@@ -320,7 +320,7 @@ theorem cost_digitLoop (base count digits digitBase : Nat) :
     (digitLoop base count digits digitBase).cost = digits * digitStepCost count :=
   cost_rep _ _ _ fun _ _ => cost_digitStep _ _ _
 
-/-- **Digit extraction**: `17 + n (5 + 29 k)` (e.g. `k = 452`, `n = 455`: `5,966,432`). -/
+/-- **Digit extraction**: `17 + n (5 + 29 k)` (e.g. `k = 362`, `n = 364`: `3,823,109`). -/
 def digitsOfCost (count digits : Nat) : Nat := 4 + digits * digitStepCost count + 13
 
 theorem size_digitsOf (base count digits digitBase : Nat) :
@@ -412,7 +412,7 @@ def preimageSamplerSize (count digits attempts : Nat) : Nat :=
   7 + attempts * tAttemptSize count digits + 2 +
     (3 + 2 * useKeptCost count digits) + 13
 
-/-- **The preimage sampler's cost** (`K = 453`, `n = 455`, `R = 80`: about `4.18 · 10^8`). -/
+/-- **The preimage sampler's cost** (`K = 363`, `n = 364`, `R = 80`: about `2.68 · 10^8`). -/
 def preimageSamplerCost (count digits attempts : Nat) : Nat :=
   7 + attempts * tAttemptCost count digits + 2 + (2 + useKeptCost count digits) + 13
 

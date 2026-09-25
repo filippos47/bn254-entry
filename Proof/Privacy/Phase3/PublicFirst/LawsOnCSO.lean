@@ -34,22 +34,22 @@ noncomputable section
 
 section Override
 
-/-- A gadget position: digit, coordinate, label position. -/
-abbrev GPos := Fin digitCount × Coord × Fin PlanB.coordinateBits
+/-- A gadget position: digit, coordinate, label position and the label's bit (one gadget index). -/
+abbrev GPos := Fin digitCount × Coord × Fin PlanB.coordinateBits × Bool
 
 /-- The gadget index of a position. -/
-def gIdx (k : GPos) : FixedIndex := .gadget k.1 k.2.1 k.2.2
+def gIdx (k : GPos) : FixedIndex := .gadget k.1 k.2.1 k.2.2.1 k.2.2.2
 
 theorem gIdx_injective : Function.Injective gIdx := by
-  rintro ⟨o, κ, p⟩ ⟨o', κ', p'⟩ same
+  rintro ⟨o, κ, p, b⟩ ⟨o', κ', p', b'⟩ same
   simp only [gIdx, FixedIndex.gadget.injEq] at same
-  obtain ⟨rfl, rfl, rfl⟩ := same
+  obtain ⟨rfl, rfl, rfl, rfl⟩ := same
   rfl
 
 /-- The fixed-key permutations overridden at the fresh gadget positions by translations. -/
 def ovrPerm (X : GPos → Bool) (v : GPos → Block) (P : FixedIndex → Equiv.Perm Block) :
     FixedIndex → Equiv.Perm Block
-  | .gadget o κ p => if X (o, κ, p) then xorPerm (v (o, κ, p)) else P (.gadget o κ p)
+  | .gadget o κ p b => if X (o, κ, p, b) then xorPerm (v (o, κ, p, b)) else P (.gadget o κ p b)
   | index => P index
 
 /-- **The oracle overridden at the fresh gadget positions.** -/
@@ -62,15 +62,15 @@ def ovrOracle (X : GPos → Bool) (v : GPos → Block) (O : PublicOracle FixedIn
 def freshAnswer (X : GPos → Bool) (v : GPos → Block)
     (ans : ∀ q : PublicQuery FixedIndex EncPRF.PermutationIndex, q.Answer) :
     ∀ q : PublicQuery FixedIndex EncPRF.PermutationIndex, q.Answer
-  | .fixedForward (.gadget o κ p) x =>
-      if X (o, κ, p) then x ^^^ v (o, κ, p) else ans (.fixedForward (.gadget o κ p) x)
+  | .fixedForward (.gadget o κ p b) x =>
+      if X (o, κ, p, b) then x ^^^ v (o, κ, p, b) else ans (.fixedForward (.gadget o κ p b) x)
   | q => ans q
 
 theorem ovr_fresh (X : GPos → Bool) (v : GPos → Block) (O : PublicOracle FixedIndex EncPRF.PermutationIndex)
     (k : GPos) (fresh : X k = true) (x : Block) :
     publicAnswer (ovrOracle X v O) (.fixedForward (gIdx k) x) = x ^^^ v k := by
-  obtain ⟨o, κ, p⟩ := k
-  show (if X (o, κ, p) then xorPerm (v (o, κ, p)) else O.1.permutation (.gadget o κ p)) x = _
+  obtain ⟨o, κ, p, b⟩ := k
+  show (if X (o, κ, p, b) then xorPerm (v (o, κ, p, b)) else O.1.permutation (.gadget o κ p b)) x = _
   rw [if_pos fresh]
   rfl
 
@@ -82,10 +82,10 @@ theorem ovr_other (X : GPos → Bool) (v : GPos → Block) (O : PublicOracle Fix
   cases q with
   | fixedForward index x =>
       cases index with
-      | gadget o κ p =>
-          have notFresh : X (o, κ, p) = false := other (o, κ, p) x rfl
-          show (if X (o, κ, p) then xorPerm (v (o, κ, p)) else O.1.permutation (.gadget o κ p)) x =
-            O.1.permutation (.gadget o κ p) x
+      | gadget o κ p b =>
+          have notFresh : X (o, κ, p, b) = false := other (o, κ, p, b) x rfl
+          show (if X (o, κ, p, b) then xorPerm (v (o, κ, p, b)) else O.1.permutation (.gadget o κ p b)) x =
+            O.1.permutation (.gadget o κ p b) x
           rw [if_neg (by rw [notFresh]; exact Bool.false_ne_true)]
       | hot _ _ _ _ _ => rfl
   | fixedInverse _ _ => exact forward.elim
@@ -96,7 +96,7 @@ theorem ovr_other (X : GPos → Bool) (v : GPos → Block) (O : PublicOracle Fix
 theorem freshAnswer_fresh (X : GPos → Bool) (v : GPos → Block)
     (ans : ∀ q : PublicQuery FixedIndex EncPRF.PermutationIndex, q.Answer) (k : GPos) (fresh : X k = true)
     (x : Block) : freshAnswer X v ans (.fixedForward (gIdx k) x) = x ^^^ v k := by
-  obtain ⟨o, κ, p⟩ := k
+  obtain ⟨o, κ, p, b⟩ := k
   simp only [gIdx, freshAnswer]
   exact if_pos fresh
 
@@ -107,8 +107,8 @@ theorem freshAnswer_other (X : GPos → Bool) (v : GPos → Block)
   cases q with
   | fixedForward index x =>
       cases index with
-      | gadget o κ p =>
-          have notFresh : X (o, κ, p) = false := other (o, κ, p) x rfl
+      | gadget o κ p b =>
+          have notFresh : X (o, κ, p, b) = false := other (o, κ, p, b) x rfl
           simp only [freshAnswer]
           exact if_neg (by rw [notFresh]; exact Bool.false_ne_true)
       | hot _ _ _ _ _ => rfl

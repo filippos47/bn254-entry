@@ -188,20 +188,19 @@ section Instances
 
 variable [FieldCertificate] [GroupCertificate]
 
-/-- **The Δ-family at a gadget position**: `c` iff the position is `κ`'s and `u`'s bit differs from
-the exceptional input's. -/
+/-- **The Δ-family at a gadget index**: `c` iff the position is `κ`'s and `u`'s bit differs from
+the index's bit. -/
 theorem deltaU_gadget (κ : Coord) (input : AffineInput) (c : Block) (scalar : NonZeroScalar)
-    (coins : Coins) (o : Fin digitCount) (κ' : Coord) (position : Fin PlanB.coordinateBits) :
-    gadgetShift (familyDeltaU κ input c) scalar coins o κ' position =
-      if κ' = κ ∧ (inputBits input κ').getLsb position ≠ exceptionalBit scalar coins.offsets o κ' position
-      then c else 0 := by
+    (coins : Coins) (o : Fin digitCount) (κ' : Coord) (position : Fin PlanB.coordinateBits)
+    (bit : Bool) :
+    gadgetShift (familyDeltaU κ input c) scalar coins o κ' position bit =
+      if κ' = κ ∧ (inputBits input κ').getLsb position ≠ bit then c else 0 := by
   unfold gadgetShift
   simp only [familyDeltaU]
   by_cases hκ : κ' = κ
   · subst hκ
     simp only [true_and, if_true]
-    cases (inputBits input κ').getLsb position <;>
-      cases exceptionalBit scalar coins.offsets o κ' position <;> simp
+    cases (inputBits input κ').getLsb position <;> cases bit <;> simp
   · simp [hκ]
 
 theorem scheme_encode (key : InputMacKey) (input : AffineInput) :
@@ -331,8 +330,8 @@ section Instances
 variable [FieldCertificate] [GroupCertificate]
 
 theorem key2_gadget (t : Nat) (c : Block) (scalar : NonZeroScalar) (coins : Coins)
-    (o : Fin digitCount) (κ : Coord) (position : Fin PlanB.coordinateBits) :
-    gadgetShift (familyKey2 t c) scalar coins o κ position = c := by
+    (o : Fin digitCount) (κ : Coord) (position : Fin PlanB.coordinateBits) (bit : Bool) :
+    gadgetShift (familyKey2 t c) scalar coins o κ position bit = c := by
   unfold gadgetShift
   simp [familyKey2]
 
@@ -397,8 +396,8 @@ variable [FieldCertificate] [GroupCertificate]
 
 theorem hotOut_gadget (ℓ : Lane) (k : Fin chunkCount) (n r : Nat) (c : Block)
     (scalar : NonZeroScalar) (coins : Coins) (o : Fin digitCount) (κ : Coord)
-    (position : Fin PlanB.coordinateBits) :
-    gadgetShift (familyHotOut ℓ k n r c) scalar coins o κ position = 0 := by
+    (position : Fin PlanB.coordinateBits) (bit : Bool) :
+    gadgetShift (familyHotOut ℓ k n r c) scalar coins o κ position bit = 0 := by
   unfold gadgetShift
   simp [familyHotOut]
 

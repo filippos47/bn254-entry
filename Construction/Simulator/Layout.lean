@@ -57,13 +57,13 @@ abbrev rSecond : Register := 15
 
 /-! ### RAM regions -/
 
-/-- The `42,052` public field cells, in `Wire.encoding` order: curve (3), rows (`91 · 11`),
-scale (`56 · 733`). -/
+/-- The `34,297` public field cells, in `Wire.encoding` order: curve (3), rows (`91 · 10`),
+scale (`52 · 642`). -/
 def fieldBase : Nat := 2 ^ 40
-/-- The `546` exception bytes. -/
+/-- The `1,092` exception bytes. -/
 def exceptionBase : Nat := 2 ^ 41
-/-- The `4 · 198` fold joins: `curveX`, `curveY`, `pointX`, `pointY`, each the lane's
-`foldStepCount = 198` blocks in flat slot order. -/
+/-- The `4 · 202` fold joins: `curveX`, `curveY`, `pointX`, `pointY`, each the lane's
+`foldStepCount = 202` blocks in flat slot order. -/
 def hotBase : Nat := 2 ^ 42
 /-- The parsed request: `u.x`, `u.y`, the two output tag bits, `Q.x`, `Q.y`. -/
 def requestBase : Nat := 2 ^ 43
@@ -71,7 +71,7 @@ def requestBase : Nat := 2 ^ 43
 def labelBase : Nat := 2 ^ 44
 /-- The `508` EncPRF-whitened labels. -/
 def whiteBase : Nat := 2 ^ 45
-/-- The `733` delivered-value accumulators, in chunk-word slot order. -/
+/-- The `642` delivered-value accumulators, in chunk-word slot order. -/
 def accBase : Nat := 2 ^ 46
 /-- The current chunk's fold: the level labels `E_0 .. E_31` at offsets `0 .. 31` (a chunk is at
 most `5` bits wide), the step materials `M_0 .. M_15` at offsets `32 .. 47`, and the designated
@@ -84,15 +84,15 @@ def openBase : Nat := 2 ^ 49
 /-- The Lamport key: `keyBase + 2 i` is the false label of input bit `i`, `+ 1` the true one
 (bits `0 .. 253` are `x`, `254 .. 507` are `y`). Sampled in stage 1. -/
 def keyBase : Nat := 2 ^ 50
-/-- The switch mask vector under digit extraction: its packed hash limbs (at most `452`) at
+/-- The switch mask vector under digit extraction: its packed hash limbs (at most `362`) at
 offsets `0 .. 511`. -/
 def vectorLimbBase : Nat := 2 ^ 51
-/-- Its base-`p` digits (at most `455`), above the limbs. -/
+/-- Its base-`p` digits (at most `364`), above the limbs. -/
 def vectorDigitBase : Nat := 2 ^ 51 + 512
 /-- The work cells of the preimage sampler (`BigInt.preimageSampler`): the flag, the kept and the
-current draw, `453` working limbs, then `2 · 452` halves. -/
+current draw, `363` working limbs, then `2 · 362` halves. -/
 def samplerBase : Nat := 2 ^ 52
-/-- The designated vector `Y* ∈ F_p ^ 455` (lane `pointX`, chunk `0`, switch `j*`), one digit
+/-- The designated vector `Y* ∈ F_p ^ 364` (lane `pointX`, chunk `0`, switch `j*`), one digit
 per cell: the digit cells the preimage sampler encodes. -/
 def designatedBase : Nat := 2 ^ 53
 
@@ -109,17 +109,17 @@ def designatedCell (element : Nat) : Nat := designatedBase + element
 
 /-- Field-cell counts. -/
 def curveCellCount : Nat := 3
-def rowCellCount : Nat := 91 * 11
-def scaleCellCount : Nat := 56 * 733
+def rowCellCount : Nat := 91 * 10
+def scaleCellCount : Nat := 52 * 642
 def fieldCellCount : Nat := curveCellCount + rowCellCount + scaleCellCount
 /-- The first scale cell. -/
 def scaleCellBase : Nat := fieldBase + curveCellCount + rowCellCount
-def exceptionByteCount : Nat := 91 * 6
-def hotBlockCount : Nat := 4 * 198
+def exceptionByteCount : Nat := 91 * 12
+def hotBlockCount : Nat := 4 * 202
 def labelCount : Nat := 508
 def keyBlockCount : Nat := 2 * 508
 
-theorem fieldCellCount_eq : fieldCellCount = 42052 := by
+theorem fieldCellCount_eq : fieldCellCount = 34297 := by
   norm_num [fieldCellCount, curveCellCount, rowCellCount, scaleCellCount]
 
 /-! ### Request cells -/
@@ -150,8 +150,10 @@ def tmpJStar : Nat := tmpBase + 6
 
 /-- Digit point `d` (tag, x, y). -/
 def openPoint (digit : Nat) : Nat := openBase + 3 * digit
-/-- The lift randomiser of digit `d`. -/
+/-- The lift randomiser `λ_d` of digit `d` (the `X` and `Z` rows). -/
 def openLambda (digit : Nat) : Nat := openBase + 400 + digit
+/-- The sign-row randomiser `t_d` of digit `d`. -/
+def openTau (digit : Nat) : Nat := openBase + 800 + digit
 /-- The lifted row target `W_d` (X, Y, Z). -/
 def openRow (digit : Nat) : Nat := openBase + 500 + 3 * digit
 

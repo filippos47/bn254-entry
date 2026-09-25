@@ -6,8 +6,8 @@
   (`uniform_bind_runRefill`), then fresh uniform answers are `I`'s run, exactly
   (`runRefill_uniform_eq`). No per-query term.
 * `refillStage2_etvDist_le` — the same bound for the two stage-2 kernels: the rest of the opening
-  (tail, lifts, the designated vector's free coordinates and collector solve, its `452` hash
-  answers, the `452` programs) is a common continuation.
+  (tail, lifts, the designated vector's free coordinates and collector solve, its `362` hash
+  answers, the `362` programs) is a common continuation.
 -/
 
 import Proof.Privacy.Phase3.Lazy.StepBound

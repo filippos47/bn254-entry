@@ -9,23 +9,23 @@ batched sampler's design A1 §4, items 2–5):
 2. `horner`: `H = pointHorner β (D_1 … D_90)` by `P ← D_d + β · P` from `d = 90` down, with the
    constant multiple `β · P` unrolled over the `192` bits of `β`; the head clamp
    `D_0 = Q − β · H`, aborting when `β · H = O` (no clamped offset exists);
-3. `lambdas`: `91` randomisers `λ_d ∈ [1, p)`;
-4. `lifts`: `W_d = (λ² x', λ³ y', tag · λ)` with `x' = 1 + tag · (x − 1)`, i.e. `liftRow`;
-5. `nonCollectors`: the designated vector `Y* ∈ F_p ^ 455` (lane `pointX`, chunk `0`, switch
-   `j*`) — its `182` non-collector coordinates `5d`, `5d + 2` (`rowX_x7`, `rowY_mixed`) drawn
-   uniform by bounded rejection over `254` coins, each added to its element's value,
-   `acc[e] += κ · Y*[e]`;
-6. `solve`: the running rows `X, Y, Z` of every digit on the accumulated values (which now hold
+3. `lambdas`: `91` randomiser pairs `(λ_d, t_d) ∈ [1, p)²`, `λ_d` then `t_d` for each digit;
+4. `lifts`: `W_d = (λ² x', t² y, tag · λ)` with `x' = 1 + tag · (x − 1)` (the identity's words
+   are `(0, 0, 0)`, so its sign row is `0`), i.e. `liftRow`;
+5. `nonCollectors`: the designated vector `Y* ∈ F_p ^ 364` (lane `pointX`, chunk `0`, switch
+   `j*`) — its `91` non-collector coordinates `4d` (`rowX_x7`) drawn uniform by bounded
+   rejection over `254` coins, each added to its element's value, `acc[e] += κ · Y*[e]`;
+6. `solve`: the running rows `X, S, Z` of every digit on the accumulated values (which now hold
    the sampled non-collectors, and at each collector the running sum without `j*`) and
-   `Y*[c] = κ · (W_d.c − row_c) / coef_c` at the three collectors `5d + 1`, `5d + 3`, `5d + 4`
+   `Y*[c] = κ · (W_d.c − row_c) / coef_c` at the three collectors `4d + 1`, `4d + 2`, `4d + 3`
    (`rowX_x9`, `rowY_cubic`, `rowZ_x9`), where `coef_c` is the collector's coefficient in its
-   row: `1` for `X` and `Z`, `x²` for `Y` (`κ = ±1`, so `κ⁻¹ = κ`; `x ≠ 0` on the curve, because
-   `3` is not a square);
-7. `preimage`: `V = enc(Y*) + p ^ 455 · t` with `t` uniform on the fibre
-   `{t : V < 2 ^ 115712}` (`BigInt.preimageSampler`, `80` constant-time attempts), split into
-   the `2 · 452` halves `(V_i mod 2 ^ 128, V_i / 2 ^ 128)`;
-8. `programs`: the `452` hash programs
-   `scaleInput pointX 0 j* i E* ↦ (V_i mod 2 ^ 128, V_i / 2 ^ 128)`, `i = 0 .. 451`; the input's
+   row: `1` for `X` and `Z`, `x²` for the sign row (`κ = ±1`, so `κ⁻¹ = κ`; `x ≠ 0` on the
+   curve, because `3` is not a square);
+7. `preimage`: `V = enc(Y*) + p ^ 364 · t` with `t` uniform on the fibre
+   `{t : V < 2 ^ 92672}` (`BigInt.preimageSampler`, `80` constant-time attempts), split into
+   the `2 · 362` halves `(V_i mod 2 ^ 128, V_i / 2 ^ 128)`;
+8. `programs`: the `362` hash programs
+   `scaleInput pointX 0 j* i E* ↦ (V_i mod 2 ^ 128, V_i / 2 ^ 128)`, `i = 0 .. 361`; the input's
    switch field is `j* · 2 ^ 137`, formed at run time from `j*`.
 -/
 
@@ -115,19 +115,22 @@ def head : Prog :=
 /-- `H`, then the head clamp. -/
 def horner : Prog := seqList [clearP, rep 90 fun index => hornerStep (90 - index), head]
 
-/-- One randomiser `λ_d ∈ [1, p)`. -/
-def lambdaOne (digit : Nat) : Prog :=
-  .seq (bounded fieldWidth (testPositiveBelow pNat) attempts (storeAt (openLambda digit) rOut))
+/-- One randomiser in `[1, p)`, stored at `address`. -/
+def nonZeroCell (address : Nat) : Prog :=
+  .seq (bounded fieldWidth (testPositiveBelow pNat) attempts (storeAt address rOut))
     (zeroRegs samplerScratch)
+
+/-- The randomiser pair of digit `d`: `λ_d` (the `X` and `Z` rows), then `t_d` (the sign row). -/
+def lambdaOne (digit : Nat) : Prog :=
+  .seq (nonZeroCell (openLambda digit)) (nonZeroCell (openTau digit))
 
 def lambdas : Prog := rep 91 lambdaOne
 
-/-- `W_d = liftRow D_d λ_d`. -/
+/-- `W_d = liftRow D_d λ_d t_d`. -/
 def liftOne (digit : Nat) : Prog :=
-  seqList [loadAt rA (openLambda digit), ar .fieldMul rB rA rA, ar .fieldMul rC rB rA,
-    loadPoint ⟨rD, rE, rF⟩ (openPoint digit), cst rAcc 1,
+  seqList [loadAt rA (openLambda digit), ar .fieldMul rB rA rA, loadAt rC (openTau digit),
+    ar .fieldMul rC rC rC, loadPoint ⟨rD, rE, rF⟩ (openPoint digit), cst rAcc 1,
     ar .fieldSub rE rE rAcc, ar .fieldMul rE rE rD, ar .fieldAdd rE rE rAcc,
-    ar .fieldSub rF rF rAcc, ar .fieldMul rF rF rD, ar .fieldAdd rF rF rAcc,
     ar .fieldMul rE rE rB, ar .fieldMul rF rF rC, ar .fieldMul rD rD rA,
     storeAt (openRow digit) rE, storeAt (openRow digit + 1) rF, storeAt (openRow digit + 2) rD,
     zeroRegs [rAcc, rAddr, rA, rB, rC, rD, rE, rF]]
@@ -135,11 +138,11 @@ def liftOne (digit : Nat) : Prog :=
 def lifts : Prog := rep 91 liftOne
 
 /-- The row-constant cell `k` of digit `d`. -/
-def rowCell (digit slot : Nat) : Nat := fieldBase + curveCellCount + 11 * digit + slot
+def rowCell (digit slot : Nat) : Nat := fieldBase + curveCellCount + 10 * digit + slot
 
 /-- The accumulator cell of x-slot `s` and y-slot `s` of the point lanes. -/
 def xCell (slot : Nat) : Nat := accBase + slot
-def yCell (slot : Nat) : Nat := accBase + 458 + slot
+def yCell (slot : Nat) : Nat := accBase + 367 + slot
 
 /-- A uniform non-collector coordinate `Y*[e]` (in `rOut`): stored in its designated cell and
 added to its element's value, `acc[e] += κ · Y*[e]`. -/
@@ -152,9 +155,9 @@ def nonCollectorOne (element : Nat) : Prog :=
   .seq (bounded fieldWidth (testBelow pNat) attempts (storeNonCollector element))
     (zeroRegs [rAcc, rOut, rFlag, rBit, rAddr, rSel, rA, rB])
 
-/-- The `182` non-collector coordinates `5d`, `5d + 2` of the designated vector. -/
+/-- The `91` non-collector coordinates `4d` of the designated vector. -/
 def nonCollectors : Prog :=
-  rep 91 fun digit => .seq (nonCollectorOne (5 * digit)) (nonCollectorOne (5 * digit + 2))
+  rep 91 fun digit => nonCollectorOne (4 * digit)
 
 /-- `rAcc += RAM[cell] · R[factor]`. -/
 def addScaled (cell : Nat) (factor : Register) : Prog :=
@@ -169,7 +172,7 @@ def finishTarget (row target : Nat) : Prog :=
     storeAt target rSel]
 
 /-- `RAM[target] = κ · (RAM[row] − rAcc) · rC⁻¹`: the target of a collector whose coefficient in
-its row is `rC = x²` (the `Y` row's `cubic`). -/
+its row is `rC = x²` (the sign row's `cubic`). -/
 def finishScaled (row target : Nat) : Prog :=
   seqList [loadAt rSel row, ar .fieldSub rSel rSel rAcc, ar .fieldMul rSel rSel rF,
     ar .fieldInv rAcc rC rC, ar .fieldMul rSel rSel rAcc, storeAt target rSel]
@@ -181,25 +184,24 @@ def solveDigit (digit : Nat) : Prog :=
     ar .fieldMul rE rA rB, loadAt rF tmpKappa,
     -- X row: c0 + c1 x + c2 y + c4 x² + v[x7] x + v[x9] + v[y10]
     loadAt rAcc (rowCell digit 0), addScaled (rowCell digit 1) rA, addScaled (rowCell digit 2) rB,
-    addScaled (rowCell digit 3) rC, addScaled (xCell (5 * digit)) rA,
-    addCell (xCell (5 * digit + 1)), addCell (yCell (3 * digit)),
-    finishTarget (openRow digit) (designatedCell (5 * digit + 1)),
-    -- Y row: c0 + c2 y + c3 x y + c4 x² + c5 y² + v[mixed] y + v[cubic] x² + v[y8] y + v[y10];
-    -- the collector `cubic` has coefficient x², so its target is κ · (W − Y) / x²
-    loadAt rAcc (rowCell digit 4), addScaled (rowCell digit 5) rB, addScaled (rowCell digit 6) rE,
-    addScaled (rowCell digit 7) rC, addScaled (rowCell digit 8) rD,
-    addScaled (xCell (5 * digit + 2)) rB, addScaled (xCell (5 * digit + 3)) rC,
+    addScaled (rowCell digit 3) rC, addScaled (xCell (4 * digit)) rA,
+    addCell (xCell (4 * digit + 1)), addCell (yCell (3 * digit)),
+    finishTarget (openRow digit) (designatedCell (4 * digit + 1)),
+    -- sign row: c0 + c2 y + c4 x² + c5 y² + v[cubic] x² + v[y8] y + v[y10];
+    -- the collector `cubic` has coefficient x², so its target is κ · (W − S) / x²
+    loadAt rAcc (rowCell digit 4), addScaled (rowCell digit 5) rB, addScaled (rowCell digit 6) rC,
+    addScaled (rowCell digit 7) rD, addScaled (xCell (4 * digit + 2)) rC,
     addScaled (yCell (3 * digit + 1)) rB, addCell (yCell (3 * digit + 2)),
-    finishScaled (openRow digit + 1) (designatedCell (5 * digit + 3)),
+    finishScaled (openRow digit + 1) (designatedCell (4 * digit + 2)),
     -- Z row: c0 + c1 x + v[x9]
-    loadAt rAcc (rowCell digit 9), addScaled (rowCell digit 10) rA, addCell (xCell (5 * digit + 4)),
-    finishTarget (openRow digit + 2) (designatedCell (5 * digit + 4)),
+    loadAt rAcc (rowCell digit 8), addScaled (rowCell digit 9) rA, addCell (xCell (4 * digit + 3)),
+    finishTarget (openRow digit + 2) (designatedCell (4 * digit + 3)),
     zeroRegs [rAcc, rAddr, rSel, rA, rB, rC, rD, rE, rF]]
 
 def solve : Prog := rep 91 solveDigit
 
-/-- The preimage of the designated vector: `V = enc(Y*) + p ^ 455 · t` on `453` working limbs,
-then its low `452` limbs as `128`-bit halves. -/
+/-- The preimage of the designated vector: `V = enc(Y*) + p ^ 364 · t` on `363` working limbs,
+then its low `362` limbs as `128`-bit halves. -/
 def preimage : Prog :=
   BigInt.preimageSampler samplerBase BigInt.samplerLimbs BigInt.samplerDigits designatedBase
     BigInt.samplerAttempts
@@ -214,7 +216,7 @@ def programOne (limb : Nat) : Prog :=
     loadAt rC designatedLabel, ar .add rInput rA rC,
     .op (.program 4 rIndex rInput rFirst rSecond)]
 
-/-- The `452` hash programs, limb by limb. -/
+/-- The `362` hash programs, limb by limb. -/
 def programs : Prog := rep (limbCount .pointX) programOne
 
 /-- **The opening.** -/
@@ -299,29 +301,36 @@ theorem cost_horner : horner.cost = 3 + 90 * 397 + 415 := by
   unfold horner clearP; prog_size
   rw [cost_rep _ _ _ fun _ _ => cost_hornerStep _, cost_head]
 
-theorem size_lambdaOne (digit : Nat) : (lambdaOne digit).size = 457743 := by
-  unfold lambdaOne
+theorem size_nonZeroCell (address : Nat) : (nonZeroCell address).size = 457743 := by
+  unfold nonZeroCell
   simp only [Prog.size_seq, size_zeroRegs, samplerScratch, List.length_cons, List.length_nil]
   rw [size_bounded _ _ _ _ (by rw [cost_storeAt]; omega)]
   simp only [testPositiveBelow, Prog.size_seq, size_cst, ar, Prog.size, size_storeAt, cost_storeAt,
     fieldWidth, attempts]
-theorem cost_lambdaOne (digit : Nat) : (lambdaOne digit).cost = 327692 := by
-  unfold lambdaOne
+theorem cost_nonZeroCell (address : Nat) : (nonZeroCell address).cost = 327692 := by
+  unfold nonZeroCell
   simp only [Prog.cost_seq, cost_zeroRegs, samplerScratch, List.length_cons, List.length_nil]
   rw [cost_bounded _ _ _ _ (by rw [cost_storeAt]; omega)]
   simp only [testPositiveBelow, Prog.cost_seq, cost_cst, ar, Prog.cost, cost_storeAt,
     fieldWidth, attempts]
 
-theorem size_lambdas : lambdas.size = 91 * 457743 := size_rep _ _ _ fun _ _ => size_lambdaOne _
-theorem cost_lambdas : lambdas.cost = 91 * 327692 := cost_rep _ _ _ fun _ _ => cost_lambdaOne _
+theorem size_lambdaOne (digit : Nat) : (lambdaOne digit).size = 2 * 457743 := by
+  unfold lambdaOne; rw [Prog.size_seq, size_nonZeroCell, size_nonZeroCell]
+theorem cost_lambdaOne (digit : Nat) : (lambdaOne digit).cost = 2 * 327692 := by
+  unfold lambdaOne; rw [Prog.cost_seq, cost_nonZeroCell, cost_nonZeroCell]
 
-theorem size_liftOne (digit : Nat) : (liftOne digit).size = 34 := by
+theorem size_lambdas : lambdas.size = 91 * (2 * 457743) :=
+  size_rep _ _ _ fun _ _ => size_lambdaOne _
+theorem cost_lambdas : lambdas.cost = 91 * (2 * 327692) :=
+  cost_rep _ _ _ fun _ _ => cost_lambdaOne _
+
+theorem size_liftOne (digit : Nat) : (liftOne digit).size = 33 := by
   unfold liftOne loadPoint; prog_size
-theorem cost_liftOne (digit : Nat) : (liftOne digit).cost = 34 := by
+theorem cost_liftOne (digit : Nat) : (liftOne digit).cost = 33 := by
   unfold liftOne loadPoint; prog_size
 
-theorem size_lifts : lifts.size = 91 * 34 := size_rep _ _ _ fun _ _ => size_liftOne _
-theorem cost_lifts : lifts.cost = 91 * 34 := cost_rep _ _ _ fun _ _ => cost_liftOne _
+theorem size_lifts : lifts.size = 91 * 33 := size_rep _ _ _ fun _ _ => size_liftOne _
+theorem cost_lifts : lifts.cost = 91 * 33 := cost_rep _ _ _ fun _ _ => cost_liftOne _
 
 theorem size_storeNonCollector (element : Nat) : (storeNonCollector element).size = 10 := by
   unfold storeNonCollector; prog_size
@@ -340,20 +349,18 @@ theorem cost_nonCollectorOne (element : Nat) : (nonCollectorOne element).cost = 
   rw [cost_bounded _ _ _ _ (by rw [cost_storeNonCollector]; omega), cost_storeNonCollector]
   simp only [testBelow, Prog.cost_seq, cost_cst, ar, Prog.cost, fieldWidth, attempts]
 
-theorem size_nonCollectors : nonCollectors.size = 91 * (2 * 457249) :=
-  size_rep _ _ _ fun _ _ => by
-    rw [Prog.size_seq, size_nonCollectorOne, size_nonCollectorOne]
-theorem cost_nonCollectors : nonCollectors.cost = 91 * (2 * 327190) :=
-  cost_rep _ _ _ fun _ _ => by
-    rw [Prog.cost_seq, cost_nonCollectorOne, cost_nonCollectorOne]
+theorem size_nonCollectors : nonCollectors.size = 91 * 457249 :=
+  size_rep _ _ _ fun _ _ => size_nonCollectorOne _
+theorem cost_nonCollectors : nonCollectors.cost = 91 * 327190 :=
+  cost_rep _ _ _ fun _ _ => cost_nonCollectorOne _
 
-theorem size_solveDigit (digit : Nat) : (solveDigit digit).size = 104 := by
+theorem size_solveDigit (digit : Nat) : (solveDigit digit).size = 96 := by
   unfold solveDigit addScaled addCell finishTarget finishScaled; prog_size
-theorem cost_solveDigit (digit : Nat) : (solveDigit digit).cost = 104 := by
+theorem cost_solveDigit (digit : Nat) : (solveDigit digit).cost = 96 := by
   unfold solveDigit addScaled addCell finishTarget finishScaled; prog_size
 
-theorem size_solve : solve.size = 91 * 104 := size_rep _ _ _ fun _ _ => size_solveDigit _
-theorem cost_solve : solve.cost = 91 * 104 := cost_rep _ _ _ fun _ _ => cost_solveDigit _
+theorem size_solve : solve.size = 91 * 96 := size_rep _ _ _ fun _ _ => size_solveDigit _
+theorem cost_solve : solve.cost = 91 * 96 := cost_rep _ _ _ fun _ _ => cost_solveDigit _
 
 theorem size_preimage :
     preimage.size = BigInt.preimageSamplerSize BigInt.samplerLimbs BigInt.samplerDigits
@@ -369,20 +376,20 @@ theorem size_programOne (limb : Nat) : (programOne limb).size = 14 := by
 theorem cost_programOne (limb : Nat) : (programOne limb).cost = 14 := by
   unfold programOne; prog_size
 
-theorem size_programs : programs.size = 452 * 14 := size_rep _ _ _ fun _ _ => size_programOne _
-theorem cost_programs : programs.cost = 452 * 14 := cost_rep _ _ _ fun _ _ => cost_programOne _
+theorem size_programs : programs.size = 362 * 14 := size_rep _ _ _ fun _ _ => size_programOne _
+theorem cost_programs : programs.cost = 362 * 14 := cost_rep _ _ _ fun _ _ => cost_programOne _
 
 /-- The opening's code size. -/
 def programSize : Nat :=
-  90 * 589865 + (3 + 90 * 397 + 439) + 91 * 457743 + 91 * 34 + 91 * (2 * 457249) + 91 * 104 +
+  90 * 589865 + (3 + 90 * 397 + 439) + 91 * (2 * 457743) + 91 * 33 + 91 * 457249 + 91 * 96 +
     BigInt.preimageSamplerSize BigInt.samplerLimbs BigInt.samplerDigits BigInt.samplerAttempts +
-    452 * 14 + 16
+    362 * 14 + 16
 
 /-- The opening's cost. -/
 def programCost : Nat :=
-  90 * 459290 + (3 + 90 * 397 + 415) + 91 * 327692 + 91 * 34 + 91 * (2 * 327190) + 91 * 104 +
+  90 * 459290 + (3 + 90 * 397 + 415) + 91 * (2 * 327692) + 91 * 33 + 91 * 327190 + 91 * 96 +
     BigInt.preimageSamplerCost BigInt.samplerLimbs BigInt.samplerDigits BigInt.samplerAttempts +
-    452 * 14 + 16
+    362 * 14 + 16
 
 theorem size_program : program.size = programSize := by
   unfold program
